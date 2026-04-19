@@ -1,5 +1,4 @@
-﻿// test push
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using Dapper;
 using Microsoft.Data.Sqlite;
