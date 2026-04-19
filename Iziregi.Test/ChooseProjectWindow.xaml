@@ -1,0 +1,48 @@
+﻿<Window x:Class="Iziregi.Test.ChooseProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Choisir un projet" Height="520" Width="760"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Recherche + Nouveau -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="160"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="SearchTextBox" Height="30" VerticalContentAlignment="Center"
+                     TextChanged="SearchTextBox_TextChanged"/>
+
+            <Button Grid.Column="2" Content="+ Nouveau projet" Height="30"
+                    Click="NewProject_Click"/>
+        </Grid>
+
+        <!-- Liste projets -->
+        <DataGrid x:Name="ProjectsGrid"
+                  Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserSortColumns="True"
+                  SelectionMode="Single"
+                  MouseDoubleClick="ProjectsGrid_MouseDoubleClick">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Nom du chantier" Binding="{Binding Name}" Width="*"/>
+                <DataGridTextColumn Header="Adresse" Binding="{Binding Address}" Width="2*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Actions -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Annuler" Width="110" Margin="0,0,8,0" Click="Cancel_Click"/>
+            <Button Content="Sélectionner" Width="140" Click="Select_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
