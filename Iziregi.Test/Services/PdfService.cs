@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File: Services/PdfService.cs
+using System;
 using System.Globalization;
 using Iziregi.Test.Models;
 using QuestPDF.Fluent;
@@ -9,7 +10,6 @@ namespace Iziregi.Test.Services;
 
 public static class PdfService
 {
-    // Appelé au démarrage
     public static void Configure()
     {
         QuestPDF.Settings.License = LicenseType.Community;
@@ -32,23 +32,27 @@ public static class PdfService
 
                 page.Header().Element(header =>
                 {
-                    header.Row(row =>
+                    // ✅ FIX: Element = single-child => on utilise Column (multi-items)
+                    header.Column(col =>
                     {
-                        row.RelativeItem().Column(col =>
+                        col.Item().Row(row =>
                         {
-                            col.Item().Text("Iziregi").SemiBold().FontSize(14);
-                            col.Item().Text("Bon de régie").FontSize(12);
+                            row.RelativeItem().Column(left =>
+                            {
+                                left.Item().Text("Iziregi").SemiBold().FontSize(14);
+                                left.Item().Text("Bon de régie").FontSize(12);
+                            });
+
+                            row.ConstantItem(220).Column(right =>
+                            {
+                                right.Item().AlignRight().Text($"BDR — N° {wo.BdrNumber}").SemiBold().FontSize(14);
+                                right.Item().AlignRight().Text($"{wo.Place}");
+                                right.Item().AlignRight().Text($"{wo.RequestDate:dd.MM.yyyy}");
+                            });
                         });
 
-                        row.ConstantItem(220).Column(col =>
-                        {
-                            col.Item().AlignRight().Text($"BDR — N° {wo.BdrNumber}").SemiBold().FontSize(14);
-                            col.Item().AlignRight().Text($"{wo.Place}");
-                            col.Item().AlignRight().Text($"{wo.RequestDate:dd.MM.yyyy}");
-                        });
+                        col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                     });
-
-                    header.LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                 });
 
                 page.Content().Column(col =>
@@ -194,21 +198,17 @@ public static class PdfService
                                 t.Cell().Text(string.IsNullOrWhiteSpace(wo.SignatureName) ? "—" : wo.SignatureName);
 
                                 t.Cell().Text("Date").SemiBold();
-                                s
-                                    .Item(); // noop: garde la structure stable (QuestPDF est parfois strict sur les chaines)
                                 t.Cell().Text(wo.SignatureDate.HasValue
-                                    ? wo.SignatureDate.Value.ToString("d MMMM yyyy", culture)  // ✅ format long
+                                    ? wo.SignatureDate.Value.ToString("d MMMM yyyy", culture)
                                     : "—");
                             });
 
                             s.Item().PaddingTop(6).Text("Signature").SemiBold();
 
-                            // ✅ Zone stable (même hauteur) + bordure légère
                             s.Item().Height(90).Border(1).BorderColor(Colors.Grey.Lighten2).Padding(6).Element(sig =>
                             {
                                 if (wo.SignaturePng != null && wo.SignaturePng.Length > 0)
                                 {
-                                    // ✅ Conserve le ratio et rentre dans la zone
                                     sig.Image(wo.SignaturePng).FitArea();
                                 }
                                 else
@@ -231,4 +231,4 @@ public static class PdfService
         })
         .GeneratePdf(filePath);
     }
-}
+} 

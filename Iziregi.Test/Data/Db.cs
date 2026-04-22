@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿// File: Data/Db.cs
+using System.Globalization;
 using System.IO;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -56,6 +57,13 @@ public static class Db
         """);
 
         con.Execute("""
+            CREATE TABLE IF NOT EXISTS Requesters (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL UNIQUE
+            );
+        """);
+
+        con.Execute("""
             CREATE TABLE IF NOT EXISTS Projects (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL,
@@ -73,6 +81,14 @@ public static class Db
                 UnitPrice REAL NOT NULL,
                 LineTotal REAL NOT NULL,
                 FOREIGN KEY (WorkOrderId) REFERENCES WorkOrders(Id)
+            );
+        """);
+
+        // Settings (valeurs par défaut configurables)
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS Settings (
+                Key TEXT PRIMARY KEY,
+                Value TEXT NOT NULL
             );
         """);
 
@@ -96,12 +112,23 @@ public static class Db
         TryAddColumn(con, "WorkOrders", "SignatureDate", "TEXT");
         TryAddColumn(con, "WorkOrders", "SignaturePng", "BLOB");
 
-        // Statuts
-        TryAddColumn(con, "WorkOrders", "IsPendingValidation", "INTEGER NOT NULL DEFAULT 0");
+        // Pipeline
+        TryAddColumn(con, "WorkOrders", "IsInCreation", "INTEGER NOT NULL DEFAULT 0");
         TryAddColumn(con, "WorkOrders", "IsSentToCompany", "INTEGER NOT NULL DEFAULT 0");
-
-        // ✅ IMPORTANT : c’est ce champ qui doit passer à 1 à l’import du devis
         TryAddColumn(con, "WorkOrders", "IsQuoteReceived", "INTEGER NOT NULL DEFAULT 0");
+        TryAddColumn(con, "WorkOrders", "IsSentToSigner", "INTEGER NOT NULL DEFAULT 0");
+        TryAddColumn(con, "WorkOrders", "IsValidatedPdfSent", "INTEGER NOT NULL DEFAULT 0");
+
+        // Ancien champ (compat)
+        TryAddColumn(con, "WorkOrders", "IsPendingValidation", "INTEGER NOT NULL DEFAULT 0");
+
+        // Corbeille
+        TryAddColumn(con, "WorkOrders", "IsTrashed", "INTEGER NOT NULL DEFAULT 0");
+        TryAddColumn(con, "WorkOrders", "TrashedAt", "TEXT");
+
+        // Archives
+        TryAddColumn(con, "WorkOrders", "IsArchived", "INTEGER NOT NULL DEFAULT 0");
+        TryAddColumn(con, "WorkOrders", "ArchivedAt", "TEXT");
     }
 
     private static void TryAddColumn(SqliteConnection con, string table, string column, string sqlType)
@@ -143,26 +170,177 @@ public static class Db
         => DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt) ? dt : def;
 
     // =========================
+    // Settings (defaults)
+    // =========================
+    private static string? GetSetting(string key)
+    {
+        using var con = Open();
+        return con.ExecuteScalar<string?>("SELECT Value FROM Settings WHERE Key=@Key;", new { Key = key });
+    }
+
+    private static void SetSetting(string key, string value)
+    {
+        using var con = Open();
+        con.Execute("""
+            INSERT INTO Settings(Key, Value) VALUES (@Key, @Value)
+            ON CONFLICT(Key) DO UPDATE SET Value=excluded.Value;
+        """, new { Key = key, Value = value });
+    }
+
+    public static string GetDefaultPlace() => GetSetting("DefaultPlace") ?? "";
+    public static void SetDefaultPlace(string value) => SetSetting("DefaultPlace", (value ?? "").Trim());
+
+    public static string GetDefaultCompany() => GetSetting("DefaultCompany") ?? "";
+    public static void SetDefaultCompany(string value) => SetSetting("DefaultCompany", (value ?? "").Trim());
+
+    public static string GetDefaultRequester() => GetSetting("DefaultRequester") ?? "";
+    public static void SetDefaultRequester(string value) => SetSetting("DefaultRequester", (value ?? "").Trim());
+
+    // =========================
     // WorkOrders
     // =========================
     public static List<WorkOrder> GetWorkOrders()
     {
         using var con = Open();
 
-        // ✅ IMPORTANT : IsQuoteReceived doit être dans le SELECT
         var rows = con.Query("""
             SELECT
                 Id, ProjectId, BdrNumber,
                 Place, RequestedBy, PerformedBy, RequestDate,
-                IsValidated, IsPerformed, IsCancelled,
-                IsPendingValidation,
+
+                IsInCreation,
                 IsSentToCompany,
                 IsQuoteReceived,
+                IsSentToSigner,
+                IsValidated,
+                IsValidatedPdfSent,
+                IsPerformed,
+                IsCancelled,
+
+                IsTrashed,
+                TrashedAt,
+
+                IsArchived,
+                ArchivedAt,
+
                 Description,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 QuoteNotes,
                 SignatureName, SignatureDate, SignaturePng
             FROM WorkOrders
+            WHERE COALESCE(IsTrashed, 0) = 0
+              AND COALESCE(IsArchived, 0) = 0
+            ORDER BY Id DESC;
+        """).ToList();
+
+        return rows.Select(MapWorkOrderRow).ToList();
+    }
+
+    public static List<WorkOrder> GetTrashedWorkOrders()
+    {
+        using var con = Open();
+
+        var rows = con.Query("""
+            SELECT
+                Id, ProjectId, BdrNumber,
+                Place, RequestedBy, PerformedBy, RequestDate,
+
+                IsInCreation,
+                IsSentToCompany,
+                IsQuoteReceived,
+                IsSentToSigner,
+                IsValidated,
+                IsValidatedPdfSent,
+                IsPerformed,
+                IsCancelled,
+
+                IsTrashed,
+                TrashedAt,
+
+                IsArchived,
+                ArchivedAt,
+
+                Description,
+                LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
+                QuoteNotes,
+                SignatureName, SignatureDate, SignaturePng
+            FROM WorkOrders
+            WHERE COALESCE(IsTrashed, 0) = 1
+            ORDER BY Id DESC;
+        """).ToList();
+
+        return rows.Select(MapWorkOrderRow).ToList();
+    }
+
+    public static List<WorkOrder> GetArchivedWorkOrders()
+    {
+        using var con = Open();
+
+        var rows = con.Query("""
+            SELECT
+                Id, ProjectId, BdrNumber,
+                Place, RequestedBy, PerformedBy, RequestDate,
+
+                IsInCreation,
+                IsSentToCompany,
+                IsQuoteReceived,
+                IsSentToSigner,
+                IsValidated,
+                IsValidatedPdfSent,
+                IsPerformed,
+                IsCancelled,
+
+                IsTrashed,
+                TrashedAt,
+
+                IsArchived,
+                ArchivedAt,
+
+                Description,
+                LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
+                QuoteNotes,
+                SignatureName, SignatureDate, SignaturePng
+            FROM WorkOrders
+            WHERE COALESCE(IsTrashed, 0) = 0
+              AND COALESCE(IsArchived, 0) = 1
+            ORDER BY Id DESC;
+        """).ToList();
+
+        return rows.Select(MapWorkOrderRow).ToList();
+    }
+
+    // ✅ Comptabilité : inclut Archives, exclut Corbeille, exclut Annulé
+    public static List<WorkOrder> GetWorkOrdersForAccounting()
+    {
+        using var con = Open();
+
+        var rows = con.Query("""
+            SELECT
+                Id, ProjectId, BdrNumber,
+                Place, RequestedBy, PerformedBy, RequestDate,
+
+                IsInCreation,
+                IsSentToCompany,
+                IsQuoteReceived,
+                IsSentToSigner,
+                IsValidated,
+                IsValidatedPdfSent,
+                IsPerformed,
+                IsCancelled,
+
+                IsTrashed,
+                TrashedAt,
+
+                IsArchived,
+                ArchivedAt,
+
+                Description,
+                LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
+                QuoteNotes,
+                SignatureName, SignatureDate, SignaturePng
+            FROM WorkOrders
+            WHERE COALESCE(IsTrashed, 0) = 0
+              AND COALESCE(IsCancelled, 0) = 0
             ORDER BY Id DESC;
         """).ToList();
 
@@ -177,10 +355,22 @@ public static class Db
             SELECT
                 Id, ProjectId, BdrNumber,
                 Place, RequestedBy, PerformedBy, RequestDate,
-                IsValidated, IsPerformed, IsCancelled,
-                IsPendingValidation,
+
+                IsInCreation,
                 IsSentToCompany,
                 IsQuoteReceived,
+                IsSentToSigner,
+                IsValidated,
+                IsValidatedPdfSent,
+                IsPerformed,
+                IsCancelled,
+
+                IsTrashed,
+                TrashedAt,
+
+                IsArchived,
+                ArchivedAt,
+
                 Description,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 QuoteNotes,
@@ -209,6 +399,16 @@ public static class Db
         byte[]? sigPng = null;
         try { sigPng = row.SignaturePng as byte[]; } catch { }
 
+        DateTime? trashedAt = null;
+        var trashedAtStr = AsString(row.TrashedAt, "");
+        if (!string.IsNullOrWhiteSpace(trashedAtStr))
+            trashedAt = AsDate(trashedAtStr, DateTime.Today);
+
+        DateTime? archivedAt = null;
+        var archivedAtStr = AsString(row.ArchivedAt, "");
+        if (!string.IsNullOrWhiteSpace(archivedAtStr))
+            archivedAt = AsDate(archivedAtStr, DateTime.Today);
+
         return new WorkOrder
         {
             Id = id,
@@ -220,15 +420,21 @@ public static class Db
             PerformedBy = AsString(row.PerformedBy),
             RequestDate = requestDate,
 
+            IsInCreation = AsBool01(row.IsInCreation),
+            IsSentToCompany = AsBool01(row.IsSentToCompany),
+            IsQuoteReceived = AsBool01(row.IsQuoteReceived),
+            IsSentToSigner = AsBool01(row.IsSentToSigner),
             IsValidated = AsBool01(row.IsValidated),
+            IsValidatedPdfSent = AsBool01(row.IsValidatedPdfSent),
+
             IsPerformed = AsBool01(row.IsPerformed),
             IsCancelled = AsBool01(row.IsCancelled),
 
-            IsPendingValidation = AsBool01(row.IsPendingValidation),
-            IsSentToCompany = AsBool01(row.IsSentToCompany),
+            IsTrashed = AsBool01(row.IsTrashed),
+            TrashedAt = trashedAt,
 
-            // ✅ IMPORTANT : mapping du flag “devis reçu”
-            IsQuoteReceived = AsBool01(row.IsQuoteReceived),
+            IsArchived = AsBool01(row.IsArchived),
+            ArchivedAt = archivedAt,
 
             Description = AsString(row.Description),
 
@@ -258,19 +464,37 @@ public static class Db
         con.Execute("""
             INSERT INTO WorkOrders (
                 BdrNumber, Place, RequestedBy, PerformedBy, RequestDate,
-                IsValidated, IsPerformed, Description, IsCancelled,
-                IsPendingValidation,
+
+                IsInCreation,
                 IsSentToCompany,
                 IsQuoteReceived,
+                IsSentToSigner,
+                IsValidated,
+                IsValidatedPdfSent,
+
+                IsPerformed, Description, IsCancelled,
+
+                IsTrashed, TrashedAt,
+                IsArchived, ArchivedAt,
+
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, QuoteNotes, ProjectId,
                 SignatureName, SignatureDate, SignaturePng
             )
             VALUES (
                 @BdrNumber, @Place, @RequestedBy, @PerformedBy, @RequestDate,
-                @IsValidated, @IsPerformed, @Description, @IsCancelled,
-                @IsPendingValidation,
+
+                @IsInCreation,
                 @IsSentToCompany,
                 @IsQuoteReceived,
+                @IsSentToSigner,
+                @IsValidated,
+                @IsValidatedPdfSent,
+
+                @IsPerformed, @Description, @IsCancelled,
+
+                @IsTrashed, @TrashedAt,
+                @IsArchived, @ArchivedAt,
+
                 @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @QuoteNotes, @ProjectId,
                 @SignatureName, @SignatureDate, @SignaturePng
             );
@@ -282,14 +506,22 @@ public static class Db
             wo.PerformedBy,
             RequestDate = wo.RequestDate.ToString("yyyy-MM-dd"),
 
+            IsInCreation = wo.IsInCreation ? 1 : 0,
+            IsSentToCompany = wo.IsSentToCompany ? 1 : 0,
+            IsQuoteReceived = wo.IsQuoteReceived ? 1 : 0,
+            IsSentToSigner = wo.IsSentToSigner ? 1 : 0,
             IsValidated = wo.IsValidated ? 1 : 0,
+            IsValidatedPdfSent = wo.IsValidatedPdfSent ? 1 : 0,
+
             IsPerformed = wo.IsPerformed ? 1 : 0,
             Description = wo.Description ?? "",
             IsCancelled = wo.IsCancelled ? 1 : 0,
 
-            IsPendingValidation = wo.IsPendingValidation ? 1 : 0,
-            IsSentToCompany = wo.IsSentToCompany ? 1 : 0,
-            IsQuoteReceived = wo.IsQuoteReceived ? 1 : 0,
+            IsTrashed = wo.IsTrashed ? 1 : 0,
+            TrashedAt = wo.TrashedAt?.ToString("yyyy-MM-dd"),
+
+            IsArchived = wo.IsArchived ? 1 : 0,
+            ArchivedAt = wo.ArchivedAt?.ToString("yyyy-MM-dd"),
 
             wo.LaborHours,
             wo.LaborRate,
@@ -351,63 +583,109 @@ public static class Db
         });
     }
 
-    public static void UpdateWorkOrderSignature(WorkOrder wo)
+    public static void UpdateWorkOrderSignatureRaw(WorkOrder wo)
     {
-        var validatedNow =
-            !string.IsNullOrWhiteSpace(wo.SignatureName) &&
-            wo.SignatureDate.HasValue &&
-            wo.SignaturePng != null &&
-            wo.SignaturePng.Length > 0;
-
-        if (validatedNow)
-        {
-            wo.IsValidated = true;
-            wo.IsPendingValidation = false;
-        }
-        else
-        {
-            wo.IsValidated = false;
-        }
-
         using var con = Open();
         con.Execute("""
             UPDATE WorkOrders
             SET SignatureName=@SignatureName,
                 SignatureDate=@SignatureDate,
-                SignaturePng=@SignaturePng,
-                IsValidated=@IsValidated,
-                IsPendingValidation=@IsPendingValidation
+                SignaturePng=@SignaturePng
             WHERE Id=@Id;
         """, new
         {
             wo.Id,
             SignatureName = wo.SignatureName ?? "",
             SignatureDate = wo.SignatureDate?.ToString("yyyy-MM-dd"),
-            SignaturePng = wo.SignaturePng,
-            IsValidated = wo.IsValidated ? 1 : 0,
-            IsPendingValidation = wo.IsPendingValidation ? 1 : 0
+            SignaturePng = wo.SignaturePng
         });
     }
 
-    public static void SetPendingValidation(long workOrderId, bool isPending)
+    // =========================
+    // Pipeline helpers
+    // =========================
+    public static void SetStageInCreation(long workOrderId)
     {
         using var con = Open();
-        con.Execute("UPDATE WorkOrders SET IsPendingValidation=@V WHERE Id=@Id;",
-            new { Id = workOrderId, V = isPending ? 1 : 0 });
+        con.Execute("""
+            UPDATE WorkOrders
+            SET IsInCreation=1,
+                IsSentToCompany=0,
+                IsQuoteReceived=0,
+                IsSentToSigner=0,
+                IsValidated=0
+            WHERE Id=@Id;
+        """, new { Id = workOrderId });
     }
 
-    public static void SetSentToCompany(long workOrderId, bool isSent)
+    public static void SetStageSentToCompany(long workOrderId)
     {
         using var con = Open();
-        con.Execute("UPDATE WorkOrders SET IsSentToCompany=@V WHERE Id=@Id;",
-            new { Id = workOrderId, V = isSent ? 1 : 0 });
+        con.Execute("""
+            UPDATE WorkOrders
+            SET IsInCreation=0,
+                IsSentToCompany=1,
+                IsQuoteReceived=0,
+                IsSentToSigner=0,
+                IsValidated=0
+            WHERE Id=@Id;
+        """, new { Id = workOrderId });
     }
 
-    public static void SetQuoteReceived(long workOrderId, bool isReceived)
+    public static void SetStageQuoteReceived(long workOrderId)
     {
         using var con = Open();
-        con.Execute("UPDATE WorkOrders SET IsQuoteReceived=@V WHERE Id=@Id;",
-            new { Id = workOrderId, V = isReceived ? 1 : 0 });
+        con.Execute("""
+            UPDATE WorkOrders
+            SET IsInCreation=0,
+                IsSentToCompany=0,
+                IsQuoteReceived=1,
+                IsSentToSigner=0,
+                IsValidated=0
+            WHERE Id=@Id;
+        """, new { Id = workOrderId });
+    }
+
+    public static void SetStageSentToSigner(long workOrderId)
+    {
+        using var con = Open();
+        con.Execute("""
+            UPDATE WorkOrders
+            SET IsInCreation=0,
+                IsSentToCompany=0,
+                IsQuoteReceived=0,
+                IsSentToSigner=1,
+                IsValidated=0
+            WHERE Id=@Id;
+        """, new { Id = workOrderId });
+    }
+
+    public static void SetStageValidated(long workOrderId)
+    {
+        using var con = Open();
+        con.Execute("""
+            UPDATE WorkOrders
+            SET IsInCreation=0,
+                IsSentToCompany=0,
+                IsQuoteReceived=0,
+                IsSentToSigner=0,
+                IsValidated=1
+            WHERE Id=@Id;
+        """, new { Id = workOrderId });
+    }
+
+    public static void SetValidatedPdfSent(long workOrderId, bool sent)
+    {
+        using var con = Open();
+        con.Execute("UPDATE WorkOrders SET IsValidatedPdfSent=@V WHERE Id=@Id;",
+            new { Id = workOrderId, V = sent ? 1 : 0 });
+    }
+
+    public static void SetPerformed(long workOrderId, bool isPerformed)
+    {
+        using var con = Open();
+        con.Execute("UPDATE WorkOrders SET IsPerformed=@V WHERE Id=@Id;",
+            new { Id = workOrderId, V = isPerformed ? 1 : 0 });
     }
 
     public static void SetCancelled(long workOrderId, bool isCancelled)
@@ -418,7 +696,56 @@ public static class Db
     }
 
     // =========================
-    // Places / Companies (ListsWindow)
+    // Corbeille
+    // =========================
+    public static void SetTrashed(long workOrderId, bool trashed)
+    {
+        using var con = Open();
+        con.Execute("""
+            UPDATE WorkOrders
+            SET IsTrashed=@T,
+                TrashedAt=@At
+            WHERE Id=@Id;
+        """, new
+        {
+            Id = workOrderId,
+            T = trashed ? 1 : 0,
+            At = trashed ? DateTime.Today.ToString("yyyy-MM-dd") : null
+        });
+    }
+
+    public static void DeleteWorkOrderPermanently(long workOrderId)
+    {
+        using var con = Open();
+        using var tx = con.BeginTransaction();
+
+        con.Execute("DELETE FROM WorkOrderLines WHERE WorkOrderId=@Id;", new { Id = workOrderId }, tx);
+        con.Execute("DELETE FROM WorkOrders WHERE Id=@Id;", new { Id = workOrderId }, tx);
+
+        tx.Commit();
+    }
+
+    // =========================
+    // Archives
+    // =========================
+    public static void SetArchived(long workOrderId, bool archived)
+    {
+        using var con = Open();
+        con.Execute("""
+            UPDATE WorkOrders
+            SET IsArchived=@A,
+                ArchivedAt=@At
+            WHERE Id=@Id;
+        """, new
+        {
+            Id = workOrderId,
+            A = archived ? 1 : 0,
+            At = archived ? DateTime.Today.ToString("yyyy-MM-dd") : null
+        });
+    }
+
+    // =========================
+    // Lists
     // =========================
     public static List<string> GetPlaces()
     {
@@ -438,6 +765,30 @@ public static class Db
         con.Execute("DELETE FROM Places WHERE Name=@Name;", new { Name = name });
     }
 
+    public static void RenamePlace(string oldName, string newName)
+    {
+        oldName = (oldName ?? "").Trim();
+        newName = (newName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        var exists = con.ExecuteScalar<long>("SELECT COUNT(1) FROM Places WHERE Name=@Name;", new { Name = newName }, tx);
+        if (exists > 0)
+            throw new Exception("Ce nom existe déjà dans la liste des lieux.");
+
+        con.Execute("UPDATE Places SET Name=@NewName WHERE Name=@OldName;",
+            new { OldName = oldName, NewName = newName }, tx);
+
+        con.Execute("UPDATE WorkOrders SET Place=@NewName WHERE Place=@OldName;",
+            new { OldName = oldName, NewName = newName }, tx);
+
+        tx.Commit();
+    }
+
     public static List<string> GetCompanies()
     {
         using var con = Open();
@@ -454,6 +805,72 @@ public static class Db
     {
         using var con = Open();
         con.Execute("DELETE FROM Companies WHERE Name=@Name;", new { Name = name });
+    }
+
+    public static void RenameCompany(string oldName, string newName)
+    {
+        oldName = (oldName ?? "").Trim();
+        newName = (newName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        var exists = con.ExecuteScalar<long>("SELECT COUNT(1) FROM Companies WHERE Name=@Name;", new { Name = newName }, tx);
+        if (exists > 0)
+            throw new Exception("Ce nom existe déjà dans la liste des entreprises.");
+
+        con.Execute("UPDATE Companies SET Name=@NewName WHERE Name=@OldName;",
+            new { OldName = oldName, NewName = newName }, tx);
+
+        con.Execute("UPDATE WorkOrders SET PerformedBy=@NewName WHERE PerformedBy=@OldName;",
+            new { OldName = oldName, NewName = newName }, tx);
+
+        tx.Commit();
+    }
+
+    public static List<string> GetRequesters()
+    {
+        using var con = Open();
+        return con.Query<string>("SELECT Name FROM Requesters ORDER BY Name;").ToList();
+    }
+
+    public static void InsertRequester(string name)
+    {
+        using var con = Open();
+        con.Execute("INSERT OR IGNORE INTO Requesters (Name) VALUES (@Name);", new { Name = (name ?? "").Trim() });
+    }
+
+    public static void DeleteRequester(string name)
+    {
+        using var con = Open();
+        con.Execute("DELETE FROM Requesters WHERE Name=@Name;", new { Name = name });
+    }
+
+    public static void RenameRequester(string oldName, string newName)
+    {
+        oldName = (oldName ?? "").Trim();
+        newName = (newName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        var exists = con.ExecuteScalar<long>("SELECT COUNT(1) FROM Requesters WHERE Name=@Name;", new { Name = newName }, tx);
+        if (exists > 0)
+            throw new Exception("Ce nom existe déjà dans la liste « Demandé par ».");
+
+        con.Execute("UPDATE Requesters SET Name=@NewName WHERE Name=@OldName;",
+            new { OldName = oldName, NewName = newName }, tx);
+
+        con.Execute("UPDATE WorkOrders SET RequestedBy=@NewName WHERE RequestedBy=@OldName;",
+            new { OldName = oldName, NewName = newName }, tx);
+
+        tx.Commit();
     }
 
     public static void SeedPlacesIfEmpty(params string[] places)
@@ -476,8 +893,18 @@ public static class Db
             con.Execute("INSERT INTO Companies (Name) VALUES (@Name);", new { Name = c });
     }
 
+    public static void SeedRequestersIfEmpty(params string[] names)
+    {
+        using var con = Open();
+        var count = con.ExecuteScalar<long>("SELECT COUNT(1) FROM Requesters;");
+        if (count > 0) return;
+
+        foreach (var n in names)
+            con.Execute("INSERT INTO Requesters (Name) VALUES (@Name);", new { Name = n });
+    }
+
     // =========================
-    // Projects (ChooseProjectWindow)
+    // Projects
     // =========================
     public static List<Project> GetProjects(bool onlyActive = true)
     {

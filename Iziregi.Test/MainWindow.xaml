@@ -1,101 +1,30 @@
-﻿<Window x:Class="Iziregi.Test.MainWindow"
+﻿<!-- File: MainWindow.xaml -->
+<Window x:Class="Iziregi.Test.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Iziregi — Tableau de bord"
+        xmlns:local="clr-namespace:Iziregi.Test"
+        Title="Iziregi"
         Height="650"
-        Width="1100">
+        Width="1100"
+        MinHeight="600"
+        MinWidth="980"
+        WindowStartupLocation="CenterScreen">
 
-    <DockPanel Margin="16">
+    <DockPanel>
 
-        <!-- Barre d’actions -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
-            <Button Content="Nouveau bon" Width="140" Click="StartNewWorkOrder_Click"/>
-            <Button Content="Listes" Width="90" Margin="8,0,0,0" Click="OpenLists_Click"/>
-            <Button Content="Choisir un projet" Width="150" Margin="8,0,0,0" Click="ChooseProject_Click"/>
+        <!-- MENU NAVIGATION -->
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="Tableau de bord" Click="NavDashboard_Click"/>
+            <MenuItem Header="Comptabilité" Click="NavAccounting_Click"/>
+            <MenuItem Header="Archives" Click="NavArchives_Click"/>
+            <MenuItem Header="Corbeille" Click="NavTrash_Click"/>
+            <MenuItem Header="Listes" Click="NavLists_Click"/>
+        </Menu>
 
-            <Button Content="Exporter pour entreprise (devis)"
-                    Width="240"
-                    Margin="16,0,0,0"
-                    Click="ExportForCompanyQuote_Click"/>
-
-            <Button Content="Importer réponse entreprise (devis)"
-                    Width="260"
-                    Margin="8,0,0,0"
-                    Click="ImportCompanyQuoteReply_Click"/>
-
-            <Button Content="Importer réponse signataire"
-                    Width="220"
-                    Margin="16,0,0,0"
-                    Click="ImportSignerReply_Click"/>
-
-            <Button Content="Annuler (sélection)" Width="160" Margin="16,0,0,0" Click="CancelSelected_Click"/>
-            <Button Content="Réactiver" Width="110" Margin="8,0,0,0" Click="ReactivateSelected_Click"/>
-
-            <Button Content="Rafraîchir" Width="120" Margin="16,0,0,0" Click="Refresh_Click"/>
-        </StackPanel>
-
-        <!-- Ouvrir en tant que... -->
-        <Border DockPanel.Dock="Top"
-                BorderBrush="#DDDDDD"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="10"
-                Margin="0,0,0,12"
-                Background="#FAFAFA">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Ouvrir le bon sélectionné :" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <Button Content="Éditer (Architecte)" Width="160" Click="OpenAsArchitect_Click"/>
-                <Button Content="Entreprise (Devis)" Width="160" Margin="8,0,0,0" Click="OpenAsCompany_Click"/>
-                <Button Content="Signataire (Signature)" Width="190" Margin="8,0,0,0" Click="OpenAsSigner_Click"/>
-                <TextBlock Text="(ou double-clic sur une ligne)" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray"/>
-            </StackPanel>
+        <!-- CONTENU (PAGE) -->
+        <Border Background="White" Padding="12">
+            <ContentControl x:Name="MainContent"/>
         </Border>
-
-        <!-- Liste -->
-        <DataGrid x:Name="WorkOrdersGrid"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  CanUserSortColumns="True"
-                  SelectionMode="Single"
-                  MouseDoubleClick="WorkOrdersGrid_MouseDoubleClick">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="N° Bdr" Binding="{Binding BdrNumber}" Width="80"/>
-                <DataGridTextColumn Header="Bat./Salle" Binding="{Binding Place}" Width="120"/>
-                <DataGridTextColumn Header="Demandé par" Binding="{Binding RequestedBy}" Width="*"/>
-                <DataGridTextColumn Header="Effectué par" Binding="{Binding PerformedBy}" Width="140"/>
-                <DataGridTextColumn Header="Date" Binding="{Binding RequestDate, StringFormat=dd.MM.yyyy}" Width="120"/>
-
-                <DataGridCheckBoxColumn Header="Brouillon"
-                                        Binding="{Binding IsDraft, Mode=OneWay}"
-                                        Width="90"
-                                        IsReadOnly="True"/>
-
-                <DataGridCheckBoxColumn Header="En attente devis"
-                                        Binding="{Binding IsPendingQuote, Mode=OneWay}"
-                                        Width="130"
-                                        IsReadOnly="True"/>
-
-                <DataGridCheckBoxColumn Header="En attente validation"
-                                        Binding="{Binding IsPendingValidation}"
-                                        Width="150"
-                                        IsReadOnly="True"/>
-
-                <DataGridCheckBoxColumn Header="Validé"
-                                        Binding="{Binding IsValidated}"
-                                        Width="80"
-                                        IsReadOnly="True"/>
-
-                <DataGridCheckBoxColumn Header="Effectué"
-                                        Binding="{Binding IsPerformed}"
-                                        Width="90"
-                                        IsReadOnly="True"/>
-
-                <DataGridCheckBoxColumn Header="Annulé"
-                                        Binding="{Binding IsCancelled}"
-                                        Width="80"
-                                        IsReadOnly="True"/>
-            </DataGrid.Columns>
-        </DataGrid>
 
     </DockPanel>
 </Window>

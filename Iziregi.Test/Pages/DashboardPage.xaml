@@ -1,0 +1,177 @@
+﻿<!-- File: Pages/DashboardPage.xaml -->
+<UserControl x:Class="Iziregi.Test.Pages.DashboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <DockPanel>
+
+        <!-- Barre actions (2 lignes) -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <WrapPanel Margin="0,0,0,6">
+                <Button Content="Nouveau bon" Width="140" Margin="0,0,8,6" Click="NewWorkOrder_Click"/>
+                <Button Content="Choisir un projet" Width="150" Margin="0,0,8,6" Click="ChooseProject_Click"/>
+                <Button Content="Envoyer à l’entreprise (devis)" Width="240" Margin="0,0,8,6" Click="SendToCompany_Click"/>
+                <Button Content="Ouvrir fichier .iziregi" Width="190" Margin="0,0,8,6" Click="OpenIziregiFile_Click"/>
+            </WrapPanel>
+
+            <WrapPanel>
+                <Button Content="Importer retour entreprise (devis)" Width="260" Margin="0,0,8,6" Click="ImportCompanyReply_Click"/>
+                <Button Content="Importer retour signataire" Width="220" Margin="0,0,8,6" Click="ImportSignerReply_Click"/>
+
+                <Button Content="Mettre à la corbeille (sélection)" Width="240" Margin="0,0,8,6" Click="TrashSelected_Click"/>
+                <Button Content="Archiver (sélection)" Width="190" Margin="0,0,8,6" Click="ArchiveSelected_Click"/>
+
+                <Button Content="Rafraîchir" Width="120" Margin="0,0,8,6" Click="Refresh_Click"/>
+            </WrapPanel>
+        </StackPanel>
+
+        <!-- ✅ Recherche -->
+        <Border DockPanel.Dock="Top"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10"
+                Margin="0,0,0,12"
+                Background="#FAFAFA">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="380"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="Recherche :"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+
+                <TextBox x:Name="SearchTextBox"
+                         Grid.Column="1"
+                         Height="26"
+                         VerticalContentAlignment="Center"
+                         TextChanged="SearchTextBox_TextChanged"/>
+
+                <TextBlock Grid.Column="3"
+                           Text="(BDR, lieu, demandé par, effectué par, description)"
+                           VerticalAlignment="Center"
+                           Foreground="Gray"/>
+            </Grid>
+        </Border>
+
+        <!-- Zone "ouvrir le bon sélectionné" -->
+        <Border DockPanel.Dock="Top"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10"
+                Margin="0,0,0,12"
+                Background="#FAFAFA">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Ouvrir le bon sélectionné :" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Button Content="Éditer (Architecte)" Width="160" Click="OpenAsArchitect_Click"/>
+                <Button Content="Entreprise (Devis)" Width="160" Margin="8,0,0,0" Click="OpenAsCompany_Click"/>
+                <Button Content="Signataire (Signature)" Width="190" Margin="8,0,0,0" Click="OpenAsSigner_Click"/>
+                <TextBlock Text="(ou double-clic sur une ligne)" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Grille -->
+        <DataGrid x:Name="WorkOrdersGrid"
+                  Style="{StaticResource IziregiGrid}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="False"
+                  SelectionMode="Single"
+                  SelectionUnit="FullRow"
+                  ColumnWidth="SizeToHeader"
+                  MouseDoubleClick="WorkOrdersGrid_MouseDoubleClick">
+
+            <DataGrid.Columns>
+
+                <!-- Sélection checkbox -->
+                <DataGridTemplateColumn Width="42" IsReadOnly="False">
+                    <DataGridTemplateColumn.Header>
+                        <CheckBox x:Name="SelectAllCheckBox"
+                                  ToolTip="Tout cocher / décocher"
+                                  Click="SelectAllCheckBox_Click"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"/>
+                    </DataGridTemplateColumn.Header>
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Colonnes stables -->
+                <DataGridTextColumn Header="N° Bdr" Binding="{Binding WorkOrder.BdrNumber}" Width="80" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Bat./Salle" Binding="{Binding WorkOrder.Place}" Width="90" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Date"
+                                    Binding="{Binding WorkOrder.RequestDate, StringFormat=dd.MM.yyyy}"
+                                    Width="105"
+                                    IsReadOnly="True"/>
+
+                <!-- Colonnes texte (template + style global) -->
+                <DataGridTemplateColumn Header="Demandé par" MinWidth="110">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Style="{StaticResource IziregiGridTextCell}"
+                                       Text="{Binding WorkOrder.RequestedBy}"
+                                       ToolTip="{Binding WorkOrder.RequestedBy}"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Effectué par" MinWidth="110">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Style="{StaticResource IziregiGridTextCell}"
+                                       Text="{Binding WorkOrder.PerformedBy}"
+                                       ToolTip="{Binding WorkOrder.PerformedBy}"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Statuts -->
+                <DataGridCheckBoxColumn Header="En création" Binding="{Binding WorkOrder.IsInCreation}" Width="95" IsReadOnly="True"/>
+                <DataGridCheckBoxColumn Header="Envoyé à l’entreprise" Binding="{Binding WorkOrder.IsSentToCompany}" Width="150" IsReadOnly="True"/>
+                <DataGridCheckBoxColumn Header="Devis rempli" Binding="{Binding WorkOrder.IsQuoteReceived}" Width="95" IsReadOnly="True"/>
+                <DataGridCheckBoxColumn Header="Envoyé au signataire" Binding="{Binding WorkOrder.IsSentToSigner}" Width="150" IsReadOnly="True"/>
+                <DataGridCheckBoxColumn Header="Validé" Binding="{Binding WorkOrder.IsValidated}" Width="80" IsReadOnly="True"/>
+                <DataGridCheckBoxColumn Header="PDF validé envoyé" Binding="{Binding WorkOrder.IsValidatedPdfSent}" Width="130" IsReadOnly="True"/>
+
+                <!-- Simple clic -->
+                <DataGridTemplateColumn Header="Effectué" Width="90" IsReadOnly="False">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding WorkOrder.IsPerformed, Mode=TwoWay}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Click="PerformedCheckBox_Click"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Annulé" Width="80" IsReadOnly="False">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding WorkOrder.IsCancelled, Mode=TwoWay}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Click="CancelledCheckBox_Click"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </DockPanel>
+</UserControl>

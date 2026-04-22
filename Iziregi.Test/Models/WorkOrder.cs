@@ -1,4 +1,5 @@
-﻿namespace Iziregi.Test.Models;
+﻿// File: Models/WorkOrder.cs
+namespace Iziregi.Test.Models;
 
 public class WorkOrder
 {
@@ -12,11 +13,25 @@ public class WorkOrder
     public string PerformedBy { get; set; } = "";
     public DateTime RequestDate { get; set; }
 
-    public bool IsValidated { get; set; }
-    public bool IsPerformed { get; set; }
-    public bool IsCancelled { get; set; }
+    // Pipeline (5 étapes exclusives)
+    public bool IsInCreation { get; set; }           // En création
+    public bool IsSentToCompany { get; set; }         // Envoyé à l’entreprise
+    public bool IsQuoteReceived { get; set; }         // Devis rempli
+    public bool IsSentToSigner { get; set; }          // Envoyé au signataire
+    public bool IsValidated { get; set; }             // Validé
 
-    public bool IsPendingValidation { get; set; }
+    // Flags indépendants
+    public bool IsValidatedPdfSent { get; set; }      // PDF validé envoyé (auto)
+    public bool IsPerformed { get; set; }             // Effectué (manuel)
+    public bool IsCancelled { get; set; }             // Annulé (manuel)
+
+    // Corbeille
+    public bool IsTrashed { get; set; }               // Dans la corbeille
+    public DateTime? TrashedAt { get; set; }          // Date de mise à la corbeille
+
+    // Archives (NOUVEAU)
+    public bool IsArchived { get; set; }              // Archivé
+    public DateTime? ArchivedAt { get; set; }         // Date d’archivage
 
     public string Description { get; set; } = "";
 
@@ -33,27 +48,9 @@ public class WorkOrder
     public DateTime? SignatureDate { get; set; }
     public byte[]? SignaturePng { get; set; }
 
-    // Statuts process
-    public bool IsSentToCompany { get; set; }     // export devis fait
-    public bool IsQuoteReceived { get; set; }     // import réponse entreprise fait
-
     public bool HasFullSignature =>
         !string.IsNullOrWhiteSpace(SignatureName) &&
         SignatureDate.HasValue &&
         SignaturePng != null &&
         SignaturePng.Length > 0;
-
-    public bool IsDraft =>
-        !IsCancelled &&
-        !IsSentToCompany &&
-        !string.IsNullOrWhiteSpace(Place) &&
-        !string.IsNullOrWhiteSpace(RequestedBy) &&
-        !string.IsNullOrWhiteSpace(PerformedBy) &&
-        !string.IsNullOrWhiteSpace(Description);
-
-    // ✅ IMPORTANT : cette case doit tomber dès que IsQuoteReceived = true
-    public bool IsPendingQuote =>
-        !IsCancelled &&
-        IsSentToCompany &&
-        !IsQuoteReceived;
 }
