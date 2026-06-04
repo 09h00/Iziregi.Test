@@ -1,431 +1,72 @@
 ﻿// File: WorkOrderWindow.xaml.cs
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Ink;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using System.Diagnostics;
+using System.Threading.Tasks;
+
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
 using Iziregi.Test.Services;
-using Microsoft.Win32;
+
+using MediaBrushes = System.Windows.Media.Brushes;
+
+// ✅ Fix ambiguïtés WinForms/WPF (TextBox, etc.)
+using WpfTextBox = System.Windows.Controls.TextBox;
+using WpfUIElement = System.Windows.UIElement;
+using WpfInkCanvas = System.Windows.Controls.InkCanvas;
+
+// ✅ Fix ambiguïtés DataObject + DataFormats (WinForms vs WPF)
+using WpfDataObject = System.Windows.DataObject;
+using WpfDataFormats = System.Windows.DataFormats;
 
 namespace Iziregi.Test;
 
 public partial class WorkOrderWindow : Window
 {
-    private readonly long _workOrderId;
-    private readonly WorkOrderEditMode _mode;
-    private WorkOrder? _wo;
+    private readonly ObservableCollection<WorkOrderLine> _lines = new();
+    private readonly List<long> _deletedLineIds = new();
 
-    private TextBox? _activeEditTextBox;
+    private WorkOrder? _workOrder;
+    private bool _isCreateMode;
+    private bool _isLoading;
 
-    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
+    private byte[]? _existingSignaturePng;
+    private bool _signatureCleared;
+
+    private WorkOrderEditMode _mode = WorkOrderEditMode.Architecte;
+    private bool _recomputeQueued;
+
+    private const int ReserveMaxLength = 20;
+    private bool _reserveLimitHooked = false;
+
+    private const int QuoteMaxLines = 15;
+    private const int QuoteHardMaxItems = QuoteMaxLines;
+
+    private bool _simulationCompanyDevisEnabled = false;
+    private bool _simulationSignerEnabled = false;
+
+    private bool _pdfAvailableForExternal = false;
 
     private static string InboxDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Iziregi", "INBOX");
 
-    public WorkOrderWindow(long workOrderId, WorkOrderEditMode mode)
+    private static readonly JsonSerializerOptions ReplyJsonOptions = new JsonSerializerOptions
     {
-        InitializeComponent();
-
-        _workOrderId = workOrderId;
-        _mode = mode;
-
-        DataContext = this;
-
-        LinesGrid.CellEditEnding += LinesGrid_CellEditEnding;
-        LinesGrid.PreparingCellForEdit += LinesGrid_PreparingCellForEdit;
-
-        LoadWorkOrder();
-        ApplyMode();
-        RecalculateTotals();
-    }
-
-    public string LaborHoursDisplay
-    {
-        get => _wo == null ? "" : EmptyIfZero0(_wo.LaborHours);
-        set { if (_wo == null) return; _wo.LaborHours = ParseDouble(value); RecalculateTotals(); }
-    }
-
-    public string LaborRateDisplay
-    {
-        get => _wo == null ? "" : EmptyIfZero2(_wo.LaborRate);
-        set { if (_wo == null) return; _wo.LaborRate = ParseDouble(value); RecalculateTotals(); }
-    }
-
-    public string TravelQtyDisplay
-    {
-        get => _wo == null ? "" : EmptyIfZero0(_wo.TravelQty);
-        set { if (_wo == null) return; _wo.TravelQty = ParseDouble(value); RecalculateTotals(); }
-    }
-
-    public string TravelRateDisplay
-    {
-        get => _wo == null ? "" : EmptyIfZero2(_wo.TravelRate);
-        set { if (_wo == null) return; _wo.TravelRate = ParseDouble(value); RecalculateTotals(); }
-    }
-
-    public string TvaRateDisplay
-    {
-        get => _wo == null ? "" : EmptyIfZero2(_wo.TvaRate);
-        set { if (_wo == null) return; _wo.TvaRate = ParseDouble(value); RecalculateTotals(); }
-    }
-
-    private void ApplyMode()
-    {
-        DemandBorder.Visibility = Visibility.Visible;
-        QuoteBorder.Visibility = Visibility.Visible;
-        SignatureBorder.Visibility = Visibility.Visible;
-
-        bool isArchitect = _mode == WorkOrderEditMode.Architecte;
-        bool isCompany = _mode == WorkOrderEditMode.EntrepriseDevis;
-        bool isSigner = _mode == WorkOrderEditMode.Signataire;
-
-        bool canEditDemand = isArchitect;
-        bool canEditQuote = isArchitect || isCompany;
-        bool canEditSignature = isArchitect || isSigner;
-
-        DemandPanel.IsEnabled = canEditDemand;
-        QuotePanel.IsEnabled = canEditQuote;
-        SignaturePanel.IsEnabled = canEditSignature;
-
-        SaveHeaderButton.Visibility = isArchitect ? Visibility.Visible : Visibility.Collapsed;
-        SendToCompanyButton.Visibility = isArchitect ? Visibility.Visible : Visibility.Collapsed;
-        ExportForSignatureButton.Visibility = isArchitect ? Visibility.Visible : Visibility.Collapsed;
-        SendValidatedToCompanyButton.Visibility = Visibility.Collapsed;
-        CreatePdfButton.Visibility = isArchitect ? Visibility.Visible : Visibility.Collapsed;
-
-        bool showQuoteButtons = !isSigner;
-
-        AddMaterialLineButton.Visibility =
-            (showQuoteButtons && (isArchitect || isCompany))
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-        DeleteMaterialLineButton.Visibility =
-            (showQuoteButtons && (isArchitect || isCompany))
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-        SaveQuoteButton.Visibility =
-            (showQuoteButtons && (isArchitect || isCompany))
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-        SaveReplyButtonQuote.Visibility = isCompany ? Visibility.Visible : Visibility.Collapsed;
-        SaveReplyButtonSignature.Visibility = isSigner ? Visibility.Visible : Visibility.Collapsed;
-
-        ExportForSignatureButton.IsEnabled = isArchitect && (_wo?.IsQuoteReceived ?? false);
-
-        if (isArchitect && (_wo?.IsValidated ?? false))
-            SendValidatedToCompanyButton.Visibility = Visibility.Visible;
-        else
-            SendValidatedToCompanyButton.Visibility = Visibility.Collapsed;
-
-        ClearSignatureButton.Visibility = canEditSignature ? Visibility.Visible : Visibility.Collapsed;
-        SaveSignatureButton.Visibility = canEditSignature ? Visibility.Visible : Visibility.Collapsed;
-
-        SignatureInkCanvas.IsEnabled = canEditSignature;
-        SignatureNameTextBox.IsEnabled = canEditSignature;
-        SignatureDatePicker.IsEnabled = canEditSignature;
-        ClearSignatureButton.IsEnabled = canEditSignature;
-        SaveSignatureButton.IsEnabled = canEditSignature;
-
-        if (canEditSignature)
-        {
-            SignatureInkCanvas.DefaultDrawingAttributes = new DrawingAttributes
-            {
-                Color = Colors.Black,
-                Width = 2.0,
-                Height = 2.0,
-                FitToCurve = true,
-                IgnorePressure = true
-            };
-        }
-    }
-
-    private void LoadWorkOrder()
-    {
-        _wo = Db.GetWorkOrderById(_workOrderId);
-        if (_wo == null)
-        {
-            MessageBox.Show("Bon introuvable.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-            Close();
-            return;
-        }
-
-        TitleTextBlock.Text = $"Bon de régie — N° {_wo.BdrNumber}";
-
-        PlaceComboBox.ItemsSource = Db.GetPlaces();
-        PerformedByComboBox.ItemsSource = Db.GetCompanies();
-
-        // ✅ RequestedBy (Demandé par) depuis la liste
-        RequestedByComboBox.ItemsSource = Db.GetRequesters();
-
-        PlaceComboBox.SelectedItem = _wo.Place;
-
-        // Si la valeur n’est pas dans la liste (ancien bon), on la met comme texte
-        if ((RequestedByComboBox.ItemsSource as IEnumerable<string>)?.Contains(_wo.RequestedBy) == true)
-            RequestedByComboBox.SelectedItem = _wo.RequestedBy;
-        else
-            RequestedByComboBox.Text = _wo.RequestedBy;
-
-        PerformedByComboBox.SelectedItem = _wo.PerformedBy;
-        RequestDatePicker.SelectedDate = _wo.RequestDate;
-        DescriptionTextBox.Text = _wo.Description ?? "";
-
-        var lines = Db.GetWorkOrderLines(_wo.Id);
-        foreach (var l in lines)
-            l.RecomputeLineTotal();
-
-        LinesGrid.ItemsSource = lines;
-
-        QuoteNotesTextBox.Text = _wo.QuoteNotes ?? "";
-
-        SignatureNameTextBox.Text = _wo.SignatureName ?? "";
-        var date = _wo.SignatureDate?.Date ?? DateTime.Today;
-        SignatureDatePicker.SelectedDate = date;
-
-        if (_wo.SignaturePng != null && _wo.SignaturePng.Length > 0)
-            SignatureImage.Source = PngBytesToImageSource(_wo.SignaturePng);
-        else
-            SignatureImage.Source = null;
-
-        SignatureInkCanvas.Strokes.Clear();
-
-        RefreshDisplayBindings();
-        ApplyMode();
-    }
-
-    private void RefreshDisplayBindings()
-    {
-        var dc = DataContext;
-        DataContext = null;
-        DataContext = dc;
-    }
-
-    private void LinesGrid_PreparingCellForEdit(object? sender, DataGridPreparingCellForEditEventArgs e)
-    {
-        var header = e.Column?.Header?.ToString() ?? "";
-        bool isQtyOrPrice =
-            header.Contains("Qt", StringComparison.OrdinalIgnoreCase) ||
-            header.Contains("Prix", StringComparison.OrdinalIgnoreCase);
-
-        if (!isQtyOrPrice) return;
-        if (e.EditingElement is not TextBox tb) return;
-
-        tb.MaxLength = 0;
-
-        if (_activeEditTextBox != null)
-            _activeEditTextBox.TextChanged -= ActiveEditTextBox_TextChanged;
-
-        _activeEditTextBox = tb;
-        _activeEditTextBox.TextChanged += ActiveEditTextBox_TextChanged;
-    }
-
-    private void ActiveEditTextBox_TextChanged(object? sender, TextChangedEventArgs e)
-    {
-        if (_wo == null) return;
-        if (sender is not TextBox tb) return;
-
-        var be = tb.GetBindingExpression(TextBox.TextProperty);
-        be?.UpdateSource();
-
-        if (LinesGrid.CurrentItem is not WorkOrderLine line)
-            return;
-
-        line.RecomputeLineTotal();
-        RecalculateTotals();
-    }
-
-    private void LinesGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
-        => Dispatcher.BeginInvoke(new Action(SaveCurrentGridLinesToDb));
-
-    private void SaveCurrentGridLinesToDb()
-    {
-        if (_wo == null) return;
-
-        LinesGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        LinesGrid.CommitEdit(DataGridEditingUnit.Row, true);
-
-        var lines = (LinesGrid.ItemsSource as IEnumerable<WorkOrderLine>)?.ToList();
-        if (lines == null) return;
-
-        foreach (var l in lines)
-        {
-            l.Label = (l.Label ?? "").Trim();
-            l.RecomputeLineTotal();
-
-            if (l.Id > 0)
-                Db.UpdateWorkOrderLine(l);
-        }
-    }
-
-    private List<WorkOrderLine> GetCurrentLinesFromGrid()
-    {
-        LinesGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        LinesGrid.CommitEdit(DataGridEditingUnit.Row, true);
-
-        var lines = (LinesGrid.ItemsSource as IEnumerable<WorkOrderLine>)?.ToList()
-                    ?? new List<WorkOrderLine>();
-
-        foreach (var l in lines)
-        {
-            l.Label = (l.Label ?? "").Trim();
-            l.RecomputeLineTotal();
-        }
-
-        return lines;
-    }
-
-    private void AddMaterialLine_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-
-        SaveCurrentGridLinesToDb();
-        Db.InsertWorkOrderLine(_wo.Id, "", 0, 0);
-
-        var lines = Db.GetWorkOrderLines(_wo.Id);
-        foreach (var l in lines)
-            l.RecomputeLineTotal();
-
-        LinesGrid.ItemsSource = lines;
-        RecalculateTotals();
-    }
-
-    private void DeleteMaterialLine_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-
-        SaveCurrentGridLinesToDb();
-        if (LinesGrid.SelectedItem is not WorkOrderLine line) return;
-
-        Db.DeleteWorkOrderLine(line.Id);
-
-        var lines = Db.GetWorkOrderLines(_wo.Id);
-        foreach (var l in lines)
-            l.RecomputeLineTotal();
-
-        LinesGrid.ItemsSource = lines;
-        RecalculateTotals();
-    }
-
-    private void RecalculateTotals()
-    {
-        if (_wo == null) return;
-
-        var lines = (LinesGrid.ItemsSource as IEnumerable<WorkOrderLine>)?.ToList()
-                    ?? Db.GetWorkOrderLines(_wo.Id);
-
-        foreach (var l in lines)
-            l.RecomputeLineTotal();
-
-        var materialTotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
-
-        var laborTotal = Math.Round(_wo.LaborHours * _wo.LaborRate, 2);
-        var travelTotal = Math.Round(_wo.TravelQty * _wo.TravelRate, 2);
-
-        var totalHt = Math.Round(materialTotal + laborTotal + travelTotal, 2);
-        var tvaAmount = Math.Round(totalHt * (_wo.TvaRate / 100.0), 2);
-        var totalTtc = Math.Round(totalHt + tvaAmount, 2);
-
-        LaborTotalTextBlock.Text = F2(laborTotal);
-        TravelTotalTextBlock.Text = F2(travelTotal);
-        TvaAmountTextBlock.Text = F2(tvaAmount);
-
-        TotalHtTextBlock.Text = $"Total HT : {F2(totalHt)}";
-        TotalTtcTextBlock.Text = $"Total TTC : {F2(totalTtc)}";
-    }
-
-    private void Back_Click(object sender, RoutedEventArgs e) => Close();
-
-    private bool DemandIsFilled()
-    {
-        var place = PlaceComboBox.SelectedItem?.ToString() ?? "";
-        var reqBy = RequestedByComboBox.Text ?? "";
-        var perfBy = PerformedByComboBox.SelectedItem?.ToString() ?? "";
-        var desc = DescriptionTextBox.Text ?? "";
-
-        return
-            !string.IsNullOrWhiteSpace(place) &&
-            !string.IsNullOrWhiteSpace(reqBy) &&
-            !string.IsNullOrWhiteSpace(perfBy) &&
-            !string.IsNullOrWhiteSpace(desc);
-    }
-
-    private void SaveHeader_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-        if (_mode != WorkOrderEditMode.Architecte) return;
-
-        _wo.Place = PlaceComboBox.SelectedItem?.ToString() ?? "";
-        _wo.RequestedBy = (RequestedByComboBox.Text ?? "").Trim();
-        _wo.PerformedBy = PerformedByComboBox.SelectedItem?.ToString() ?? "";
-        _wo.RequestDate = RequestDatePicker.SelectedDate ?? DateTime.Today;
-        _wo.Description = DescriptionTextBox.Text ?? "";
-
-        Db.UpdateWorkOrderHeader(_wo);
-
-        if (DemandIsFilled())
-            Db.SetStageInCreation(_wo.Id);
-
-        MessageBox.Show("Demande enregistrée.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-        LoadWorkOrder();
-    }
-
-    private bool QuoteIsReallyFilled()
-    {
-        if (_wo == null) return false;
-
-        var lines = GetCurrentLinesFromGrid();
-        bool hasMaterial = lines.Any(l =>
-            !string.IsNullOrWhiteSpace(l.Label) ||
-            (l.Qty > 0) ||
-            (l.UnitPrice > 0));
-
-        bool hasLabor = _wo.LaborHours > 0 || _wo.LaborRate > 0;
-        bool hasTravel = _wo.TravelQty > 0 || _wo.TravelRate > 0;
-
-        return hasMaterial || hasLabor || hasTravel;
-    }
-
-    private void SaveQuote_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-
-        SaveCurrentGridLinesToDb();
-        _wo.QuoteNotes = QuoteNotesTextBox.Text ?? "";
-        Db.UpdateWorkOrderQuote(_wo);
-
-        if (_mode == WorkOrderEditMode.Architecte && QuoteIsReallyFilled())
-            Db.SetStageQuoteReceived(_wo.Id);
-
-        MessageBox.Show("Devis enregistré.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-        LoadWorkOrder();
-    }
-
-    private void SendToCompany_Click(object sender, RoutedEventArgs e)
-        => SaveSignerReply_Click(sender, e);
-
-    private class IziregiExportFile
-    {
-        public string FileType { get; set; } = "iziregi";
-        public string Package { get; set; } = "";
-        public string ExportedAt { get; set; } = "";
-        public WorkOrder? WorkOrder { get; set; }
-        public List<WorkOrderLine> Lines { get; set; } = new();
-    }
+        WriteIndented = true
+    };
 
     private class IziregiReplyFile
     {
@@ -433,7 +74,6 @@ public partial class WorkOrderWindow : Window
         public string Package { get; set; } = "";
         public string RepliedAt { get; set; } = "";
         public long WorkOrderId { get; set; }
-
         public WorkOrder? WorkOrder { get; set; }
         public List<WorkOrderLine> Lines { get; set; } = new();
 
@@ -442,319 +82,1389 @@ public partial class WorkOrderWindow : Window
         public byte[]? SignaturePng { get; set; }
     }
 
-    private void SaveReply_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
+    private const int DescriptionMaxCharsPerLine = 34;
+    private const int DescriptionMaxLines = 10;
 
-        Directory.CreateDirectory(InboxDir);
+    private bool _descriptionGuard;
+    private bool _descriptionLimitHooked;
+
+    private void HookDescriptionLimit()
+    {
+        if (_descriptionLimitHooked) return;
+        _descriptionLimitHooked = true;
+
+        if (DescriptionTextBox == null) return;
+
+        DescriptionTextBox.TextChanged -= DescriptionTextBox_TextChanged_EnforceRules;
+
+        DescriptionTextBox.PreviewKeyDown -= DescriptionTextBox_PreviewKeyDown_BlockEnterAtMaxLines;
+        DescriptionTextBox.PreviewKeyDown += DescriptionTextBox_PreviewKeyDown_BlockEnterAtMaxLines;
+
+        DescriptionTextBox.LostKeyboardFocus -= DescriptionTextBox_LostKeyboardFocus_EnforceRules;
+        DescriptionTextBox.LostKeyboardFocus += DescriptionTextBox_LostKeyboardFocus_EnforceRules;
+
+        WpfDataObject.RemovePastingHandler(DescriptionTextBox, DescriptionTextBox_OnPaste_EnforceRules);
+        WpfDataObject.AddPastingHandler(DescriptionTextBox, DescriptionTextBox_OnPaste_EnforceRules);
+    }
+
+    private void DescriptionTextBox_PreviewKeyDown_BlockEnterAtMaxLines(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (_isLoading) return;
+        if (sender is not WpfTextBox tb) return;
+
+        var isEnter = e.Key == System.Windows.Input.Key.Return || e.Key == System.Windows.Input.Key.Enter;
+        if (!isEnter) return;
+
+        if (tb.SelectionLength > 0) return;
+
+        var lines = SplitLines(tb.Text ?? "");
+        if (lines.Length >= DescriptionMaxLines)
+            e.Handled = true;
+    }
+
+    private void DescriptionTextBox_LostKeyboardFocus_EnforceRules(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_isLoading) return;
+        if (_descriptionGuard) return;
+        if (sender is not WpfTextBox tb) return;
+
+        try
+        {
+            var before = NormalizeNewlines(tb.Text ?? "");
+            var after = EnforceDescriptionRules(before);
+
+            if (string.Equals(before, after, StringComparison.Ordinal))
+                return;
+
+            _descriptionGuard = true;
+            try
+            {
+                tb.Text = after;
+                tb.CaretIndex = Math.Min(after.Length, tb.CaretIndex);
+            }
+            finally
+            {
+                _descriptionGuard = false;
+            }
+        }
+        catch { }
+    }
+
+    private void DescriptionTextBox_OnPaste_EnforceRules(object sender, DataObjectPastingEventArgs e)
+    {
+        if (_isLoading) return;
+        if (_descriptionGuard) return;
+        if (sender is not WpfTextBox tb) return;
+
+        try
+        {
+            if (!e.DataObject.GetDataPresent(WpfDataFormats.UnicodeText)) return;
+
+            var pasteText = e.DataObject.GetData(WpfDataFormats.UnicodeText) as string ?? "";
+            pasteText = NormalizeNewlines(pasteText);
+
+            var current = NormalizeNewlines(tb.Text ?? "");
+            var selStart = tb.SelectionStart;
+            var selLen = tb.SelectionLength;
+
+            if (selStart < 0) selStart = 0;
+            if (selStart > current.Length) selStart = current.Length;
+            if (selLen < 0) selLen = 0;
+            if (selStart + selLen > current.Length) selLen = current.Length - selStart;
+
+            var composed = current.Substring(0, selStart) + pasteText + current.Substring(selStart + selLen);
+            var enforced = EnforceDescriptionRules(composed);
+
+            e.CancelCommand();
+            _descriptionGuard = true;
+            try
+            {
+                tb.Text = enforced;
+                tb.CaretIndex = Math.Min(enforced.Length, selStart + pasteText.Length);
+            }
+            finally
+            {
+                _descriptionGuard = false;
+            }
+        }
+        catch { }
+    }
+
+    private void DescriptionTextBox_TextChanged_EnforceRules(object sender, TextChangedEventArgs e) { }
+
+    private static string EnforceDescriptionRules(string input)
+    {
+        input = NormalizeNewlines(input);
+        var wrapped = EnforceWordWrap(input, DescriptionMaxCharsPerLine);
+
+        var lines = SplitLines(wrapped);
+        if (lines.Length <= DescriptionMaxLines)
+            return wrapped;
+
+        return string.Join("\n", lines.Take(DescriptionMaxLines));
+    }
+
+    private static string EnforceWordWrap(string input, int maxCharsPerLine)
+    {
+        input = NormalizeNewlines(input);
+        if (maxCharsPerLine <= 0) return input;
+
+        var rawLines = input.Split('\n');
+        var outLines = new List<string>();
+
+        foreach (var raw in rawLines)
+        {
+            var line = raw ?? "";
+
+            if (line.Length == 0)
+            {
+                outLines.Add("");
+                continue;
+            }
+
+            var remaining = line;
+
+            while (remaining.Length > maxCharsPerLine)
+            {
+                int cut = -1;
+                for (int i = maxCharsPerLine; i >= 0; i--)
+                {
+                    if (i < remaining.Length && remaining[i] == ' ')
+                    {
+                        cut = i;
+                        break;
+                    }
+                }
+
+                if (cut <= 0)
+                {
+                    outLines.Add(remaining.Substring(0, maxCharsPerLine));
+                    remaining = remaining.Substring(maxCharsPerLine);
+                    continue;
+                }
+
+                outLines.Add(remaining.Substring(0, cut));
+
+                int nextStart = cut + 1;
+                while (nextStart < remaining.Length && remaining[nextStart] == ' ')
+                    nextStart++;
+
+                remaining = nextStart <= remaining.Length ? remaining.Substring(nextStart) : "";
+            }
+
+            outLines.Add(remaining);
+        }
+
+        return string.Join("\n", outLines);
+    }
+
+    private const int QuoteNotesMaxCharsPerLine = 26;
+    private const int QuoteNotesMaxLines = 9;
+
+    private bool _quoteNotesGuard;
+    private bool _quoteNotesLimitHooked;
+
+    private void HookQuoteNotesLimit()
+    {
+        if (_quoteNotesLimitHooked) return;
+        _quoteNotesLimitHooked = true;
+
+        if (QuoteNotesTextBox == null) return;
+
+        QuoteNotesTextBox.PreviewKeyDown -= QuoteNotesTextBox_PreviewKeyDown_BlockEnterAtMaxLines;
+        QuoteNotesTextBox.PreviewKeyDown += QuoteNotesTextBox_PreviewKeyDown_BlockEnterAtMaxLines;
+
+        QuoteNotesTextBox.LostKeyboardFocus -= QuoteNotesTextBox_LostKeyboardFocus_EnforceRules;
+        QuoteNotesTextBox.LostKeyboardFocus += QuoteNotesTextBox_LostKeyboardFocus_EnforceRules;
+
+        WpfDataObject.RemovePastingHandler(QuoteNotesTextBox, QuoteNotesTextBox_OnPaste_EnforceRules);
+        WpfDataObject.AddPastingHandler(QuoteNotesTextBox, QuoteNotesTextBox_OnPaste_EnforceRules);
+    }
+
+    private void QuoteNotesTextBox_PreviewKeyDown_BlockEnterAtMaxLines(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (_isLoading) return;
+        if (sender is not WpfTextBox tb) return;
+
+        var isEnter = e.Key == System.Windows.Input.Key.Return || e.Key == System.Windows.Input.Key.Enter;
+        if (!isEnter) return;
+
+        if (tb.SelectionLength > 0) return;
+
+        var lines = SplitLines(tb.Text ?? "");
+        if (lines.Length >= QuoteNotesMaxLines)
+            e.Handled = true;
+    }
+
+    private void QuoteNotesTextBox_LostKeyboardFocus_EnforceRules(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_isLoading) return;
+        if (_quoteNotesGuard) return;
+        if (sender is not WpfTextBox tb) return;
+
+        try
+        {
+            var before = NormalizeNewlines(tb.Text ?? "");
+            var after = EnforceQuoteNotesRules(before);
+
+            if (string.Equals(before, after, StringComparison.Ordinal))
+                return;
+
+            _quoteNotesGuard = true;
+            try
+            {
+                tb.Text = after;
+                tb.CaretIndex = Math.Min(after.Length, tb.CaretIndex);
+            }
+            finally
+            {
+                _quoteNotesGuard = false;
+            }
+        }
+        catch { }
+    }
+
+    private void QuoteNotesTextBox_OnPaste_EnforceRules(object sender, DataObjectPastingEventArgs e)
+    {
+        if (_isLoading) return;
+        if (_quoteNotesGuard) return;
+        if (sender is not WpfTextBox tb) return;
+
+        try
+        {
+            if (!e.DataObject.GetDataPresent(WpfDataFormats.UnicodeText)) return;
+
+            var pasteText = e.DataObject.GetData(WpfDataFormats.UnicodeText) as string ?? "";
+            pasteText = NormalizeNewlines(pasteText);
+
+            var current = NormalizeNewlines(tb.Text ?? "");
+            var selStart = tb.SelectionStart;
+            var selLen = tb.SelectionLength;
+
+            if (selStart < 0) selStart = 0;
+            if (selStart > current.Length) selStart = current.Length;
+            if (selLen < 0) selLen = 0;
+            if (selStart + selLen > current.Length) selLen = current.Length - selStart;
+
+            var composed = current.Substring(0, selStart) + pasteText + current.Substring(selStart + selLen);
+            var enforced = EnforceQuoteNotesRules(composed);
+
+            e.CancelCommand();
+            _quoteNotesGuard = true;
+            try
+            {
+                tb.Text = enforced;
+                tb.CaretIndex = Math.Min(enforced.Length, selStart + pasteText.Length);
+            }
+            finally
+            {
+                _quoteNotesGuard = false;
+            }
+        }
+        catch { }
+    }
+
+    private static string EnforceQuoteNotesRules(string input)
+    {
+        input = NormalizeNewlines(input);
+
+        var rawLines = SplitLines(input);
+        var resultLines = new List<string>(capacity: QuoteNotesMaxLines);
+
+        foreach (var raw in rawLines)
+        {
+            var line = raw ?? "";
+
+            if (line.Length == 0)
+            {
+                resultLines.Add("");
+                if (resultLines.Count >= QuoteNotesMaxLines) break;
+                continue;
+            }
+
+            int idx = 0;
+            while (idx < line.Length)
+            {
+                var take = Math.Min(QuoteNotesMaxCharsPerLine, line.Length - idx);
+                resultLines.Add(line.Substring(idx, take));
+                idx += take;
+
+                if (resultLines.Count >= QuoteNotesMaxLines)
+                    break;
+            }
+
+            if (resultLines.Count >= QuoteNotesMaxLines)
+                break;
+        }
+
+        if (resultLines.Count > QuoteNotesMaxLines)
+            resultLines = resultLines.Take(QuoteNotesMaxLines).ToList();
+
+        for (int i = 0; i < resultLines.Count; i++)
+        {
+            var s = resultLines[i] ?? "";
+            if (s.Length > QuoteNotesMaxCharsPerLine)
+                resultLines[i] = s.Substring(0, QuoteNotesMaxCharsPerLine);
+        }
+
+        return string.Join("\n", resultLines);
+    }
+
+    private static string NormalizeNewlines(string s)
+    {
+        s ??= "";
+        return s.Replace("\r\n", "\n").Replace("\r", "\n");
+    }
+
+    private static string[] SplitLines(string s)
+    {
+        s = NormalizeNewlines(s);
+        if (s.Length == 0) return Array.Empty<string>();
+        return s.Split('\n');
+    }
+
+    private string GetSelectedValidationDecision()
+    {
+        try
+        {
+            if (DecisionValidateRadio?.IsChecked == true) return "Validé";
+            if (DecisionRefuseRadio?.IsChecked == true) return "Refusé";
+            if (DecisionCancelRadio?.IsChecked == true) return "Annulé";
+        }
+        catch { }
+        return "";
+    }
+
+    private void ApplyValidationDecisionToUi(string? decision)
+    {
+        decision = (decision ?? "").Trim();
+
+        try
+        {
+            if (DecisionValidateRadio != null) DecisionValidateRadio.IsChecked = false;
+            if (DecisionRefuseRadio != null) DecisionRefuseRadio.IsChecked = false;
+            if (DecisionCancelRadio != null) DecisionCancelRadio.IsChecked = false;
+
+            if (string.Equals(decision, "Validé", StringComparison.OrdinalIgnoreCase))
+            {
+                if (DecisionValidateRadio != null) DecisionValidateRadio.IsChecked = true;
+                return;
+            }
+
+            if (string.Equals(decision, "Refusé", StringComparison.OrdinalIgnoreCase))
+            {
+                if (DecisionRefuseRadio != null) DecisionRefuseRadio.IsChecked = true;
+                return;
+            }
+
+            if (string.Equals(decision, "Annulé", StringComparison.OrdinalIgnoreCase))
+            {
+                if (DecisionCancelRadio != null) DecisionCancelRadio.IsChecked = true;
+                return;
+            }
+        }
+        catch { }
+    }
+
+    private bool EnsureValidationIsNotPartialOrWarn()
+    {
+        var decision = (GetSelectedValidationDecision() ?? "").Trim();
+        var name = (SignatureNameTextBox?.Text ?? "").Trim();
+        var date = SignatureDatePicker?.SelectedDate;
+
+        bool hasInk = false;
+        try { hasInk = SignatureInkCanvas != null && SignatureInkCanvas.Strokes.Count > 0; } catch { hasInk = false; }
+
+        bool hasSignature =
+            hasInk
+            || (_existingSignaturePng != null && _existingSignaturePng.Length > 0);
+
+        bool allEmpty =
+            string.IsNullOrWhiteSpace(decision)
+            && string.IsNullOrWhiteSpace(name)
+            && !date.HasValue
+            && !hasSignature
+            && !_signatureCleared;
+
+        if (allEmpty)
+            return true;
+
+        bool isComplete =
+            !string.IsNullOrWhiteSpace(decision)
+            && !string.IsNullOrWhiteSpace(name)
+            && date.HasValue
+            && hasSignature;
+
+        if (!isComplete)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "Validation incomplète : tous les champs obligatoires ne sont pas remplis.",
+                "Validation",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        var png = CaptureSignaturePng();
+        if (png == null || png.Length == 0)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "Validation incomplète : tous les champs obligatoires ne sont pas remplis.",
+                "Validation",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        _existingSignaturePng = png;
+        _signatureCleared = false;
+
+        return true;
+    }
+
+    private void ResetValidationButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (DecisionValidateRadio != null) DecisionValidateRadio.IsChecked = false;
+            if (DecisionRefuseRadio != null) DecisionRefuseRadio.IsChecked = false;
+            if (DecisionCancelRadio != null) DecisionCancelRadio.IsChecked = false;
+
+            if (SignatureNameTextBox != null) SignatureNameTextBox.Text = "";
+            if (SignatureDatePicker != null) SignatureDatePicker.SelectedDate = null;
+
+            try { SignatureInkCanvas?.Strokes.Clear(); } catch { }
+            try { if (SignatureInkCanvas != null) SignatureInkCanvas.Background = MediaBrushes.White; } catch { }
+
+            _existingSignaturePng = null;
+            _signatureCleared = true;
+
+            if (_workOrder == null || _workOrder.Id <= 0)
+            {
+                ApplyMode();
+                return;
+            }
+
+            _workOrder.SignatureName = "";
+            _workOrder.SignatureDate = null;
+            _workOrder.SignaturePng = null;
+            _workOrder.ValidationDecision = "";
+
+            Db.UpdateWorkOrderSignatureRaw(_workOrder);
+            Db.UpdateWorkOrderValidationDecision(_workOrder.Id, "");
+
+            var hasQuoteData = HasAnyQuoteData(_workOrder) || _lines.Any(l => !string.IsNullOrWhiteSpace(l?.Label));
+            if (hasQuoteData)
+                Db.SetStageQuoteReceived(_workOrder.Id);
+            else
+                Db.SetStageInCreation(_workOrder.Id);
+
+            _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+
+            ApplyMode();
+            UpdatePdfButtonVisibility();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible de reset la validation.\n\n{ex.Message}",
+                "Validation",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void ResetValidationBottomButton_Click(object sender, RoutedEventArgs e) => ResetValidationButton_Click(sender, e);
+
+    public WorkOrderWindow()
+        : this(null, WorkOrderEditMode.Architecte, createMode: true)
+    {
+    }
+
+    public WorkOrderWindow(long workOrderId, WorkOrderEditMode mode)
+        : this(Db.GetWorkOrderById(workOrderId), mode, createMode: false)
+    {
+    }
+
+    private WorkOrderWindow(WorkOrder? workOrder, WorkOrderEditMode mode, bool createMode)
+    {
+        InitializeComponent();
+
+        Db.Init();
+
+        _workOrder = workOrder;
+        _mode = mode;
+        _isCreateMode = createMode || workOrder == null;
+
+        LinesGrid.ItemsSource = _lines;
+
+        HookReserveMaxLength();
+        HookNumericInputsNoSelectAll();
+        HookMainScrollFix();
+        HookQuoteNotesLimit();
+        HookDescriptionLimit();
+
+        LoadStaticHeader();
+        LoadLists();
+        ApplyDemandLabels();
+        LoadWorkOrder();
+
+        _pdfAvailableForExternal = (_mode == WorkOrderEditMode.Signataire);
+
+        ApplyMode();
+        RecomputeTotals();
+    }
+
+    private void HookMainScrollFix()
+    {
+        try
+        {
+            if (LinesGrid != null)
+            {
+                LinesGrid.PreviewMouseWheel -= LinesGrid_PreviewMouseWheel;
+                LinesGrid.PreviewMouseWheel += LinesGrid_PreviewMouseWheel;
+            }
+
+            PreviewMouseWheel -= WorkOrderWindow_PreviewMouseWheel;
+            PreviewMouseWheel += WorkOrderWindow_PreviewMouseWheel;
+        }
+        catch { }
+    }
+
+    private void WorkOrderWindow_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        try
+        {
+            if (MainScrollViewer == null) return;
+
+            if (e.Handled)
+            {
+                MainScrollViewer.ScrollToVerticalOffset(MainScrollViewer.VerticalOffset - e.Delta);
+                e.Handled = true;
+            }
+        }
+        catch { }
+    }
+
+    private void LinesGrid_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        try
+        {
+            if (MainScrollViewer == null) return;
+
+            MainScrollViewer.ScrollToVerticalOffset(MainScrollViewer.VerticalOffset - e.Delta);
+            e.Handled = true;
+        }
+        catch { }
+    }
+
+    private void HookNumericInputsNoSelectAll()
+    {
+        HookNoSelectAll(LaborHoursTextBox);
+        HookNoSelectAll(LaborRateTextBox);
+        HookNoSelectAll(TravelQtyTextBox);
+        HookNoSelectAll(TravelRateTextBox);
+        HookNoSelectAll(TvaRateTextBox);
+        HookNoSelectAll(DiscountRateTextBox);
+        HookNoSelectAll(ForfaitQtyTextBox);
+        HookNoSelectAll(ForfaitUnitPriceTextBox);
+    }
+
+    private void HookNoSelectAll(WpfTextBox? tb)
+    {
+        if (tb == null) return;
+
+        tb.PreviewMouseLeftButtonDown += (s, e) =>
+        {
+            try
+            {
+                if (tb.IsKeyboardFocusWithin) return;
+
+                e.Handled = true;
+                tb.Focus();
+
+                var p = e.GetPosition(tb);
+                int idx = tb.GetCharacterIndexFromPoint(p, true);
+                if (idx < 0) idx = tb.Text?.Length ?? 0;
+                tb.CaretIndex = idx;
+                tb.SelectionLength = 0;
+            }
+            catch { }
+        };
+
+        tb.GotKeyboardFocus += (s, e) =>
+        {
+            try { tb.SelectionLength = 0; } catch { }
+        };
+    }
+
+    private void DiscountRateTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not WpfTextBox tb) return;
+
+        if (!tb.IsKeyboardFocusWithin)
+        {
+            e.Handled = true;
+            tb.Focus();
+            tb.CaretIndex = tb.Text?.Length ?? 0;
+        }
+    }
+
+    private void PercentInt_LostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not WpfTextBox tb) return;
+
+        var v = ParseDouble(tb.Text, 0);
+        v = Math.Max(0, v);
+        var intVal = (int)Math.Round(v, MidpointRounding.AwayFromZero);
+        tb.Text = intVal == 0 ? "" : intVal.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void HookReserveMaxLength()
+    {
+        if (_reserveLimitHooked) return;
+        _reserveLimitHooked = true;
+
+        if (ReserveComboBox == null) return;
+
+        ReserveComboBox.IsEditable = true;
+
+        ReserveComboBox.Loaded += (_, __) =>
+        {
+            try
+            {
+                if (ReserveComboBox.Template?.FindName("PART_EditableTextBox", ReserveComboBox) is WpfTextBox tb)
+                {
+                    tb.MaxLength = ReserveMaxLength;
+
+                    tb.TextChanged -= ReserveEditableTextBox_TextChanged;
+                    tb.TextChanged += ReserveEditableTextBox_TextChanged;
+
+                    if ((tb.Text ?? "").Length > ReserveMaxLength)
+                    {
+                        tb.Text = (tb.Text ?? "").Substring(0, ReserveMaxLength);
+                        tb.CaretIndex = tb.Text.Length;
+                    }
+                }
+
+                ReserveComboBox.SelectionChanged -= ReserveComboBox_SelectionChanged_Truncate;
+                ReserveComboBox.SelectionChanged += ReserveComboBox_SelectionChanged_Truncate;
+
+                if ((ReserveComboBox.Text ?? "").Length > ReserveMaxLength)
+                    ReserveComboBox.Text = (ReserveComboBox.Text ?? "").Substring(0, ReserveMaxLength);
+            }
+            catch { }
+        };
+    }
+
+    private void ReserveEditableTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        try
+        {
+            if (sender is not WpfTextBox tb) return;
+
+            if ((tb.Text ?? "").Length > ReserveMaxLength)
+            {
+                var caret = tb.CaretIndex;
+                tb.Text = (tb.Text ?? "").Substring(0, ReserveMaxLength);
+                tb.CaretIndex = Math.Min(caret, tb.Text.Length);
+            }
+        }
+        catch { }
+    }
+
+    private void ReserveComboBox_SelectionChanged_Truncate(object sender, SelectionChangedEventArgs e)
+    {
+        try
+        {
+            if (ReserveComboBox == null) return;
+
+            var t = ReserveComboBox.Text ?? "";
+            if (t.Length > ReserveMaxLength)
+                ReserveComboBox.Text = t.Substring(0, ReserveMaxLength);
+        }
+        catch { }
+    }
+
+    private void ApplyMode()
+    {
+        ApplyFieldPermissions();
+        UpdatePdfButtonVisibility();
+        UpdateExportButtonsVisibility();
+        UpdateCompanyPdfButtons();
+    }
+
+    private void UpdateExportButtonsVisibility()
+    {
+        var isArchitecte = _mode == WorkOrderEditMode.Architecte;
+
+        if (ExportQuoteRequestButton != null)
+            ExportQuoteRequestButton.Visibility = isArchitecte ? Visibility.Visible : Visibility.Collapsed;
+
+        if (ExportSignatureRequestButton != null)
+            ExportSignatureRequestButton.Visibility = isArchitecte ? Visibility.Visible : Visibility.Collapsed;
+
+        if (ResetValidationBottomButton != null)
+            ResetValidationBottomButton.Visibility = isArchitecte ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdatePdfButtonVisibility()
+    {
+        if (PdfButton == null) return;
 
         if (_mode == WorkOrderEditMode.EntrepriseDevis)
         {
-            SaveCurrentGridLinesToDb();
-            _wo.QuoteNotes = QuoteNotesTextBox.Text ?? "";
-            Db.UpdateWorkOrderQuote(_wo);
-
-            var lines = GetCurrentLinesFromGrid();
-
-            var reply = new IziregiReplyFile
-            {
-                FileType = "iziregi-reponse",
-                Package = "devis",
-                RepliedAt = DateTime.UtcNow.ToString("o"),
-                WorkOrderId = _wo.Id,
-                WorkOrder = _wo,
-                Lines = lines
-            };
-
-            var fileName = $"BDR-{_wo.BdrNumber}-devis.iziregi-reponse";
-            var path = Path.Combine(InboxDir, fileName);
-
-            File.WriteAllText(path, JsonSerializer.Serialize(reply, JsonOptions));
-
-            MessageBox.Show("Réponse devis enregistrée (INBOX).", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-            Close();
+            PdfButton.Visibility = _pdfAvailableForExternal ? Visibility.Visible : Visibility.Collapsed;
+            PdfButton.IsEnabled = _pdfAvailableForExternal;
             return;
         }
 
-        if (_mode == WorkOrderEditMode.Signataire)
+        var hasQuoteData = (_workOrder != null) && (HasAnyQuoteData(_workOrder) || _lines.Any(l => !string.IsNullOrWhiteSpace(l?.Label)));
+        var show = hasQuoteData || _pdfAvailableForExternal;
+
+        PdfButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        PdfButton.IsEnabled = show;
+    }
+
+    private void ApplyFieldPermissions()
+    {
+        var isArchitecte = true;
+        var isEntreprise = true;
+        var isSignataire = true;
+
+        SetEnabled(ReserveComboBox, isArchitecte);
+        SetEnabled(RequestedByComboBox, isArchitecte);
+        SetEnabled(PerformedByComboBox, isArchitecte);
+        SetEnabled(PlaceComboBox, isArchitecte);
+        SetEnabled(EtageComboBox, isArchitecte);
+        SetEnabled(DeadlineDatePicker, isArchitecte);
+
+        SetTextBoxEditable(DescriptionTextBox, isArchitecte);
+
+        var devisEditable = isArchitecte || isEntreprise;
+
+        // ✅ Forfait (ligne)
+        SetTextBoxEditable(ForfaitQtyTextBox, devisEditable);
+        SetTextBoxEditable(ForfaitUnitPriceTextBox, devisEditable);
+
+        // ✅ Forfait : si utilisé, désactiver Matériel/MO/Déplacements/Rabais
+        var forfaitUsed = IsForfaitUsedFromUi();
+
+        var devisStandardEditable = devisEditable && !forfaitUsed;
+
+        SetTextBoxEditable(QuoteNameTextBox, devisEditable);
+        SetEnabled(QuoteDatePicker, devisEditable);
+
+        SetTextBoxEditable(LaborHoursTextBox, devisStandardEditable);
+        SetTextBoxEditable(LaborRateTextBox, devisStandardEditable);
+        SetTextBoxEditable(TravelQtyTextBox, devisStandardEditable);
+        SetTextBoxEditable(TravelRateTextBox, devisStandardEditable);
+        SetTextBoxEditable(DiscountRateTextBox, devisStandardEditable);
+
+        SetTextBoxEditable(TvaRateTextBox, devisEditable);
+        SetTextBoxEditable(QuoteNotesTextBox, devisEditable);
+
+        if (AddLineButton != null) AddLineButton.IsEnabled = devisStandardEditable;
+        if (DeleteLineButton != null) DeleteLineButton.IsEnabled = devisStandardEditable;
+        if (LinesGrid != null) LinesGrid.IsReadOnly = !devisStandardEditable;
+
+        var validationEditable = isArchitecte || isSignataire;
+        SetTextBoxEditable(SignatureNameTextBox, validationEditable);
+        SetEnabled(SignatureDatePicker, validationEditable);
+
+        SetEnabled(DecisionValidateRadio, validationEditable);
+        SetEnabled(DecisionRefuseRadio, validationEditable);
+        SetEnabled(DecisionCancelRadio, validationEditable);
+
+        if (SignatureInkCanvas is WpfInkCanvas ic)
         {
-            var refreshed = Db.GetWorkOrderById(_wo.Id);
-            if (refreshed == null)
+            ic.IsEnabled = validationEditable;
+            ic.EditingMode = validationEditable ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
+        }
+
+        if (ImportSignatureButton != null) ImportSignatureButton.IsEnabled = validationEditable;
+        if (ClearSignatureButton != null) ClearSignatureButton.IsEnabled = validationEditable;
+        if (ResetValidationBottomButton != null) ResetValidationBottomButton.IsEnabled = isArchitecte;
+
+        // boutons PDF devis forfaitaire
+        UpdateCompanyPdfButtons();
+    }
+
+    private bool IsForfaitUsedFromUi()
+    {
+        var q = ParseDouble(ForfaitQtyTextBox?.Text, 0);
+        var u = ParseDouble(ForfaitUnitPriceTextBox?.Text, 0);
+        var total = q * u;
+        return Math.Abs(total) > 0.0000000001;
+    }
+
+    private void UpdateCompanyPdfButtons()
+    {
+        var hasPdf = false;
+        try
+        {
+            hasPdf = _workOrder != null
+                && _workOrder.ForfaitPdfFileBytes != null
+                && _workOrder.ForfaitPdfFileBytes.Length > 0;
+        }
+        catch { hasPdf = false; }
+
+        if (CompanyPdfOpenButton != null) CompanyPdfOpenButton.IsEnabled = hasPdf;
+        if (CompanyPdfRemoveButton != null) CompanyPdfRemoveButton.IsEnabled = hasPdf;
+
+        if (CompanyPdfFileNameTextBlock != null)
+        {
+            var name = _workOrder?.ForfaitPdfFileName ?? "";
+            CompanyPdfFileNameTextBlock.Text = string.IsNullOrWhiteSpace(name) ? "" : name;
+        }
+    }
+
+    private static void SetEnabled(WpfUIElement? e, bool enabled)
+    {
+        if (e == null) return;
+        e.IsEnabled = enabled;
+    }
+
+    private static void SetTextBoxEditable(WpfTextBox? tb, bool editable)
+    {
+        if (tb == null) return;
+        tb.IsReadOnly = !editable;
+        tb.IsEnabled = true;
+    }
+
+    private void ApplyDemandLabels()
+    {
+        try
+        {
+            var pid = Db.GetCurrentProjectId();
+            if (!pid.HasValue || pid.Value <= 0) return;
+
+            var projectId = pid.Value;
+
+            if (ReserveLabelTextBlock != null) ReserveLabelTextBlock.Text = Db.GetLabelReserve(projectId);
+            if (RequestedByLabelTextBlock != null) RequestedByLabelTextBlock.Text = Db.GetLabelRequestedBy(projectId);
+            if (PerformedByLabelTextBlock != null) PerformedByLabelTextBlock.Text = Db.GetLabelPerformedBy(projectId);
+            if (PlaceLabelTextBlock != null) PlaceLabelTextBlock.Text = Db.GetLabelPlace(projectId);
+            if (EtageLabelTextBlock != null) EtageLabelTextBlock.Text = Db.GetLabelEtage(projectId);
+            if (DeadlineLabelTextBlock != null) DeadlineLabelTextBlock.Text = Db.GetLabelDeadline(projectId);
+        }
+        catch { }
+    }
+
+    private static (string line1, string line2) SplitAddressTwoLines(string? raw)
+    {
+        var s = (raw ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(s))
+            return ("", "");
+
+        var lastComma = s.LastIndexOf(',');
+        if (lastComma >= 0 && lastComma < s.Length - 1)
+        {
+            var a = s.Substring(0, lastComma).Trim();
+            var b = s.Substring(lastComma + 1).Trim();
+            return (a, b);
+        }
+
+        return (s, "");
+    }
+
+    private void LoadStaticHeader()
+    {
+        ArchitectNameTextBlock.Text =
+            string.IsNullOrWhiteSpace(Db.GetArchitectName()) ? "Architecte" : Db.GetArchitectName();
+
+        var archAddr = Db.GetArchitectAddress() ?? "";
+        var (a1, a2) = SplitAddressTwoLines(archAddr);
+        if (ArchitectAddressLine1TextBlock != null) ArchitectAddressLine1TextBlock.Text = a1;
+        if (ArchitectAddressLine2TextBlock != null) ArchitectAddressLine2TextBlock.Text = a2;
+
+        LoadArchitectLogo(Db.GetArchitectLogoPath());
+
+        var currentProject = Db.GetCurrentProject();
+        ProjectNameTextBlock.Text = currentProject?.Name ?? "";
+
+        var projAddr = currentProject?.Address ?? "";
+        var (p1, p2) = SplitAddressTwoLines(projAddr);
+        if (ProjectAddressLine1TextBlock != null) ProjectAddressLine1TextBlock.Text = p1;
+        if (ProjectAddressLine2TextBlock != null) ProjectAddressLine2TextBlock.Text = p2;
+    }
+
+    private void LoadArchitectLogo(string? path)
+    {
+        ArchitectLogoImage.Source = null;
+        ArchitectLogoEmptyText.Visibility = Visibility.Visible;
+
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return;
+
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+
+            ArchitectLogoImage.Source = bmp;
+            ArchitectLogoEmptyText.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            ArchitectLogoImage.Source = null;
+            ArchitectLogoEmptyText.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void LoadLists()
+    {
+        _isLoading = true;
+        try
+        {
+            ReserveComboBox.ItemsSource = Db.GetReserves();
+            RequestedByComboBox.ItemsSource = Db.GetRequesters();
+            PerformedByComboBox.ItemsSource = Db.GetCompanies();
+            PlaceComboBox.ItemsSource = Db.GetPlaces();
+            EtageComboBox.ItemsSource = Db.GetEtages();
+        }
+        finally { _isLoading = false; }
+    }
+
+    private void LoadWorkOrder()
+    {
+        _isLoading = true;
+        try
+        {
+            if (_workOrder == null)
             {
-                MessageBox.Show("Bon introuvable.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                _workOrder = CreateDefaultWorkOrder();
+                Title = "Nouveau bon de régie";
+            }
+            else
+            {
+                _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+                Title = $"Bon de régie — N° {_workOrder.BdrDisplay}";
+            }
+
+            BdrNumberTextBox.Text = _workOrder.BdrNumber.ToString(CultureInfo.InvariantCulture);
+            RequestDatePicker.SelectedDate = _workOrder.RequestDate == default ? DateTime.Today : _workOrder.RequestDate;
+
+            ReserveComboBox.Text = _workOrder.Reserve ?? "";
+            RequestedByComboBox.Text = _workOrder.RequestedBy ?? "";
+            PerformedByComboBox.Text = _workOrder.PerformedBy ?? "";
+
+            PlaceComboBox.Text = _workOrder.Place ?? "";
+            EtageComboBox.Text = _workOrder.Etage ?? "";
+            DeadlineDatePicker.SelectedDate = _workOrder.DeadlineDate == default ? DateTime.Today : _workOrder.DeadlineDate;
+
+            DescriptionTextBox.Text = EnforceDescriptionRules(_workOrder.Description ?? "");
+
+            QuoteNameTextBox.Text = _workOrder.QuoteName ?? "";
+            QuoteDatePicker.SelectedDate = _workOrder.QuoteDate == default ? DateTime.Today : _workOrder.QuoteDate;
+
+            LaborHoursTextBox.Text = FormatInputNumber(_workOrder.LaborHours);
+            LaborRateTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.LaborRate);
+            TravelQtyTextBox.Text = FormatInputNumber(_workOrder.TravelQty);
+            TravelRateTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.TravelRate);
+
+            // ✅ Forfait
+            ForfaitQtyTextBox.Text = FormatInputNumber(_workOrder.ForfaitQty);
+            ForfaitUnitPriceTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.ForfaitUnitPrice);
+
+            var tvaRate = _workOrder.TvaRate <= 0 ? 8.1 : _workOrder.TvaRate;
+            TvaRateTextBox.Text = tvaRate.ToString("0.00", CultureInfo.InvariantCulture);
+
+            DiscountRateTextBox.Text = _workOrder.DiscountRate <= 0
+                ? ""
+                : ((int)Math.Round(_workOrder.DiscountRate, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+
+            QuoteNotesTextBox.Text = EnforceQuoteNotesRules(_workOrder.QuoteNotes ?? "");
+
+            SignatureNameTextBox.Text = _workOrder.SignatureName ?? "";
+            SignatureDatePicker.SelectedDate = null;
+
+            _existingSignaturePng = _workOrder.SignaturePng;
+            _signatureCleared = false;
+            LoadSignaturePreview(_existingSignaturePng);
+
+            ApplyValidationDecisionToUi(_workOrder.ValidationDecision);
+
+            _lines.Clear();
+            _deletedLineIds.Clear();
+
+            if (!_isCreateMode && _workOrder.Id > 0)
+            {
+                foreach (var line in Db.GetWorkOrderLines(_workOrder.Id))
+                {
+                    line.RecomputeLineTotal();
+                    _lines.Add(line);
+                }
+            }
+
+            if (_lines.Count == 0)
+                _lines.Add(new WorkOrderLine());
+
+            TrimTrailingEmptyLinesToMax();
+
+            RecomputeTotals();
+            ApplyMode();
+            UpdatePdfButtonVisibility();
+            UpdateCompanyPdfButtons();
+        }
+        finally { _isLoading = false; }
+    }
+
+    private WorkOrder CreateDefaultWorkOrder()
+    {
+        var currentProject = Db.GetCurrentProject();
+        long? projectId = currentProject?.Id;
+
+        if (!projectId.HasValue || projectId.Value <= 0)
+            projectId = Db.GetCurrentProjectId();
+
+        var bdr = projectId.HasValue && projectId.Value > 0
+            ? Db.GetNextBdrNumberForProject(projectId.Value)
+            : Db.GetNextBdrNumber();
+
+        return new WorkOrder
+        {
+            BdrNumber = bdr,
+            ProjectId = projectId,
+
+            Reserve = projectId.HasValue ? Db.GetDefaultReserve(projectId.Value) : Db.GetDefaultReserve(),
+            RequestedBy = projectId.HasValue ? Db.GetDefaultRequester(projectId.Value) : Db.GetDefaultRequester(),
+            PerformedBy = projectId.HasValue ? Db.GetDefaultCompany(projectId.Value) : Db.GetDefaultCompany(),
+            Place = projectId.HasValue ? Db.GetDefaultPlace(projectId.Value) : Db.GetDefaultPlace(),
+            Etage = projectId.HasValue ? Db.GetDefaultEtage(projectId.Value) : Db.GetDefaultEtage(),
+
+            RequestDate = DateTime.Today,
+            DeadlineDate = DateTime.Today,
+
+            Description = "",
+            QuoteName = "",
+            QuoteDate = DateTime.Today,
+
+            LaborHours = 0,
+            LaborRate = 0,
+            TravelQty = 0,
+            TravelRate = 0,
+
+            ForfaitQty = 0,
+            ForfaitUnitPrice = 0,
+            ForfaitPdfFileName = "",
+            ForfaitPdfFileBytes = null,
+
+            TvaRate = 8.1,
+            QuoteNotes = "",
+            DiscountRate = 0,
+
+            SignatureName = "",
+            SignatureDate = null,
+            SignaturePng = null,
+
+            ValidationDecision = ""
+        };
+    }
+
+    private void LinesGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (LinesGrid == null) return;
+
+            var dep = (DependencyObject)e.OriginalSource;
+
+            while (dep != null && dep is not DataGridRow && dep is not DataGridCell && dep is not DataGridColumnHeader)
+                dep = VisualTreeHelper.GetParent(dep);
+
+            if (dep is DataGridColumnHeader)
+                return;
+
+            if (dep is DataGridRow row)
+            {
+                if (!row.IsSelected)
+                {
+                    LinesGrid.SelectedItem = row.Item;
+                    LinesGrid.ScrollIntoView(row.Item);
+                }
+                row.Focus();
                 return;
             }
 
-            if (!refreshed.HasFullSignature)
+            if (dep is DataGridCell cell)
             {
-                MessageBox.Show("Signature incomplète. Fais d’abord « Enregistrer signature ».", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (cell.DataContext != null && !cell.IsSelected)
+                {
+                    LinesGrid.SelectedItem = cell.DataContext;
+                    LinesGrid.ScrollIntoView(cell.DataContext);
+                }
+
+                if (!cell.IsFocused)
+                    cell.Focus();
+
+                if (!cell.IsEditing)
+                {
+                    LinesGrid.CurrentCell = new DataGridCellInfo(cell.DataContext, cell.Column);
+                    LinesGrid.BeginEdit();
+                    e.Handled = true;
+                }
+
                 return;
             }
+        }
+        catch { }
+    }
 
-            var reply = new IziregiReplyFile
+    private static bool IsLineEmpty(WorkOrderLine? l)
+    {
+        if (l == null) return true;
+
+        var label = (l.Label ?? "").Trim();
+        var hasNumbers = Math.Abs(l.Qty) > 0.0000000001 || Math.Abs(l.UnitPrice) > 0.0000000001;
+
+        return string.IsNullOrWhiteSpace(label) && !hasNumbers;
+    }
+
+    private void TrimTrailingEmptyLinesToMax()
+    {
+        while (_lines.Count > QuoteHardMaxItems)
+        {
+            var last = _lines.LastOrDefault();
+            if (!IsLineEmpty(last))
+                break;
+
+            _lines.RemoveAt(_lines.Count - 1);
+        }
+    }
+
+    private void AddLineButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lines.Count >= QuoteHardMaxItems)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Maximum {QuoteMaxLines} lignes dans le devis.",
+                "Devis",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var newLine = new WorkOrderLine();
+        newLine.RecomputeLineTotal();
+
+        _lines.Add(newLine);
+
+        LinesGrid.SelectedItem = newLine;
+        LinesGrid.ScrollIntoView(newLine);
+
+        QueueRecomputeTotals();
+    }
+
+    private void DeleteLineButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (LinesGrid.SelectedItem is not WorkOrderLine line)
+            return;
+
+        if (line.Id > 0)
+            _deletedLineIds.Add(line.Id);
+
+        _lines.Remove(line);
+        QueueRecomputeTotals();
+    }
+
+    private void LinesGrid_CurrentCellChanged(object sender, EventArgs e)
+    {
+        if (_isLoading) return;
+        QueueRecomputeTotals();
+    }
+
+    private void LinesGrid_RowEditEnding(object sender, DataGridRowEditEndingEventArgs e)
+    {
+        if (_isLoading) return;
+        QueueRecomputeTotals();
+    }
+
+    private void TotalsInput_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isLoading) return;
+        QueueRecomputeTotals();
+    }
+
+    private void QueueRecomputeTotals()
+    {
+        if (_recomputeQueued) return;
+        _recomputeQueued = true;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            _recomputeQueued = false;
+            RecomputeTotals();
+            ApplyFieldPermissions();
+            UpdatePdfButtonVisibility();
+        }));
+    }
+
+    private void RecomputeTotals()
+    {
+        if (_isLoading) return;
+
+        foreach (var line in _lines)
+            line.RecomputeLineTotal();
+
+        double materialTotal = 0;
+
+        foreach (var l in _lines)
+        {
+            if (l == null) continue;
+            if (IsLineEmpty(l)) continue;
+
+            materialTotal += l.LineTotal;
+        }
+
+        var forfaitQty = ParseDouble(ForfaitQtyTextBox?.Text, 0);
+        var forfaitUnit = ParseDouble(ForfaitUnitPriceTextBox?.Text, 0);
+        var forfaitTotal = forfaitQty * forfaitUnit;
+
+        var laborHours = ParseDouble(LaborHoursTextBox?.Text);
+        var laborRate = ParseDouble(LaborRateTextBox?.Text);
+        var laborTotal = laborHours * laborRate;
+
+        var travelQty = ParseDouble(TravelQtyTextBox?.Text);
+        var travelRate = ParseDouble(TravelRateTextBox?.Text);
+        var travelTotal = travelQty * travelRate;
+
+        var totalHtBrut = materialTotal + laborTotal + travelTotal + forfaitTotal;
+
+        var discountRate = ParseDouble(DiscountRateTextBox?.Text, 0);
+        discountRate = Math.Max(0, discountRate);
+
+        var totalHtNet = totalHtBrut * (1.0 - (discountRate / 100.0));
+        var discountAmount = totalHtNet - totalHtBrut;
+
+        var tvaRate = ParseDouble(TvaRateTextBox?.Text, 8.1);
+        var tvaAmount = totalHtNet * (tvaRate / 100.0);
+        var totalTtc = totalHtNet + tvaAmount;
+
+        var fr = CultureInfo.GetCultureInfo("fr-FR");
+
+        if (MaterialTotalTextBlock != null) MaterialTotalTextBlock.Text = materialTotal.ToString("0.00", fr);
+        if (LaborTotalTextBlock != null) LaborTotalTextBlock.Text = laborTotal.ToString("0.00", fr);
+        if (TravelTotalTextBlock != null) TravelTotalTextBlock.Text = travelTotal.ToString("0.00", fr);
+        if (ForfaitTotalTextBlock != null) ForfaitTotalTextBlock.Text = forfaitTotal.ToString("0.00", fr);
+
+        var discountDisplay = Math.Abs(discountAmount) < 0.0000000001 ? 0 : discountAmount;
+        if (DiscountAmountTextBlock != null) DiscountAmountTextBlock.Text = discountDisplay.ToString("0.00", fr);
+
+        if (TotalHtTextBlock != null) TotalHtTextBlock.Text = totalHtNet.ToString("0.00", fr);
+
+        if (TvaAmountTextBlock != null) TvaAmountTextBlock.Text = tvaAmount.ToString("0.00", fr);
+        if (TotalTtcTextBlock != null) TotalTtcTextBlock.Text = totalTtc.ToString("0.00", fr);
+    }
+
+    private static double ParseDouble(string? value, double def = 0)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return def;
+        value = value.Trim().Replace("’", "").Replace("'", "").Replace(',', '.');
+        return double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : def;
+    }
+
+    private static string FormatInputNumber(double value)
+        => Math.Abs(value) < 0.0000000001 ? "" : value.ToString("G17", CultureInfo.InvariantCulture);
+
+    private static string FormatMoney2DecOrEmpty(double value)
+        => Math.Abs(value) < 0.0000000001 ? "" : value.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private void Money2Decimals_LostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox tb) return;
+        var v = ParseDouble(tb.Text);
+        tb.Text = Math.Abs(v) < 0.0000000001 ? "" : v.ToString("0.00", CultureInfo.InvariantCulture);
+    }
+
+    private void ClearSignatureButton_Click(object sender, RoutedEventArgs e)
+    {
+        SignatureInkCanvas.Strokes.Clear();
+        SignatureInkCanvas.Background = MediaBrushes.White;
+
+        _existingSignaturePng = null;
+        _signatureCleared = true;
+    }
+
+    private void ImportSignatureButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Importer une signature",
+            Filter = "PNG|*.png|Images|*.png;*.jpg;*.jpeg;*.bmp|Tous les fichiers|*.*"
+        };
+
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var bytes = File.ReadAllBytes(dlg.FileName);
+            _existingSignaturePng = bytes;
+            _signatureCleared = false;
+            LoadSignaturePreview(bytes);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Impossible d’importer la signature.\n\n{ex.Message}",
+                "Signature",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void LoadSignaturePreview(byte[]? png)
+    {
+        SignatureInkCanvas.Strokes.Clear();
+        SignatureInkCanvas.Background = MediaBrushes.White;
+
+        if (png == null || png.Length == 0) return;
+
+        try
+        {
+            var bmp = new BitmapImage();
+            using var ms = new MemoryStream(png);
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            bmp.Freeze();
+
+            SignatureInkCanvas.Background = new ImageBrush(bmp)
             {
-                FileType = "iziregi-reponse",
-                Package = "signature",
-                RepliedAt = DateTime.UtcNow.ToString("o"),
-                WorkOrderId = refreshed.Id,
-                SignatureName = refreshed.SignatureName ?? "",
-                SignatureDate = refreshed.SignatureDate?.ToString("yyyy-MM-dd") ?? "",
-                SignaturePng = refreshed.SignaturePng
+                Stretch = Stretch.Uniform,
+                AlignmentX = AlignmentX.Center,
+                AlignmentY = AlignmentY.Center
             };
-
-            var fileName = $"BDR-{refreshed.BdrNumber}-signature.iziregi-reponse";
-            var path = Path.Combine(InboxDir, fileName);
-
-            File.WriteAllText(path, JsonSerializer.Serialize(reply, JsonOptions));
-
-            MessageBox.Show("Réponse signature enregistrée (INBOX).", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-            Close();
-            return;
+        }
+        catch
+        {
+            SignatureInkCanvas.Background = MediaBrushes.White;
         }
     }
 
-    private void SaveSignerReply_Click(object sender, RoutedEventArgs e)
+    private byte[]? CaptureSignaturePng()
     {
-        if (_wo == null) return;
-        if (_mode != WorkOrderEditMode.Architecte) return;
+        if (SignatureInkCanvas.Strokes.Count == 0)
+            return _signatureCleared ? null : _existingSignaturePng;
 
-        SaveHeader_Click(sender, e);
-        SaveCurrentGridLinesToDb();
-        _wo.QuoteNotes = QuoteNotesTextBox.Text ?? "";
-        Db.UpdateWorkOrderQuote(_wo);
+        var width = Math.Max(1, (int)SignatureInkCanvas.ActualWidth);
+        var height = Math.Max(1, (int)SignatureInkCanvas.ActualHeight);
 
-        var lines = GetCurrentLinesFromGrid();
+        SignatureInkCanvas.Measure(new System.Windows.Size(width, height));
+        SignatureInkCanvas.Arrange(new System.Windows.Rect(new System.Windows.Size(width, height)));
+        SignatureInkCanvas.UpdateLayout();
 
-        var payload = new IziregiExportFile
-        {
-            FileType = "iziregi",
-            Package = "devis",
-            ExportedAt = DateTime.UtcNow.ToString("o"),
-            WorkOrder = _wo,
-            Lines = lines
-        };
-
-        var sfd = new SaveFileDialog
-        {
-            Title = "Exporter pour l’entreprise (Devis)",
-            Filter = "Iziregi (*.iziregi)|*.iziregi",
-            FileName = $"BDR-{_wo.BdrNumber}-devis.iziregi",
-            AddExtension = true,
-            DefaultExt = ".iziregi"
-        };
-
-        if (sfd.ShowDialog() != true) return;
-
-        try
-        {
-            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(sfd.FileName, json);
-
-            Db.SetStageSentToCompany(_wo.Id);
-
-            MessageBox.Show("Devis exporté. Statut: Envoyé à l’entreprise.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-            LoadWorkOrder();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Erreur export", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private void ExportForSignature_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-        if (_mode != WorkOrderEditMode.Architecte) return;
-
-        if (!_wo.IsQuoteReceived)
-        {
-            MessageBox.Show("Le devis n’est pas encore rempli.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var lines = GetCurrentLinesFromGrid();
-
-        var payload = new IziregiExportFile
-        {
-            FileType = "iziregi",
-            Package = "signature",
-            ExportedAt = DateTime.UtcNow.ToString("o"),
-            WorkOrder = _wo,
-            Lines = lines
-        };
-
-        var sfd = new SaveFileDialog
-        {
-            Title = "Exporter pour le signataire (Signature)",
-            Filter = "Iziregi (*.iziregi)|*.iziregi",
-            FileName = $"BDR-{_wo.BdrNumber}-signature.iziregi",
-            AddExtension = true,
-            DefaultExt = ".iziregi"
-        };
-
-        if (sfd.ShowDialog() != true) return;
-
-        try
-        {
-            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(sfd.FileName, json);
-
-            Db.SetStageSentToSigner(_wo.Id);
-
-            MessageBox.Show("Package signature exporté. Statut: Envoyé au signataire.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-            LoadWorkOrder();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Erreur export signature", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private void ClearSignature_Click(object sender, RoutedEventArgs e)
-    {
-        SignatureInkCanvas.Strokes.Clear();
-        SignatureImage.Source = null;
-    }
-
-    private void SaveSignature_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-        if (_mode != WorkOrderEditMode.Signataire && _mode != WorkOrderEditMode.Architecte) return;
-
-        var name = (SignatureNameTextBox.Text ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            MessageBox.Show("Nom obligatoire.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        if (SignatureInkCanvas.Strokes == null || SignatureInkCanvas.Strokes.Count == 0)
-        {
-            MessageBox.Show("Signature obligatoire.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var date = SignatureDatePicker.SelectedDate ?? DateTime.Today;
-
-        _wo.SignatureName = name;
-        _wo.SignatureDate = date;
-        _wo.SignaturePng = StrokesToPngBytes(SignatureInkCanvas, 800, 250);
-
-        Db.UpdateWorkOrderSignatureRaw(_wo);
-
-        SignatureImage.Source = PngBytesToImageSource(_wo.SignaturePng);
-        SignatureInkCanvas.Strokes.Clear();
-
-        var refreshed = Db.GetWorkOrderById(_wo.Id);
-        if (refreshed != null && refreshed.HasFullSignature)
-            Db.SetStageValidated(_wo.Id);
-
-        MessageBox.Show("Signature enregistrée.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-        LoadWorkOrder();
-    }
-
-    private static string PdfValidatedFolder =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Iziregi", "PDF validés");
-
-    private string GetDefaultValidatedPdfPath()
-    {
-        if (_wo == null) throw new Exception("WorkOrder null");
-        Directory.CreateDirectory(PdfValidatedFolder);
-
-        var baseName = $"Bon-de-regie-BDR-{_wo.BdrNumber}.pdf";
-        var path = Path.Combine(PdfValidatedFolder, baseName);
-
-        if (!File.Exists(path))
-            return path;
-
-        var ts = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        var alt = $"Bon-de-regie-BDR-{_wo.BdrNumber}-{ts}.pdf";
-        return Path.Combine(PdfValidatedFolder, alt);
-    }
-
-    private void CreatePdf_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-        if (_mode != WorkOrderEditMode.Architecte) return;
-
-        if (!_wo.IsValidated)
-        {
-            MessageBox.Show("Le document n’est pas validé.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        try
-        {
-            var lines = GetCurrentLinesFromGrid();
-            var pdfPath = GetDefaultValidatedPdfPath();
-
-            PdfService.GenerateWorkOrderPdf(pdfPath, _wo, lines);
-
-            Db.SetValidatedPdfSent(_wo.Id, true);
-
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{pdfPath}\"") { UseShellExecute = true });
-
-            MessageBox.Show("PDF validé créé et classé. Statut: PDF validé envoyé.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-            LoadWorkOrder();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Erreur PDF", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private void SendValidatedToCompany_Click(object sender, RoutedEventArgs e)
-    {
-        if (_wo == null) return;
-        if (_mode != WorkOrderEditMode.Architecte) return;
-
-        if (!_wo.IsValidated)
-        {
-            MessageBox.Show("Le document n’est pas validé.", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        try
-        {
-            CreatePdf_Click(sender, e);
-
-            var subject = Uri.EscapeDataString($"Bon de régie BDR-{_wo.BdrNumber} — Document validé (PDF)");
-            var body = Uri.EscapeDataString(
-                "Bonjour,\n\nVeuillez trouver ci-joint le PDF du bon de régie validé.\n\nMerci."
-            );
-
-            var mailto = $"mailto:?subject={subject}&body={body}";
-            Process.Start(new ProcessStartInfo(mailto) { UseShellExecute = true });
-
-            MessageBox.Show("Email préparé. Joins le PDF depuis le dossier « PDF validés ».", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Erreur email", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private void SignerExportPdf_Click(object sender, RoutedEventArgs e) { }
-
-    private static byte[] StrokesToPngBytes(InkCanvas canvas, int width, int height)
-    {
         var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-
-        var grid = new Grid { Width = width, Height = height, Background = Brushes.White };
-        var clone = new InkCanvas
-        {
-            Width = width,
-            Height = height,
-            Background = Brushes.White
-        };
-        clone.Strokes = canvas.Strokes.Clone();
-
-        grid.Children.Add(clone);
-        grid.Measure(new Size(width, height));
-        grid.Arrange(new Rect(0, 0, width, height));
-        grid.UpdateLayout();
-
-        rtb.Render(grid);
+        rtb.Render(SignatureInkCanvas);
 
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(rtb));
@@ -764,36 +1474,553 @@ public partial class WorkOrderWindow : Window
         return ms.ToArray();
     }
 
-    private static ImageSource? PngBytesToImageSource(byte[]? pngBytes)
+    private enum StageRank
     {
-        if (pngBytes == null || pngBytes.Length == 0) return null;
-
-        var image = new BitmapImage();
-        using var ms = new MemoryStream(pngBytes);
-        image.BeginInit();
-        image.CacheOption = BitmapCacheOption.OnLoad;
-        image.StreamSource = ms;
-        image.EndInit();
-        image.Freeze();
-        return image;
+        None = 0,
+        InCreation = 1,
+        SentToCompany = 2,
+        QuoteReceived = 3,
+        SentToSigner = 4,
+        Validated = 5
     }
 
-    private static string F2(double v) => v.ToString("0.00");
-
-    private static string EmptyIfZero2(double v)
-        => Math.Abs(v) < 0.0000001 ? "" : v.ToString("0.00");
-
-    private static string EmptyIfZero0(double v)
-        => Math.Abs(v) < 0.0000001 ? "" : Math.Round(v, 0).ToString("0");
-
-    private static double ParseDouble(string? s)
+    private static StageRank GetStageRank(WorkOrder wo)
     {
-        if (string.IsNullOrWhiteSpace(s)) return 0;
-        s = s.Trim().Replace(',', '.');
-        return double.TryParse(
-            s,
-            System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out var v) ? v : 0;
+        if (wo.IsValidated) return StageRank.Validated;
+        if (wo.IsSentToSigner) return StageRank.SentToSigner;
+        if (wo.IsQuoteReceived) return StageRank.QuoteReceived;
+        if (wo.IsSentToCompany) return StageRank.SentToCompany;
+        if (wo.IsInCreation) return StageRank.InCreation;
+        return StageRank.None;
+    }
+
+    private static bool HasAnyQuoteData(WorkOrder wo)
+    {
+        if (!string.IsNullOrWhiteSpace(wo.QuoteName)) return true;
+        if (!string.IsNullOrWhiteSpace(wo.QuoteNotes)) return true;
+        if (Math.Abs(wo.LaborHours) > 0.0000000001) return true;
+        if (Math.Abs(wo.LaborRate) > 0.0000000001) return true;
+        if (Math.Abs(wo.TravelQty) > 0.0000000001) return true;
+        if (Math.Abs(wo.TravelRate) > 0.0000000001) return true;
+        if (Math.Abs(wo.DiscountRate) > 0.0000000001) return true;
+        if (Math.Abs(wo.ForfaitQty * wo.ForfaitUnitPrice) > 0.0000000001) return true;
+        return false;
+    }
+
+    private StageRank ComputeDesiredStageAfterSave()
+    {
+        if (_workOrder == null) return StageRank.None;
+
+        if (_workOrder.HasFullSignature)
+            return StageRank.Validated;
+
+        if (HasAnyQuoteData(_workOrder) || _lines.Any(l => !string.IsNullOrWhiteSpace(l.Label)))
+            return StageRank.QuoteReceived;
+
+        return StageRank.InCreation;
+    }
+
+    private void ApplyStageIfAdvancing(long workOrderId, StageRank desired)
+    {
+        var fresh = Db.GetWorkOrderById(workOrderId);
+        if (fresh == null) return;
+
+        var current = GetStageRank(fresh);
+        if (desired <= current) return;
+
+        switch (desired)
+        {
+            case StageRank.InCreation:
+                Db.SetStageInCreation(workOrderId);
+                break;
+            case StageRank.SentToCompany:
+                Db.SetStageSentToCompany(workOrderId);
+                break;
+            case StageRank.QuoteReceived:
+                Db.SetStageQuoteReceived(workOrderId);
+                break;
+            case StageRank.SentToSigner:
+                Db.SetStageSentToSigner(workOrderId);
+                break;
+            case StageRank.Validated:
+                Db.SetStageValidated(workOrderId);
+                break;
+        }
+
+        _workOrder = Db.GetWorkOrderById(workOrderId) ?? _workOrder;
+    }
+
+    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            try
+            {
+                Keyboard.ClearFocus();
+                LinesGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+                LinesGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            }
+            catch { }
+
+            var pdfWasAvailable = _pdfAvailableForExternal;
+
+            var saved = SaveWorkOrder();
+            if (!saved) return;
+
+            if (_workOrder == null || _workOrder.Id <= 0)
+                throw new InvalidOperationException("Bon invalide (Id manquant après enregistrement).");
+
+            var desired = ComputeDesiredStageAfterSave();
+            ApplyStageIfAdvancing(_workOrder.Id, desired);
+
+            UpdatePdfButtonVisibility();
+
+            if (_mode == WorkOrderEditMode.EntrepriseDevis && !pdfWasAvailable && _pdfAvailableForExternal)
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    "Devis enregistré. Vous pouvez maintenant générer le PDF.",
+                    "PDF",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+
+            System.Windows.MessageBox.Show(
+                this,
+                "Bon enregistré.",
+                "Enregistrement",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’enregistrer le bon de régie.\n\n{ex.Message}",
+                "Enregistrement",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private bool SaveWorkOrder()
+    {
+        if (_workOrder == null)
+            _workOrder = CreateDefaultWorkOrder();
+
+        _workOrder.BdrNumber = int.TryParse(BdrNumberTextBox.Text, out var n) ? n : _workOrder.BdrNumber;
+
+        var reserve = (ReserveComboBox.Text ?? "").Trim();
+        if (reserve.Length > ReserveMaxLength)
+            reserve = reserve.Substring(0, ReserveMaxLength);
+
+        _workOrder.Reserve = reserve;
+        _workOrder.RequestedBy = (RequestedByComboBox.Text ?? "").Trim();
+        _workOrder.PerformedBy = (PerformedByComboBox.Text ?? "").Trim();
+        _workOrder.Place = (PlaceComboBox.Text ?? "").Trim();
+        _workOrder.Etage = (EtageComboBox.Text ?? "").Trim();
+
+        _workOrder.RequestDate = RequestDatePicker.SelectedDate ?? DateTime.Today;
+        _workOrder.DeadlineDate = DeadlineDatePicker.SelectedDate ?? DateTime.Today;
+
+        _workOrder.Description = EnforceDescriptionRules(DescriptionTextBox.Text ?? "");
+
+        _workOrder.QuoteName = (QuoteNameTextBox.Text ?? "").Trim();
+        _workOrder.QuoteDate = QuoteDatePicker.SelectedDate ?? DateTime.Today;
+
+        // ✅ Forfait (toujours enregistré)
+        _workOrder.ForfaitQty = ParseDouble(ForfaitQtyTextBox.Text, 0);
+        _workOrder.ForfaitUnitPrice = ParseDouble(ForfaitUnitPriceTextBox.Text, 0);
+
+        var forfaitUsed = Math.Abs(_workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice) > 0.0000000001;
+
+        if (forfaitUsed)
+        {
+            // ✅ règle B : on force à 0 les autres montants + rabais
+            _workOrder.LaborHours = 0;
+            _workOrder.LaborRate = 0;
+            _workOrder.TravelQty = 0;
+            _workOrder.TravelRate = 0;
+            _workOrder.DiscountRate = 0;
+
+            if (LaborHoursTextBox != null) LaborHoursTextBox.Text = "";
+            if (LaborRateTextBox != null) LaborRateTextBox.Text = "";
+            if (TravelQtyTextBox != null) TravelQtyTextBox.Text = "";
+            if (TravelRateTextBox != null) TravelRateTextBox.Text = "";
+            if (DiscountRateTextBox != null) DiscountRateTextBox.Text = "";
+        }
+        else
+        {
+            _workOrder.LaborHours = ParseDouble(LaborHoursTextBox.Text);
+            _workOrder.LaborRate = ParseDouble(LaborRateTextBox.Text);
+            _workOrder.TravelQty = ParseDouble(TravelQtyTextBox.Text);
+            _workOrder.TravelRate = ParseDouble(TravelRateTextBox.Text);
+
+            _workOrder.DiscountRate = ParseDouble(DiscountRateTextBox.Text, 0);
+            if (_workOrder.DiscountRate < 0) _workOrder.DiscountRate = 0;
+        }
+
+        _workOrder.TvaRate = ParseDouble(TvaRateTextBox.Text, 8.1);
+
+        _workOrder.QuoteNotes = EnforceQuoteNotesRules(QuoteNotesTextBox.Text ?? "");
+
+        if (!EnsureValidationIsNotPartialOrWarn())
+            return false;
+
+        _workOrder.SignatureName = (SignatureNameTextBox.Text ?? "").Trim();
+        _workOrder.SignatureDate = SignatureDatePicker.SelectedDate;
+        _workOrder.SignaturePng = CaptureSignaturePng();
+        _workOrder.ValidationDecision = GetSelectedValidationDecision();
+
+        if (_isCreateMode || _workOrder.Id <= 0)
+        {
+            if (!_workOrder.ProjectId.HasValue || _workOrder.ProjectId.Value <= 0)
+                _workOrder.ProjectId = Db.GetCurrentProjectId();
+
+            Db.InsertWorkOrder(_workOrder);
+            _isCreateMode = false;
+        }
+        else
+        {
+            Db.UpdateWorkOrderHeader(_workOrder);
+            Db.UpdateWorkOrderQuote(_workOrder);
+            Db.UpdateWorkOrderSignatureRaw(_workOrder);
+        }
+
+        if (_workOrder.Id > 0)
+            Db.UpdateWorkOrderValidationDecision(_workOrder.Id, _workOrder.ValidationDecision);
+
+        // ✅ si forfait utilisé => on supprime toutes les lignes matériel en base
+        if (_workOrder.Id > 0)
+        {
+            foreach (var l in _lines)
+                l.RecomputeLineTotal();
+
+            TrimTrailingEmptyLinesToMax();
+
+            if (forfaitUsed)
+            {
+                _lines.Clear();
+                _lines.Add(new WorkOrderLine());
+            }
+
+            Db.ReplaceWorkOrderLines(_workOrder.Id, _lines.ToList());
+            _deletedLineIds.Clear();
+        }
+
+        if (_mode == WorkOrderEditMode.EntrepriseDevis)
+            _pdfAvailableForExternal = true;
+
+        UpdateCompanyPdfButtons();
+
+        return true;
+    }
+
+    private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void ExportQuoteRequestButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            try
+            {
+                Keyboard.ClearFocus();
+                LinesGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+                LinesGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            }
+            catch { }
+
+            var saved = SaveWorkOrder();
+            if (!saved) return;
+
+            if (_workOrder == null || _workOrder.Id <= 0)
+                throw new InvalidOperationException("Le bon doit être enregistré avant l’envoi.");
+
+            Db.SetStageSentToCompany(_workOrder.Id);
+            _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+
+            System.Windows.MessageBox.Show(
+                this,
+                "Demande devis envoyée (statut mis à jour).",
+                "Devis",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’envoyer la demande devis.\n\n{ex.Message}",
+                "Devis",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void ExportSignatureRequestButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            try
+            {
+                Keyboard.ClearFocus();
+                LinesGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+                LinesGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            }
+            catch { }
+
+            var saved = SaveWorkOrder();
+            if (!saved) return;
+
+            if (_workOrder == null || _workOrder.Id <= 0)
+                throw new InvalidOperationException("Le bon doit être enregistré avant l’envoi.");
+
+            Db.SetStageSentToSigner(_workOrder.Id);
+            _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+
+            System.Windows.MessageBox.Show(
+                this,
+                "Demande validation envoyée (statut mis à jour).",
+                "Validation",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’envoyer la demande de validation.\n\n{ex.Message}",
+                "Validation",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private static async Task WaitForFileReadyAsync(string filePath, int attempts = 25, int delayMs = 150)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Chemin PDF invalide.", nameof(filePath));
+
+        Exception? last = null;
+
+        for (int i = 0; i < attempts; i++)
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                    throw new FileNotFoundException("Fichier PDF introuvable.", filePath);
+
+                var fi = new FileInfo(filePath);
+                if (fi.Length <= 0)
+                    throw new IOException("PDF vide (taille = 0).");
+
+                using (var s = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                }
+
+                return;
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                await Task.Delay(delayMs);
+            }
+        }
+
+        throw new IOException("Le PDF n'est pas prêt à l'ouverture (encore verrouillé ou incomplet).", last);
+    }
+
+    private async void PdfButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            try
+            {
+                Keyboard.ClearFocus();
+                LinesGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+                LinesGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            }
+            catch { }
+
+            var saved = SaveWorkOrder();
+            if (!saved) return;
+
+            if (_workOrder == null || _workOrder.Id <= 0)
+                throw new InvalidOperationException("Le bon doit être enregistré avant export PDF.");
+
+            var lines = Db.GetWorkOrderLines(_workOrder.Id) ?? new List<WorkOrderLine>();
+
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Enregistrer le PDF (bon de régie)",
+                Filter = "PDF (*.pdf)|*.pdf",
+                FileName = $"BDR-{_workOrder.BdrDisplay}-{DateTime.Now:yyyyMMdd-HHmmss}.pdf",
+                AddExtension = true,
+                DefaultExt = ".pdf",
+                OverwritePrompt = true
+            };
+
+            if (dlg.ShowDialog() != true)
+                return;
+
+            PdfService.GenerateWorkOrderPdf(dlg.FileName, _workOrder, lines);
+            await WaitForFileReadyAsync(dlg.FileName, attempts: 25, delayMs: 150);
+
+            // ✅ Ouvre automatiquement le PDF
+            try
+            {
+                Process.Start(new ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
+            }
+            catch { }
+
+            System.Windows.MessageBox.Show(
+                this,
+                "PDF généré.",
+                "PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible de générer le PDF.\n\n{ex.Message}",
+                "PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void CompanyPdfUploadButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_workOrder == null)
+                _workOrder = CreateDefaultWorkOrder();
+
+            if (_workOrder.Id <= 0)
+            {
+                var saved = SaveWorkOrder();
+                if (!saved) return;
+            }
+
+            if (_workOrder == null || _workOrder.Id <= 0)
+                throw new InvalidOperationException("Le bon doit être enregistré avant d’ajouter un PDF.");
+
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Ajouter un PDF (devis forfaitaire)",
+                Filter = "PDF (*.pdf)|*.pdf",
+                Multiselect = false
+            };
+
+            if (dlg.ShowDialog() != true)
+                return;
+
+            var fi = new FileInfo(dlg.FileName);
+            if (fi.Exists && fi.Length > 15 * 1024 * 1024)
+                throw new InvalidOperationException("PDF trop volumineux (max 15 Mo).");
+
+            var bytes = File.ReadAllBytes(dlg.FileName);
+            if (bytes == null || bytes.Length == 0)
+                throw new InvalidOperationException("PDF vide.");
+
+            _workOrder.ForfaitPdfFileName = Path.GetFileName(dlg.FileName);
+            _workOrder.ForfaitPdfFileBytes = bytes;
+
+            Db.UpdateWorkOrderForfaitPdf(_workOrder.Id, _workOrder.ForfaitPdfFileName, _workOrder.ForfaitPdfFileBytes);
+
+            _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+
+            UpdateCompanyPdfButtons();
+
+            System.Windows.MessageBox.Show(
+                this,
+                "PDF ajouté.",
+                "PDF devis forfaitaire",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’ajouter le PDF.\n\n{ex.Message}",
+                "PDF devis forfaitaire",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void CompanyPdfOpenButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_workOrder == null || _workOrder.Id <= 0)
+                throw new InvalidOperationException("Bon non enregistré.");
+
+            var bytes = _workOrder.ForfaitPdfFileBytes;
+            if (bytes == null || bytes.Length == 0)
+                throw new InvalidOperationException("Aucun PDF.");
+
+            var name = (_workOrder.ForfaitPdfFileName ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(name))
+                name = "Devis-Forfait.pdf";
+
+            if (!name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                name += ".pdf";
+
+            var dir = Path.Combine(Path.GetTempPath(), "Iziregi");
+            Directory.CreateDirectory(dir);
+
+            var filePath = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{name}");
+
+            File.WriteAllBytes(filePath, bytes);
+
+            Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’ouvrir le PDF.\n\n{ex.Message}",
+                "PDF devis forfaitaire",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void CompanyPdfRemoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_workOrder == null || _workOrder.Id <= 0)
+                throw new InvalidOperationException("Bon non enregistré.");
+
+            _workOrder.ForfaitPdfFileName = "";
+            _workOrder.ForfaitPdfFileBytes = null;
+
+            Db.UpdateWorkOrderForfaitPdf(_workOrder.Id, "", null);
+
+            _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+
+            UpdateCompanyPdfButtons();
+
+            System.Windows.MessageBox.Show(
+                this,
+                "PDF supprimé.",
+                "PDF devis forfaitaire",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible de supprimer le PDF.\n\n{ex.Message}",
+                "PDF devis forfaitaire",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 }

@@ -12,6 +12,13 @@ using Iziregi.Test.Models;
 using Iziregi.Test.Pages;
 using Microsoft.Win32;
 
+// ✅ Fix ambiguïté System.Drawing vs WPF
+using MediaBrush = System.Windows.Media.Brush;
+using MediaBrushConverter = System.Windows.Media.BrushConverter;
+using MediaBrushes = System.Windows.Media.Brushes;
+using MediaColor = System.Windows.Media.Color;
+using MediaSolidColorBrush = System.Windows.Media.SolidColorBrush;
+
 namespace Iziregi.Test;
 
 public partial class MainWindow : Window
@@ -33,6 +40,7 @@ public partial class MainWindow : Window
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Iziregi", "INBOX");
 
     private static string ImportedDir => Path.Combine(InboxDir, "Imported");
+    private static string ErrorDir => Path.Combine(InboxDir, "Error");
 
     private FileSystemWatcher? _inboxWatcher;
     private readonly Queue<string> _pendingInboxFiles = new();
@@ -46,6 +54,7 @@ public partial class MainWindow : Window
     private ArchivesPage? _archivesPage;
     private TrashPage? _trashPage;
     private ListsPage? _listsPage;
+    private PlanningPage? _planningPage;
 
     public MainWindow()
     {
@@ -54,7 +63,11 @@ public partial class MainWindow : Window
         // DB init
         Db.Init();
 
-        // Seeds de base (si vide)
+        // ✅ Restaurer le projet courant depuis Settings (si existant)
+        _selectedProject = Db.GetCurrentProject();
+        Db.SetCurrentProjectId(_selectedProject?.Id);
+
+        // Seeds de base (si vide) - dépend du projet courant
         Db.SeedPlacesIfEmpty("D20", "D21", "Extérieur");
         Db.SeedCompaniesIfEmpty("Electricien", "Sanitaire", "Ventilation");
         Db.SeedRequestersIfEmpty("Architecte");
@@ -62,8 +75,97 @@ public partial class MainWindow : Window
         // Watcher INBOX
         StartInboxWatcher();
 
+        // ✅ Badge projet
+        UpdateProjectBadge(show: false); // Dashboard par défaut => caché
+
         // Page par défaut
         ShowDashboard();
+    }
+
+    // =========================
+    // Badge projet (affiché sauf Dashboard)
+    // =========================
+    private static MediaBrush BrushFromHexOrNull(string? hex)
+    {
+        try
+        {
+            var s = (hex ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(s))
+                return MediaBrushes.Transparent;
+
+            if (!s.StartsWith("#", StringComparison.Ordinal))
+                s = "#" + s;
+
+            var obj = new MediaBrushConverter().ConvertFromString(s);
+            return obj is MediaBrush b ? b : MediaBrushes.Transparent;
+        }
+        catch
+        {
+            return MediaBrushes.Transparent;
+        }
+    }
+
+    private static bool TryGetSolidColor(MediaBrush? brush, out MediaColor color)
+    {
+        if (brush is MediaSolidColorBrush scb)
+        {
+            color = scb.Color;
+            return true;
+        }
+
+        color = default;
+        return false;
+    }
+
+    private static MediaBrush GetTextBrushForBackground(MediaBrush? bg)
+    {
+        if (bg == null)
+            return MediaBrushes.White;
+
+        if (!TryGetSolidColor(bg, out var c))
+            return MediaBrushes.White;
+
+        // luminance relative
+        double r = c.R / 255.0;
+        double g = c.G / 255.0;
+        double b = c.B / 255.0;
+        double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+        // clair => noir, foncé => blanc
+        return luminance >= 0.55 ? MediaBrushes.Black : MediaBrushes.White;
+    }
+
+    private void UpdateProjectBadge(bool show)
+    {
+        if (ProjectBadgeContainer != null)
+            ProjectBadgeContainer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!show)
+            return;
+
+        var p = Db.GetCurrentProject();
+
+        if (ProjectBadgeTextBlock != null)
+        {
+            ProjectBadgeTextBlock.Text = p != null
+                ? $"Projet : {p.Name}"
+                : "Projet : (aucun)";
+        }
+
+        // ✅ Couleur du badge (fond) + contraste auto (texte)
+        if (ProjectBadgeContainer != null)
+        {
+            var bg = p != null ? BrushFromHexOrNull(p.ColorHex) : MediaBrushes.Transparent;
+
+            // fallback si pas de couleur -> couleur par défaut existante
+            if (bg == null || bg == MediaBrushes.Transparent)
+                bg = BrushFromHexOrNull("#111827");
+
+            ProjectBadgeContainer.Background = bg;
+
+            if (ProjectBadgeTextBlock != null)
+                ProjectBadgeTextBlock.Foreground = GetTextBrushForBackground(bg);
+        }
     }
 
     // =========================
@@ -74,12 +176,15 @@ public partial class MainWindow : Window
     private void NavArchives_Click(object sender, RoutedEventArgs e) => ShowArchives();
     private void NavTrash_Click(object sender, RoutedEventArgs e) => ShowTrash();
     private void NavLists_Click(object sender, RoutedEventArgs e) => ShowLists();
+    private void NavPlanning_Click(object sender, RoutedEventArgs e) => ShowPlanning();
 
     private void ShowDashboard()
     {
         _dashboardPage ??= new DashboardPage(this);
         MainContent.Content = _dashboardPage;
         _dashboardPage.Reload();
+
+        UpdateProjectBadge(show: false);
     }
 
     private void ShowAccounting()
@@ -87,6 +192,8 @@ public partial class MainWindow : Window
         _accountingPage ??= new AccountingPage(this);
         MainContent.Content = _accountingPage;
         _accountingPage.Reload();
+
+        UpdateProjectBadge(show: true);
     }
 
     private void ShowArchives()
@@ -94,6 +201,8 @@ public partial class MainWindow : Window
         _archivesPage ??= new ArchivesPage(this);
         MainContent.Content = _archivesPage;
         _archivesPage.Reload();
+
+        UpdateProjectBadge(show: true);
     }
 
     private void ShowTrash()
@@ -101,6 +210,8 @@ public partial class MainWindow : Window
         _trashPage ??= new TrashPage(this);
         MainContent.Content = _trashPage;
         _trashPage.Reload();
+
+        UpdateProjectBadge(show: true);
     }
 
     private void ShowLists()
@@ -108,13 +219,48 @@ public partial class MainWindow : Window
         _listsPage ??= new ListsPage(this);
         MainContent.Content = _listsPage;
         _listsPage.Reload();
+
+        UpdateProjectBadge(show: true);
+    }
+
+    private void ShowPlanning()
+    {
+        _planningPage ??= new PlanningPage(this);
+        MainContent.Content = _planningPage;
+        _planningPage.Reload();
+
+        UpdateProjectBadge(show: true);
+    }
+
+    // =========================
+    // ✅ Handler manquant (MainWindow.xaml -> Click="PlanningPdf_Click")
+    // =========================
+    private void PlanningPdf_Click(object sender, RoutedEventArgs e)
+    {
+        // Pour l’instant : handler "placeholder" pour compiler.
+        // (On branchera ensuite sur le vrai export PDF du planning.)
+        System.Windows.MessageBox.Show(
+            this,
+            "Export PDF planning : TODO",
+            "Planning",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     // =========================
     // API appelée depuis les pages
     // =========================
     public Project? GetSelectedProject() => _selectedProject;
-    public void SetSelectedProject(Project? p) => _selectedProject = p;
+
+    public void SetSelectedProject(Project? p)
+    {
+        _selectedProject = p;
+        Db.SetCurrentProjectId(_selectedProject?.Id);
+
+        // Comme on change de projet, on met à jour le badge si visible
+        var show = ProjectBadgeContainer != null && ProjectBadgeContainer.Visibility == Visibility.Visible;
+        UpdateProjectBadge(show: show);
+    }
 
     public List<WorkOrder> GetAllWorkOrders() => Db.GetWorkOrders();
 
@@ -132,7 +278,14 @@ public partial class MainWindow : Window
         var w = new ChooseProjectWindow { Owner = this };
         var ok = w.ShowDialog();
         if (ok == true && w.SelectedProject != null)
+        {
             _selectedProject = w.SelectedProject;
+            Db.SetCurrentProjectId(_selectedProject.Id);
+        }
+
+        // Mise à jour badge si visible
+        var show = ProjectBadgeContainer != null && ProjectBadgeContainer.Visibility == Visibility.Visible;
+        UpdateProjectBadge(show: show);
 
         if (MainContent.Content is IReloadablePage p)
             p.Reload();
@@ -143,27 +296,30 @@ public partial class MainWindow : Window
     // =========================
     public void CreateNewWorkOrderAndOpen()
     {
+        var projectId = Db.GetCurrentProjectId();
+        _selectedProject = projectId.HasValue ? Db.GetProjectById(projectId.Value) : null;
+
         // Lieu par défaut
-        var defaultPlace = (Db.GetDefaultPlace() ?? "").Trim();
+        var defaultPlace = projectId.HasValue ? (Db.GetDefaultPlace(projectId.Value) ?? "").Trim() : "";
         var place = !string.IsNullOrWhiteSpace(defaultPlace)
             ? defaultPlace
-            : (Db.GetPlaces().FirstOrDefault() ?? "D21");
+            : (projectId.HasValue ? (Db.GetPlaces(projectId.Value).FirstOrDefault() ?? "D21") : "D21");
 
         // Entreprise par défaut
-        var defaultCompany = (Db.GetDefaultCompany() ?? "").Trim();
+        var defaultCompany = projectId.HasValue ? (Db.GetDefaultCompany(projectId.Value) ?? "").Trim() : "";
         var performedBy = !string.IsNullOrWhiteSpace(defaultCompany)
             ? defaultCompany
-            : (Db.GetCompanies().FirstOrDefault() ?? "Electricien");
+            : (projectId.HasValue ? (Db.GetCompanies(projectId.Value).FirstOrDefault() ?? "Electricien") : "Electricien");
 
         // Demandé par par défaut
-        var defaultRequester = (Db.GetDefaultRequester() ?? "").Trim();
+        var defaultRequester = projectId.HasValue ? (Db.GetDefaultRequester(projectId.Value) ?? "").Trim() : "";
         var requestedBy = !string.IsNullOrWhiteSpace(defaultRequester)
             ? defaultRequester
             : "Architecte";
 
         var wo = new WorkOrder
         {
-            BdrNumber = Db.GetNextBdrNumber(),
+            BdrNumber = projectId.HasValue ? Db.GetNextBdrNumberForProject(projectId.Value) : Db.GetNextBdrNumber(),
             Place = place,
             RequestedBy = requestedBy,
             PerformedBy = performedBy,
@@ -171,7 +327,6 @@ public partial class MainWindow : Window
 
             Description = "",
 
-            // Pipeline
             IsInCreation = false,
             IsSentToCompany = false,
             IsQuoteReceived = false,
@@ -179,17 +334,14 @@ public partial class MainWindow : Window
             IsValidated = false,
             IsValidatedPdfSent = false,
 
-            // Manuels
             IsPerformed = false,
             IsCancelled = false,
 
-            // Corbeille / Archives
             IsTrashed = false,
             TrashedAt = null,
             IsArchived = false,
             ArchivedAt = null,
 
-            // Devis
             LaborHours = 0,
             LaborRate = 0,
             TravelQty = 0,
@@ -197,17 +349,16 @@ public partial class MainWindow : Window
             TvaRate = 8.1,
             QuoteNotes = "",
 
-            ProjectId = _selectedProject?.Id
+            ProjectId = projectId
         };
 
         Db.InsertWorkOrder(wo);
 
-        // Insérer une première ligne vide (V1)
-        var created = Db.GetWorkOrders().FirstOrDefault();
+        var created = projectId.HasValue ? Db.GetWorkOrders(projectId.Value).FirstOrDefault() : Db.GetWorkOrders().FirstOrDefault();
         if (created != null)
             Db.InsertWorkOrderLine(created.Id, "", 0, 0);
 
-        created = Db.GetWorkOrders().FirstOrDefault();
+        created = projectId.HasValue ? Db.GetWorkOrders(projectId.Value).FirstOrDefault() : Db.GetWorkOrders().FirstOrDefault();
         if (created == null) return;
 
         OpenWorkOrder(created.Id, WorkOrderEditMode.Architecte);
@@ -218,7 +369,7 @@ public partial class MainWindow : Window
     // =========================
     public void ImportCompanyQuoteReply_ManualPicker()
     {
-        var ofd = new OpenFileDialog
+        var ofd = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Importer retour entreprise (devis)",
             Filter = "Iziregi réponse (*.iziregi-reponse)|*.iziregi-reponse",
@@ -230,13 +381,13 @@ public partial class MainWindow : Window
         try { ImportReplyFile(ofd.FileName); }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Erreur import devis", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(this, ex.Message, "Erreur import devis", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
     public void ImportSignerReply_ManualPicker()
     {
-        var ofd = new OpenFileDialog
+        var ofd = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Importer retour signataire",
             Filter = "Iziregi réponse (*.iziregi-reponse)|*.iziregi-reponse",
@@ -248,7 +399,7 @@ public partial class MainWindow : Window
         try { ImportReplyFile(ofd.FileName); }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Erreur import signataire", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(this, ex.Message, "Erreur import signataire", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -261,6 +412,7 @@ public partial class MainWindow : Window
         {
             Directory.CreateDirectory(InboxDir);
             Directory.CreateDirectory(ImportedDir);
+            Directory.CreateDirectory(ErrorDir);
 
             _inboxWatcher = new FileSystemWatcher(InboxDir, "*.iziregi-reponse")
             {
@@ -278,7 +430,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Erreur INBOX", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(this, ex.Message, "Erreur INBOX", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -334,25 +486,37 @@ public partial class MainWindow : Window
                 if (!File.Exists(path))
                     continue;
 
-                var kind = DetectReplyKindSafe(path); // "devis" ou "signature"
-                var displayKind =
-                    string.Equals(kind, "devis", StringComparison.OrdinalIgnoreCase) ? "Devis rempli" :
-                    string.Equals(kind, "signature", StringComparison.OrdinalIgnoreCase) ? "Signature signée" :
-                    "Retour";
-
-                var ok = MessageBox.Show(this,
-                    $"Retour reçu : {displayKind}\n\nFichier : {Path.GetFileName(path)}\n\nCliquer OK pour importer.",
-                    "Retour Iziregi",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-
-                if (ok == MessageBoxResult.OK)
+                try
                 {
+                    var kind = DetectReplyKindSafe(path); // "devis" | "signature" | ""
                     ImportReplyFile(path);
                     MoveToImported(path);
 
                     if (MainContent.Content is IReloadablePage p)
                         p.Reload();
+
+                    var displayKind =
+                        string.Equals(kind, "devis", StringComparison.OrdinalIgnoreCase) ? "Devis reçu" :
+                        string.Equals(kind, "signature", StringComparison.OrdinalIgnoreCase) ? "Validation reçue" :
+                        "Retour reçu";
+
+                    System.Windows.MessageBox.Show(
+                        this,
+                        $"{displayKind}.\n\nFichier : {Path.GetFileName(path)}",
+                        "Retour Iziregi",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show(
+                        this,
+                        $"Import impossible.\n\n{ex.Message}\n\nLe fichier sera déplacé dans INBOX\\Error.",
+                        "Erreur import INBOX",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+
+                    MoveToError(path);
                 }
             }
         }
@@ -384,7 +548,33 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Erreur déplacement INBOX", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, ex.Message, "Erreur déplacement INBOX", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void MoveToError(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+
+            Directory.CreateDirectory(ErrorDir);
+
+            var fileName = Path.GetFileName(path);
+            var target = Path.Combine(ErrorDir, fileName);
+
+            if (File.Exists(target))
+            {
+                var ts = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                var nameNoExt = Path.GetFileNameWithoutExtension(fileName);
+                target = Path.Combine(ErrorDir, $"{nameNoExt}-{ts}.iziregi-reponse");
+            }
+
+            File.Move(path, target);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "Erreur déplacement INBOX\\Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -460,8 +650,6 @@ public partial class MainWindow : Window
         }
 
         Db.SetStageQuoteReceived(wo.Id);
-
-        MessageBox.Show(this, "Devis importé. Statut: Devis rempli.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void ImportSignatureReply(IziregiReplyFile reply)
@@ -484,8 +672,6 @@ public partial class MainWindow : Window
             throw new Exception("Signature incomplète dans le retour (nom/date/signature).");
 
         Db.SetStageValidated(wo.Id);
-
-        MessageBox.Show(this, "Signature importée. Statut: Validé.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private string DetectReplyKindSafe(string filePath)

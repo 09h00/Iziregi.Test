@@ -1,240 +1,1351 @@
-﻿// File: Pages/DashboardPage.xaml.cs
+﻿// File: DashboardPage.xaml.cs
 using System;
-using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
+using Iziregi.Test.Services;
 
-namespace Iziregi.Test.Pages;
+// ✅ Aliases WPF (évite ambiguïtés avec WinForms / System.Drawing)
+using WpfBinding = System.Windows.Data.Binding;
+using WpfBrush = System.Windows.Media.Brush;
+using WpfBrushConverter = System.Windows.Media.BrushConverter;
+using WpfBrushes = System.Windows.Media.Brushes;
+using WpfColor = System.Windows.Media.Color;
+using WpfColorConverter = System.Windows.Media.ColorConverter;
+using WpfSolidColorBrush = System.Windows.Media.SolidColorBrush;
 
-public partial class DashboardPage : UserControl, IReloadablePage
+// ✅ Interfaces WPF
+using System.Windows.Data;
+
+namespace Iziregi.Test;
+
+public partial class DashboardPage : System.Windows.Controls.UserControl
 {
-    private readonly MainWindow _host;
+    private bool _isLoadingProjects;
+    private string _logoPath = "";
 
-    // Wrapper pour la grille (sélection par checkbox)
-    public class WorkOrderRow
-    {
-        public WorkOrder WorkOrder { get; set; } = new();
-        public bool IsSelected { get; set; }
-    }
+    // =========================
+    // ✅ Mode "obliger OK" (dirty strict)
+    // =========================
+    private bool _identityDirty;
+    private bool _suspendDirtyTracking;
+    private long? _lastProjectId;
 
-    private List<WorkOrderRow> _rows = new();
-    private List<WorkOrderRow> _filteredRows = new();
-
-    public DashboardPage(MainWindow host)
+    public DashboardPage()
     {
         InitializeComponent();
-        _host = host;
+
+        // ✅ Converters stockés en ressources (et utilisés en code-behind)
+        Resources["CompanyToBrush"] = new CompanyToBrushConverter_Local();
+        Resources["CompanyToForegroundBrush"] = new CompanyToForegroundBrushConverter_Local();
+
+        // ✅ Applique le style couleur uniquement sur la cellule "Entreprise"
+        ApplyPerformedByCompanyCellStyle();
+
+        Db.Init();
+
+        // ✅ Drag & Drop de fichiers .iziregi-package sur le dashboard
+        AllowDrop = true;
+        PreviewDragOver += DashboardPage_PreviewDragOver;
+        Drop += DashboardPage_Drop;
+
+        HookDirtyTracking();
+
+        LoadIdentity();
+        LoadProjects();
+        RefreshAll();
+
+        MarkIdentityDirty(false);
+    }
+
+    // Compatibilité avec MainWindow.xaml.cs qui appelle new DashboardPage(this)
+    public DashboardPage(object? _)
+        : this()
+    {
     }
 
     public void Reload()
     {
-        var list = Db.GetWorkOrders(); // exclut corbeille + archives
-        _rows = list.Select(w => new WorkOrderRow { WorkOrder = w, IsSelected = false }).ToList();
-
-        ApplySearchFilter();
-
-        if (SelectAllCheckBox != null)
-            SelectAllCheckBox.IsChecked = false;
+        LoadIdentity();
+        LoadProjects();
+        RefreshAll();
     }
 
-    private WorkOrderRow? SelectedRow => WorkOrdersGrid.SelectedItem as WorkOrderRow;
-    private WorkOrder? SelectedWorkOrder => SelectedRow?.WorkOrder;
-
-    private List<WorkOrder> CheckedWorkOrders =>
-        _filteredRows.Where(r => r.IsSelected).Select(r => r.WorkOrder).ToList();
-
-    private void ApplySearchFilter()
+    // =========================
+    // ✅ Dirty tracking (strict)
+    // =========================
+    private void HookDirtyTracking()
     {
-        var q = (SearchTextBox?.Text ?? "").Trim();
+        HookDirty(ArchitectNameTextBox);
+        HookDirty(ArchitectAddressTextBox);
+        HookDirty(ArchitectZipCityTextBox);
+        HookDirty(ArchitectWebsiteTextBox);
 
-        if (string.IsNullOrWhiteSpace(q))
+        HookDirty(ProjectNameEditTextBox);
+        HookDirty(ProjectAddressEditTextBox);
+        HookDirty(ProjectZipCityEditTextBox);
+
+        // Empêche changement projet si dirty (rollback)
+        if (ProjectComboBox != null)
         {
-            _filteredRows = _rows.ToList();
+            ProjectComboBox.SelectionChanged -= ProjectComboBox_SelectionChanged_DirtyProxy;
+            ProjectComboBox.SelectionChanged += ProjectComboBox_SelectionChanged_DirtyProxy;
         }
-        else
-        {
-            var qq = q.ToLowerInvariant();
+    }
 
-            _filteredRows = _rows.Where(r =>
+    private void HookDirty(object? control)
+    {
+        if (control == null) return;
+
+        var tb = control as global::System.Windows.Controls.TextBox;
+        if (tb == null) return;
+
+        tb.TextChanged -= AnyIdentityField_TextChanged;
+        tb.TextChanged += AnyIdentityField_TextChanged;
+    }
+
+    private void AnyIdentityField_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suspendDirtyTracking) return;
+        MarkIdentityDirty(true);
+    }
+
+    private void MarkIdentityDirty(bool dirty)
+    {
+        _identityDirty = dirty;
+        ApplyIdentityLocks();
+    }
+
+    private void ApplyIdentityLocks()
+    {
+        var allowContinue = !_identityDirty;
+
+        // ✅ Bannière visible
+        if (DirtyBanner != null)
+            DirtyBanner.Visibility = allowContinue ? Visibility.Collapsed : Visibility.Visible;
+
+        // ✅ OK mis en évidence quand dirty
+        try
+        {
+            if (SaveIdentityButton != null)
             {
-                var wo = r.WorkOrder;
-
-                var bdr = wo.BdrNumber.ToString();
-                var place = wo.Place ?? "";
-                var requestedBy = wo.RequestedBy ?? "";
-                var performedBy = wo.PerformedBy ?? "";
-                var desc = wo.Description ?? "";
-
-                return
-                    bdr.Contains(qq, StringComparison.OrdinalIgnoreCase) ||
-                    place.Contains(qq, StringComparison.OrdinalIgnoreCase) ||
-                    requestedBy.Contains(qq, StringComparison.OrdinalIgnoreCase) ||
-                    performedBy.Contains(qq, StringComparison.OrdinalIgnoreCase) ||
-                    desc.Contains(qq, StringComparison.OrdinalIgnoreCase);
-            }).ToList();
+                SaveIdentityButton.Style = allowContinue
+                    ? (Style)FindResource("SmallButtonStyle")
+                    : (Style)FindResource("OkHighlightButtonStyle");
+            }
+        }
+        catch
+        {
+            // non bloquant
         }
 
-        WorkOrdersGrid.ItemsSource = _filteredRows;
-        WorkOrdersGrid.Items.Refresh();
+        // ✅ Désactive TOUTES les actions tant que dirty (silencieux)
+        if (NewWorkOrderTopButton != null) NewWorkOrderTopButton.IsEnabled = allowContinue;
+        if (RefreshTopButton != null) RefreshTopButton.IsEnabled = allowContinue;
+        if (ManageProjectsButton != null) ManageProjectsButton.IsEnabled = allowContinue;
 
-        if (SelectAllCheckBox != null)
-            SelectAllCheckBox.IsChecked = false;
+        if (ArchiveSelectionButton != null) ArchiveSelectionButton.IsEnabled = allowContinue && AnyBatchSelected();
+        if (TrashSelectionButton != null) TrashSelectionButton.IsEnabled = allowContinue && AnyBatchSelected();
+
+        AllowDrop = allowContinue;
+
+        if (ProjectComboBox != null) ProjectComboBox.IsEnabled = allowContinue;
+
+        if (WorkOrdersGrid != null) WorkOrdersGrid.IsEnabled = allowContinue;
+        if (ArchivedGrid != null) ArchivedGrid.IsEnabled = allowContinue;
+        if (TrashedGrid != null) TrashedGrid.IsEnabled = allowContinue;
     }
 
-    private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
-        => ApplySearchFilter();
-
-    private void SelectAllCheckBox_Click(object sender, RoutedEventArgs e)
+    private bool EnsureNotDirtyOrWarn()
     {
-        bool check = SelectAllCheckBox.IsChecked == true;
+        if (!_identityDirty) return true;
 
-        foreach (var r in _filteredRows)
-            r.IsSelected = check;
+        System.Windows.MessageBox.Show(
+            "Modifications non enregistrées.\n\nClique sur OK pour enregistrer avant de continuer.",
+            "Modifications non enregistrées",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
 
-        WorkOrdersGrid.Items.Refresh();
+        return false;
     }
 
-    private void NewWorkOrder_Click(object sender, RoutedEventArgs e)
-        => _host.CreateNewWorkOrderAndOpen();
-
-    private void ChooseProject_Click(object sender, RoutedEventArgs e)
-        => _host.ChooseProject();
-
-    private void SendToCompany_Click(object sender, RoutedEventArgs e)
+    private void ProjectComboBox_SelectionChanged_DirtyProxy(object sender, SelectionChangedEventArgs e)
     {
-        var wo = SelectedWorkOrder;
-        if (wo == null)
+        if (_suspendDirtyTracking) return;
+        if (!_identityDirty) return;
+
+        // rollback
+        try
         {
-            MessageBox.Show("Sélectionne un bon.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+            _suspendDirtyTracking = true;
+
+            if (ProjectComboBox != null)
+            {
+                ProjectComboBox.SelectionChanged -= ProjectComboBox_SelectionChanged;
+
+                if (_lastProjectId.HasValue)
+                    ProjectComboBox.SelectedValue = _lastProjectId.Value;
+
+                ProjectComboBox.SelectionChanged += ProjectComboBox_SelectionChanged;
+            }
+        }
+        finally
+        {
+            _suspendDirtyTracking = false;
+        }
+
+        System.Windows.MessageBox.Show(
+            "Modifications non enregistrées.\n\nClique sur OK pour enregistrer avant de changer de projet.",
+            "Modifications non enregistrées",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
+    private bool AnyBatchSelected()
+    {
+        try
+        {
+            var items = GetActiveWorkOrders();
+            return items.Any(x => x.IsBatchSelected);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // =========================
+    // ✅ Helpers : split/join adresse <-> "NPA/Ville"
+    // =========================
+    private static (string line1, string line2) SplitAddressTwoLines(string? raw)
+    {
+        var s = (raw ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(s))
+            return ("", "");
+
+        // On coupe au dernier ","
+        var lastComma = s.LastIndexOf(',');
+        if (lastComma >= 0 && lastComma < s.Length - 1)
+        {
+            var a = s.Substring(0, lastComma).Trim();
+            var b = s.Substring(lastComma + 1).Trim();
+            return (a, b);
+        }
+
+        return (s, "");
+    }
+
+    private static string JoinAddressTwoLines(string? line1, string? line2)
+    {
+        var a = (line1 ?? "").Trim();
+        var b = (line2 ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(a) && string.IsNullOrWhiteSpace(b))
+            return "";
+
+        if (string.IsNullOrWhiteSpace(b))
+            return a;
+
+        if (string.IsNullOrWhiteSpace(a))
+            return b;
+
+        return $"{a}, {b}";
+    }
+
+    // =========================
+    // ✅ Style cellule Entreprise (couleur + contraste) en code-behind
+    // =========================
+    private void ApplyPerformedByCompanyCellStyle()
+    {
+        try
+        {
+            if (WorkOrdersGrid == null)
+                return;
+
+            var bgConv = Resources["CompanyToBrush"] as IValueConverter;
+            var fgConv = Resources["CompanyToForegroundBrush"] as IValueConverter;
+
+            if (bgConv == null || fgConv == null)
+                return;
+
+            DataGridTextColumn? performedByCol = null;
+
+            foreach (var col in WorkOrdersGrid.Columns)
+            {
+                if (col is not DataGridTextColumn textCol)
+                    continue;
+
+                // Colonne Entreprise via Binding Path = "PerformedBy"
+                if (textCol.Binding is WpfBinding b && string.Equals(b.Path?.Path, "PerformedBy", StringComparison.OrdinalIgnoreCase))
+                {
+                    performedByCol = textCol;
+                    break;
+                }
+            }
+
+            if (performedByCol == null)
+                return;
+
+            var cellStyle = new Style(typeof(DataGridCell));
+
+            cellStyle.Setters.Add(new Setter(DataGridCell.PaddingProperty, new Thickness(6, 0, 6, 0)));
+            cellStyle.Setters.Add(new Setter(DataGridCell.VerticalContentAlignmentProperty, VerticalAlignment.Center));
+            cellStyle.Setters.Add(new Setter(DataGridCell.HorizontalContentAlignmentProperty, System.Windows.HorizontalAlignment.Center));
+
+            // Border
+            cellStyle.Setters.Add(new Setter(DataGridCell.BorderBrushProperty, (WpfBrush)new WpfBrushConverter().ConvertFromString("#E5E7EB")!));
+            cellStyle.Setters.Add(new Setter(DataGridCell.BorderThicknessProperty, new Thickness(0, 0, 1, 1)));
+
+            // Background = couleur entreprise
+            cellStyle.Setters.Add(new Setter(
+                DataGridCell.BackgroundProperty,
+                new WpfBinding("PerformedBy") { Converter = bgConv }
+            ));
+
+            // Foreground = contraste auto
+            cellStyle.Setters.Add(new Setter(
+                DataGridCell.ForegroundProperty,
+                new WpfBinding("PerformedBy") { Converter = fgConv }
+            ));
+
+            // Sélection = bleu standard
+            var selectedTrigger = new Trigger
+            {
+                Property = DataGridCell.IsSelectedProperty,
+                Value = true
+            };
+            selectedTrigger.Setters.Add(new Setter(DataGridCell.BackgroundProperty, (WpfBrush)new WpfBrushConverter().ConvertFromString("#DBEAFE")!));
+            selectedTrigger.Setters.Add(new Setter(DataGridCell.ForegroundProperty, (WpfBrush)new WpfBrushConverter().ConvertFromString("#111827")!));
+            cellStyle.Triggers.Add(selectedTrigger);
+
+            performedByCol.CellStyle = cellStyle;
+        }
+        catch
+        {
+            // non bloquant
+        }
+    }
+
+    // =========================
+    // ✅ Libellés dashboard (headers)
+    // =========================
+    private void ApplyDashboardLabels()
+    {
+        try
+        {
+            if (ReserveHeaderTextBlock == null
+                || RequestedByHeaderTextBlock == null
+                || PerformedByHeaderTextBlock == null)
+                return;
+
+            if (ProjectComboBox?.SelectedItem is not Project p || p.Id <= 0)
+            {
+                ReserveHeaderTextBlock.Text = "Concerne";
+                RequestedByHeaderTextBlock.Text = "Demandé par";
+                PerformedByHeaderTextBlock.Text = "Entreprise";
+                return;
+            }
+
+            ReserveHeaderTextBlock.Text = Db.GetLabelReserve(p.Id);
+            RequestedByHeaderTextBlock.Text = Db.GetLabelRequestedBy(p.Id);
+            PerformedByHeaderTextBlock.Text = Db.GetLabelPerformedBy(p.Id);
+        }
+        catch
+        {
+            // non bloquant
+        }
+    }
+
+    // =========================
+    // ✅ Aperçu descriptif (zone 50% à droite)
+    // =========================
+    private void UpdateSelectedWorkOrderPreview()
+    {
+        try
+        {
+            if (SelectedWorkOrderDescriptionPreviewTextBlock == null)
+                return;
+
+            var wo = GetSelectedWorkOrder(WorkOrdersGrid);
+            if (wo == null)
+            {
+                SelectedWorkOrderDescriptionPreviewTextBlock.Text = "";
+                return;
+            }
+
+            var desc = (wo.Description ?? "").Trim();
+
+            // premières lignes “utiles”
+            var lines = desc
+                .Replace("\r\n", "\n")
+                .Split('\n')
+                .Select(x => x.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Take(3)
+                .ToList();
+
+            SelectedWorkOrderDescriptionPreviewTextBlock.Text =
+                lines.Count == 0 ? "" : string.Join(" — ", lines);
+        }
+        catch
+        {
+            // non bloquant
+        }
+    }
+
+    // =========================
+    // ✅ Preview border (bleu/gris selon sélection)
+    // =========================
+    private void UpdatePreviewBorderFromSelection()
+    {
+        var hasSelection = WorkOrdersGrid != null && WorkOrdersGrid.SelectedItem != null;
+
+        if (SelectedWorkOrderDescriptionPreviewBorder != null)
+        {
+            SelectedWorkOrderDescriptionPreviewBorder.BorderBrush =
+                (WpfBrush)new WpfBrushConverter().ConvertFromString(hasSelection ? "#2563EB" : "#D1D5DB")!;
+
+            SelectedWorkOrderDescriptionPreviewBorder.BorderThickness =
+                hasSelection ? new Thickness(2) : new Thickness(1);
+        }
+    }
+
+    // =========================
+    // Chargement global
+    // =========================
+    private void RefreshAll()
+    {
+        ApplyDashboardLabels();
+
+        RefreshWorkOrders();
+        RefreshArchived();
+        RefreshTrashed();
+        RefreshBatchSelectionUi();
+
+        // ✅ force refresh visuel (utile si les couleurs entreprise ont changé)
+        WorkOrdersGrid?.Items.Refresh();
+
+        // ✅ met à jour l’aperçu du descriptif (après refresh)
+        UpdateSelectedWorkOrderPreview();
+
+        // ✅ synchronise la bordure du preview avec la sélection
+        UpdatePreviewBorderFromSelection();
+    }
+
+    private void RefreshWorkOrders()
+    {
+        if (WorkOrdersGrid == null)
+            return;
+
+        if (ProjectComboBox?.SelectedItem is not Project selectedProject)
+        {
+            WorkOrdersGrid.ItemsSource = Array.Empty<WorkOrder>();
+            RefreshBatchSelectionUi();
+            UpdateSelectedWorkOrderPreview();
+            UpdatePreviewBorderFromSelection();
             return;
         }
 
-        _host.OpenWorkOrder(wo.Id, WorkOrderEditMode.Architecte);
+        var workOrders = Db.GetWorkOrders(selectedProject.Id);
+
+        foreach (var wo in workOrders)
+            wo.IsBatchSelected = false;
+
+        WorkOrdersGrid.ItemsSource = workOrders;
+
+        RefreshBatchSelectionUi();
     }
 
-    private void OpenIziregiFile_Click(object sender, RoutedEventArgs e)
+    private void RefreshArchived()
     {
-        var wo = SelectedWorkOrder;
-        if (wo == null)
+        if (ArchivedGrid == null)
+            return;
+
+        if (ProjectComboBox?.SelectedItem is not Project selectedProject)
         {
-            MessageBox.Show("Sélectionne un bon puis utilise les boutons d’export/import dans la fenêtre du bon.", "Info",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            ArchivedGrid.ItemsSource = Array.Empty<WorkOrder>();
             return;
         }
 
-        _host.OpenWorkOrder(wo.Id, WorkOrderEditMode.Architecte);
+        ArchivedGrid.ItemsSource = Db.GetArchivedWorkOrders(selectedProject.Id);
     }
 
-    private void ImportCompanyReply_Click(object sender, RoutedEventArgs e)
-        => _host.ImportCompanyQuoteReply_ManualPicker();
-
-    private void ImportSignerReply_Click(object sender, RoutedEventArgs e)
-        => _host.ImportSignerReply_ManualPicker();
-
-    private List<WorkOrder> GetActionSelectionOrFallbackToRow()
+    private void RefreshTrashed()
     {
-        var selected = CheckedWorkOrders;
+        if (TrashedGrid == null)
+            return;
 
-        // fallback si aucune checkbox cochée : utiliser la ligne sélectionnée
-        if (selected.Count == 0 && SelectedWorkOrder != null)
-            selected = new List<WorkOrder> { SelectedWorkOrder };
-
-        return selected;
-    }
-
-    private void TrashSelected_Click(object sender, RoutedEventArgs e)
-    {
-        var selected = GetActionSelectionOrFallbackToRow();
-
-        if (selected.Count == 0)
+        if (ProjectComboBox?.SelectedItem is not Project selectedProject)
         {
-            MessageBox.Show("Coche un ou plusieurs bons (colonne de gauche).", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+            TrashedGrid.ItemsSource = Array.Empty<WorkOrder>();
             return;
         }
 
-        var msg = selected.Count == 1
-            ? $"Mettre le bon BDR-{selected[0].BdrNumber} à la corbeille ?"
-            : $"Mettre {selected.Count} bons à la corbeille ?";
+        TrashedGrid.ItemsSource = Db.GetTrashedWorkOrders(selectedProject.Id);
+    }
 
-        var ok = MessageBox.Show(msg, "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+    private static WorkOrder? GetRowWorkOrder(object sender)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is WorkOrder wo)
+            return wo;
+
+        return null;
+    }
+
+    private static WorkOrder? GetSelectedWorkOrder(DataGrid? grid)
+    {
+        return grid?.SelectedItem as WorkOrder;
+    }
+
+    // =========================
+    // ✅ SelectionChanged -> maj aperçu + bordure
+    // =========================
+    private void WorkOrdersGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateSelectedWorkOrderPreview();
+        UpdatePreviewBorderFromSelection();
+    }
+
+    // =========================
+    // Batch selection (multi)
+    // =========================
+    private System.Collections.Generic.List<WorkOrder> GetActiveWorkOrders()
+    {
+        if (WorkOrdersGrid?.ItemsSource == null)
+            return new System.Collections.Generic.List<WorkOrder>();
+
+        return WorkOrdersGrid.ItemsSource.Cast<WorkOrder>().ToList();
+    }
+
+    private void RefreshBatchSelectionUi()
+    {
+        var items = GetActiveWorkOrders();
+        var selectedCount = items.Count(x => x.IsBatchSelected);
+
+        if (ArchiveSelectionButton != null)
+            ArchiveSelectionButton.IsEnabled = !_identityDirty && selectedCount > 0;
+
+        if (TrashSelectionButton != null)
+            TrashSelectionButton.IsEnabled = !_identityDirty && selectedCount > 0;
+    }
+
+    private void BatchSelectCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetRowWorkOrder(sender);
+        if (wo == null || wo.Id <= 0)
+            return;
+
+        if (sender is System.Windows.Controls.CheckBox cb)
+            wo.IsBatchSelected = cb.IsChecked == true;
+
+        RefreshBatchSelectionUi();
+    }
+
+    private void SelectAllWorkOrdersCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        if (sender is not System.Windows.Controls.CheckBox cb)
+            return;
+
+        var items = GetActiveWorkOrders();
+        if (items.Count == 0)
+            return;
+
+        var newValue = cb.IsChecked != false;
+
+        foreach (var wo in items)
+            wo.IsBatchSelected = newValue;
+
+        WorkOrdersGrid?.Items.Refresh();
+        RefreshBatchSelectionUi();
+    }
+
+    private void ArchiveSelection_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var items = GetActiveWorkOrders().Where(x => x.IsBatchSelected).ToList();
+        if (items.Count == 0)
+            return;
+
+        var ok = System.Windows.MessageBox.Show(
+            $"Archiver {items.Count} bon(s) sélectionné(s) ?",
+            "Confirmation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
         if (ok != MessageBoxResult.Yes)
             return;
 
-        foreach (var wo in selected)
-            Db.SetTrashed(wo.Id, true);
-
-        Reload();
-    }
-
-    private void ArchiveSelected_Click(object sender, RoutedEventArgs e)
-    {
-        var selected = GetActionSelectionOrFallbackToRow();
-
-        if (selected.Count == 0)
-        {
-            MessageBox.Show("Coche un ou plusieurs bons (colonne de gauche).", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var msg = selected.Count == 1
-            ? $"Archiver le bon BDR-{selected[0].BdrNumber} ?\n\nIl disparaîtra du Tableau de bord et sera visible dans Archives."
-            : $"Archiver {selected.Count} bons ?\n\nIls disparaîtront du Tableau de bord et seront visibles dans Archives.";
-
-        var ok = MessageBox.Show(msg, "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (ok != MessageBoxResult.Yes)
-            return;
-
-        foreach (var wo in selected)
+        foreach (var wo in items)
             Db.SetArchived(wo.Id, true);
 
-        Reload();
+        RefreshAll();
+    }
+
+    private void TrashSelection_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var items = GetActiveWorkOrders().Where(x => x.IsBatchSelected).ToList();
+        if (items.Count == 0)
+            return;
+
+        var ok = System.Windows.MessageBox.Show(
+            $"Mettre {items.Count} bon(s) sélectionné(s) à la corbeille ?",
+            "Confirmation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        foreach (var wo in items)
+            Db.SetTrashed(wo.Id, true);
+
+        RefreshAll();
+    }
+
+    // =========================
+    // Dates indépendantes (dashboard)
+    // =========================
+    private void DistributedDate_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetRowWorkOrder(sender);
+        if (wo == null || wo.Id <= 0)
+            return;
+
+        if (sender is DatePicker dp)
+        {
+            wo.DistributedAt = dp.SelectedDate;
+            Db.SetDistributedAt(wo.Id, wo.DistributedAt);
+
+            UpdateSelectedWorkOrderPreview();
+            UpdatePreviewBorderFromSelection();
+        }
+    }
+
+    private void PerformedDate_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetRowWorkOrder(sender);
+        if (wo == null || wo.Id <= 0)
+            return;
+
+        if (sender is DatePicker dp)
+        {
+            wo.PerformedAt = dp.SelectedDate;
+            Db.SetPerformedAt(wo.Id, wo.PerformedAt);
+
+            UpdateSelectedWorkOrderPreview();
+            UpdatePreviewBorderFromSelection();
+        }
+    }
+
+    // =========================
+    // Drag & Drop import packages
+    // =========================
+    private void DashboardPage_PreviewDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        try
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+            e.Handled = true;
+
+            if (_identityDirty)
+                return;
+
+            if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+                return;
+
+            var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+            if (files == null || files.Length == 0)
+                return;
+
+            if (files.Any(IsIziregiPackageFile))
+                e.Effects = System.Windows.DragDropEffects.Copy;
+        }
+        catch
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+            e.Handled = true;
+        }
+    }
+
+    private void DashboardPage_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        try
+        {
+            if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+                return;
+
+            var files = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+            if (files == null || files.Length == 0)
+                return;
+
+            var firstPackage = files.FirstOrDefault(IsIziregiPackageFile);
+            if (string.IsNullOrWhiteSpace(firstPackage))
+            {
+                System.Windows.MessageBox.Show(
+                    "Dépose un fichier .iziregi-package pour importer.",
+                    "Import package",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            ImportPackageFromPath(firstPackage);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Impossible d’importer le package.\n\n{ex.Message}",
+                "Import package",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private static bool IsIziregiPackageFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        return File.Exists(path)
+            && string.Equals(Path.GetExtension(path), ".iziregi-package", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ImportPackageFromPath(string filePath)
+    {
+        var imported = PackageImportService.Load(filePath);
+
+        var sourceId = imported.Manifest.WorkOrderId;
+
+        var existing = Db.GetImportedWorkOrderBySourceId(sourceId);
+        if (existing != null && existing.IsValidated)
+            throw new InvalidOperationException(
+                $"Ce bon ({existing.BdrDisplay}) est déjà validé.\n\n" +
+                "Pour le refaire, crée un nouveau bon avec un nouveau numéro."
+            );
+
+        if (ProjectComboBox?.SelectedItem is Project p)
+        {
+            var sameNumber = Db.GetWorkOrders(p.Id)
+                .FirstOrDefault(x => x.BdrNumber == imported.WorkOrder.BdrNumber);
+
+            if (sameNumber != null && sameNumber.IsValidated)
+                throw new InvalidOperationException(
+                    $"Un bon {sameNumber.BdrDisplay} est déjà validé dans ce projet.\n\n" +
+                    "Pour le refaire, crée un nouveau bon avec un nouveau numéro."
+                );
+        }
+
+        var id = Db.UpsertImportedWorkOrder_OptionA(imported.WorkOrder, sourceId);
+        Db.ReplaceWorkOrderLines(id, imported.Lines);
+
+        var mode = imported.PackageType == "devis"
+            ? WorkOrderEditMode.EntrepriseDevis
+            : WorkOrderEditMode.Signataire;
+
+        var win = new WorkOrderWindow(id, mode)
+        {
+            Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
+        };
+
+        win.ShowDialog();
+        RefreshAll();
+    }
+
+    // =========================
+    // Identité architecte
+    // =========================
+    private void LoadIdentity()
+    {
+        _suspendDirtyTracking = true;
+        try
+        {
+            if (ArchitectNameTextBox != null)
+                ArchitectNameTextBox.Text = Db.GetArchitectName();
+
+            // ✅ champs séparés + website
+            if (ArchitectAddressTextBox != null)
+                ArchitectAddressTextBox.Text = Db.GetArchitectAddressLine();
+
+            if (ArchitectZipCityTextBox != null)
+                ArchitectZipCityTextBox.Text = Db.GetArchitectZipCity();
+
+            if (ArchitectWebsiteTextBox != null)
+                ArchitectWebsiteTextBox.Text = Db.GetArchitectWebsite();
+
+            _logoPath = Db.GetArchitectLogoPath();
+            LoadLogoPreview(_logoPath);
+        }
+        finally
+        {
+            _suspendDirtyTracking = false;
+        }
+    }
+
+    private void LoadLogoPreview(string? path)
+    {
+        if (LogoImage != null)
+            LogoImage.Source = null;
+
+        if (LogoEmptyText != null)
+            LogoEmptyText.Visibility = Visibility.Visible;
+
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return;
+
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+
+            if (LogoImage != null)
+                LogoImage.Source = bmp;
+
+            if (LogoEmptyText != null)
+                LogoEmptyText.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            if (LogoImage != null)
+                LogoImage.Source = null;
+
+            if (LogoEmptyText != null)
+                LogoEmptyText.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void ImportLogo_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Importer un logo",
+            Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp|Tous les fichiers|*.*"
+        };
+
+        if (dlg.ShowDialog() != true)
+            return;
+
+        _logoPath = dlg.FileName;
+        LoadLogoPreview(_logoPath);
+
+        MarkIdentityDirty(true);
+    }
+
+    private void RemoveLogo_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        _logoPath = "";
+        LoadLogoPreview("");
+
+        Db.SetArchitectLogoPath("");
+
+        MarkIdentityDirty(true);
+    }
+
+    private void SaveIdentity_Click(object sender, RoutedEventArgs e)
+    {
+        _suspendDirtyTracking = true;
+        try
+        {
+            Db.SetArchitectName(ArchitectNameTextBox?.Text ?? "");
+
+            // ✅ persiste champs séparés + website
+            Db.SetArchitectAddressLine(ArchitectAddressTextBox?.Text ?? "");
+            Db.SetArchitectZipCity(ArchitectZipCityTextBox?.Text ?? "");
+            Db.SetArchitectWebsite(ArchitectWebsiteTextBox?.Text ?? "");
+
+            // ✅ Compat : on maintient aussi l'ancien champ ArchitectAddress
+            var line = (ArchitectAddressTextBox?.Text ?? "").Trim();
+            var zipCity = (ArchitectZipCityTextBox?.Text ?? "").Trim();
+            Db.SetArchitectAddress(string.IsNullOrWhiteSpace(zipCity) ? line : $"{line}, {zipCity}");
+
+            Db.SetArchitectLogoPath(_logoPath);
+
+            MarkIdentityDirty(false);
+        }
+        finally
+        {
+            _suspendDirtyTracking = false;
+        }
+    }
+
+    // =========================
+    // Projets
+    // =========================
+    private void LoadProjects()
+    {
+        if (ProjectComboBox == null)
+            return;
+
+        _isLoadingProjects = true;
+        _suspendDirtyTracking = true;
+
+        try
+        {
+            var projects = Db.GetProjects(true)
+                .OrderBy(p => p.Name)
+                .ToList();
+
+            ProjectComboBox.ItemsSource = projects;
+
+            var currentId = Db.GetCurrentProjectId();
+
+            if (currentId.HasValue && projects.Any(p => p.Id == currentId.Value))
+            {
+                ProjectComboBox.SelectedValue = currentId.Value;
+            }
+            else if (projects.Count > 0)
+            {
+                ProjectComboBox.SelectedIndex = 0;
+
+                if (ProjectComboBox.SelectedItem is Project p)
+                    Db.SetCurrentProjectId(p.Id);
+            }
+            else
+            {
+                ProjectComboBox.SelectedItem = null;
+            }
+
+            _lastProjectId = ProjectComboBox.SelectedItem is Project cur ? cur.Id : null;
+
+            LoadSelectedProjectIntoFields();
+            ApplyDashboardLabels();
+        }
+        finally
+        {
+            _suspendDirtyTracking = false;
+            _isLoadingProjects = false;
+        }
+    }
+
+    private void LoadSelectedProjectIntoFields()
+    {
+        _suspendDirtyTracking = true;
+        try
+        {
+            if (ProjectComboBox?.SelectedItem is Project project)
+            {
+                if (ProjectNameEditTextBox != null)
+                    ProjectNameEditTextBox.Text = project.Name ?? "";
+
+                var raw = project.Address ?? "";
+                var (addr, zipCity) = SplitAddressTwoLines(raw);
+
+                if (ProjectAddressEditTextBox != null)
+                    ProjectAddressEditTextBox.Text = addr;
+
+                if (ProjectZipCityEditTextBox != null)
+                    ProjectZipCityEditTextBox.Text = zipCity;
+            }
+            else
+            {
+                if (ProjectNameEditTextBox != null)
+                    ProjectNameEditTextBox.Text = "";
+
+                if (ProjectAddressEditTextBox != null)
+                    ProjectAddressEditTextBox.Text = "";
+
+                if (ProjectZipCityEditTextBox != null)
+                    ProjectZipCityEditTextBox.Text = "";
+            }
+        }
+        finally
+        {
+            _suspendDirtyTracking = false;
+        }
+    }
+
+    private void ProjectComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLoadingProjects)
+            return;
+
+        if (_identityDirty)
+            return;
+
+        if (ProjectComboBox?.SelectedItem is Project project)
+        {
+            Db.SetCurrentProjectId(project.Id);
+            _lastProjectId = project.Id;
+
+            LoadSelectedProjectIntoFields();
+            ApplyDashboardLabels();
+        }
+
+        RefreshAll();
+    }
+
+    private void SaveProjectIdentity_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        try
+        {
+            if (ProjectComboBox?.SelectedItem is not Project project)
+                throw new InvalidOperationException("Aucun projet sélectionné.");
+
+            project.Name = (ProjectNameEditTextBox?.Text ?? "").Trim();
+
+            var addr = (ProjectAddressEditTextBox?.Text ?? "").Trim();
+            var zipCity = (ProjectZipCityEditTextBox?.Text ?? "").Trim();
+            project.Address = JoinAddressTwoLines(addr, zipCity);
+
+            if (string.IsNullOrWhiteSpace(project.Name))
+                throw new InvalidOperationException("Le nom du projet est obligatoire.");
+
+            if (string.IsNullOrWhiteSpace(addr))
+                throw new InvalidOperationException("L’adresse du projet est obligatoire.");
+
+            Db.UpdateProject(project);
+
+            LoadProjects();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Impossible d’enregistrer le projet.\n\n{ex.Message}",
+                "Projet",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void ManageProjects_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        try
+        {
+            var win = new ProjectsWindow
+            {
+                Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
+            };
+
+            win.ShowDialog();
+
+            LoadProjects();
+            RefreshAll();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Impossible d’ouvrir la fenêtre Projets.\n\n{ex.Message}",
+                "Projets",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    // =========================
+    // Boutons principaux
+    // =========================
+    private void NewWorkOrder_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        if (ProjectComboBox?.SelectedItem is Project project)
+            Db.SetCurrentProjectId(project.Id);
+
+        OpenWorkOrderWindow(null, createMode: true);
+        RefreshAll();
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e)
-        => Reload();
-
-    private void OpenAsArchitect_Click(object sender, RoutedEventArgs e)
     {
-        var wo = SelectedWorkOrder;
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        LoadIdentity();
+        LoadProjects();
+        RefreshAll();
+    }
+
+    // =========================
+    // Handlers XAML (grille principale)
+    // =========================
+    private void WorkOrdersGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetSelectedWorkOrder(WorkOrdersGrid);
         if (wo == null) return;
-        _host.OpenWorkOrder(wo.Id, WorkOrderEditMode.Architecte);
+
+        OpenWorkOrderWindow(wo, createMode: false);
+        RefreshAll();
     }
 
-    private void OpenAsCompany_Click(object sender, RoutedEventArgs e)
+    private void ViewWorkOrder_Click(object sender, RoutedEventArgs e)
     {
-        var wo = SelectedWorkOrder;
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetRowWorkOrder(sender) ?? GetSelectedWorkOrder(WorkOrdersGrid);
         if (wo == null) return;
-        _host.OpenWorkOrder(wo.Id, WorkOrderEditMode.EntrepriseDevis);
+
+        OpenWorkOrderWindow(wo, createMode: false);
+        RefreshAll();
     }
 
-    private void OpenAsSigner_Click(object sender, RoutedEventArgs e)
+    private void EditWorkOrder_Click(object sender, RoutedEventArgs e)
     {
-        var wo = SelectedWorkOrder;
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetRowWorkOrder(sender) ?? GetSelectedWorkOrder(WorkOrdersGrid);
         if (wo == null) return;
-        _host.OpenWorkOrder(wo.Id, WorkOrderEditMode.Signataire);
+
+        OpenWorkOrderWindow(wo, createMode: false);
+        RefreshAll();
     }
 
-    private void WorkOrdersGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        => OpenAsArchitect_Click(sender, e);
-
-    private void PerformedCheckBox_Click(object sender, RoutedEventArgs e)
+    private void ArchiveWorkOrder_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not CheckBox cb) return;
-        if (cb.DataContext is not WorkOrderRow row) return;
+        if (!EnsureNotDirtyOrWarn()) return;
 
-        Db.SetPerformed(row.WorkOrder.Id, cb.IsChecked == true);
-        Reload();
+        var wo = GetRowWorkOrder(sender) ?? GetSelectedWorkOrder(WorkOrdersGrid);
+        if (wo == null) return;
+
+        var ok = System.Windows.MessageBox.Show(
+            $"Archiver le bon {wo.BdrDisplay} ?",
+            "Confirmation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        Db.SetArchived(wo.Id, true);
+        RefreshAll();
     }
 
-    private void CancelledCheckBox_Click(object sender, RoutedEventArgs e)
+    private void TrashWorkOrder_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not CheckBox cb) return;
-        if (cb.DataContext is not WorkOrderRow row) return;
+        if (!EnsureNotDirtyOrWarn()) return;
 
-        Db.SetCancelled(row.WorkOrder.Id, cb.IsChecked == true);
-        Reload();
+        var wo = GetRowWorkOrder(sender) ?? GetSelectedWorkOrder(WorkOrdersGrid);
+        if (wo == null) return;
+
+        var ok = System.Windows.MessageBox.Show(
+            $"Mettre le bon {wo.BdrDisplay} à la corbeille ?",
+            "Confirmation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        Db.SetTrashed(wo.Id, true);
+        RefreshAll();
+    }
+
+    // =========================
+    // Handlers XAML (grilles cachées)
+    // =========================
+    private void ArchivedGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetSelectedWorkOrder(ArchivedGrid);
+        if (wo == null) return;
+
+        OpenWorkOrderWindow(wo, createMode: false);
+        RefreshAll();
+    }
+
+    private void TrashedGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        var wo = GetSelectedWorkOrder(TrashedGrid);
+        if (wo == null) return;
+
+        OpenWorkOrderWindow(wo, createMode: false);
+        RefreshAll();
+    }
+
+    // =========================
+    // Helpers (ouverture bon)
+    // =========================
+    private void OpenWorkOrderWindow(WorkOrder? workOrder, bool createMode)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        Window win;
+
+        if (createMode || workOrder == null || workOrder.Id <= 0)
+            win = new WorkOrderWindow();
+        else
+            win = new WorkOrderWindow(workOrder.Id, WorkOrderEditMode.Architecte);
+
+        win.Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow;
+        win.ShowDialog();
+
+        ApplyDashboardLabels();
+    }
+
+    private void ImportResponse_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        try
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Importer un package Iziregi",
+                Filter = "Iziregi package|*.iziregi-package|Tous les fichiers|*.*"
+            };
+
+            if (dlg.ShowDialog() != true)
+                return;
+
+            ImportPackageFromPath(dlg.FileName);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Impossible d’importer le package.\n\n{ex.Message}",
+                "Import package",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void OpenLists_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        System.Windows.MessageBox.Show(
+            "Listes : à raccorder dans une prochaine étape.",
+            "Iziregi",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void OpenAccounting_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        System.Windows.MessageBox.Show(
+            "Comptabilité : à raccorder dans une prochaine étape.",
+            "Iziregi",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void EmptyTrash_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureNotDirtyOrWarn()) return;
+
+        System.Windows.MessageBox.Show(
+            "Vider la corbeille : à raccorder dans une prochaine étape.",
+            "Iziregi",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    // =========================
+    // ✅ Converters locaux (WPF-only)
+    // =========================
+    private sealed class CompanyToBrushConverter_Local : IValueConverter
+    {
+        public WpfBrush FallbackBrush { get; set; } = WpfBrushes.Transparent;
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            try
+            {
+                var company = (value?.ToString() ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(company))
+                    return FallbackBrush;
+
+                var pid = Db.GetCurrentProjectId();
+                if (!pid.HasValue || pid.Value <= 0)
+                    return FallbackBrush;
+
+                var hex = Db.GetCompanyColorHex(pid.Value, company);
+                if (string.IsNullOrWhiteSpace(hex))
+                    return FallbackBrush;
+
+                var color = (WpfColor)WpfColorConverter.ConvertFromString(hex);
+                var brush = new WpfSolidColorBrush(color);
+                brush.Freeze();
+                return brush;
+            }
+            catch
+            {
+                return FallbackBrush;
+            }
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class CompanyToForegroundBrushConverter_Local : IValueConverter
+    {
+        public WpfBrush LightTextBrush { get; set; } = WpfBrushes.White;
+        public WpfBrush DarkTextBrush { get; set; } = WpfBrushes.Black;
+
+        public double Threshold { get; set; } = 0.55;
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            try
+            {
+                var company = (value?.ToString() ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(company))
+                    return DarkTextBrush;
+
+                var pid = Db.GetCurrentProjectId();
+                if (!pid.HasValue || pid.Value <= 0)
+                    return DarkTextBrush;
+
+                var hex = Db.GetCompanyColorHex(pid.Value, company);
+                if (string.IsNullOrWhiteSpace(hex))
+                    return DarkTextBrush;
+
+                var color = (WpfColor)WpfColorConverter.ConvertFromString(hex);
+
+                static double SrgbToLinear(double c) => c <= 0.04045 ? (c / 12.92) : Math.Pow((c + 0.055) / 1.055, 2.4);
+
+                var r = SrgbToLinear(color.R / 255.0);
+                var g = SrgbToLinear(color.G / 255.0);
+                var b = SrgbToLinear(color.B / 255.0);
+
+                var luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+                return luminance < Threshold ? LightTextBrush : DarkTextBrush;
+            }
+            catch
+            {
+                return DarkTextBrush;
+            }
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
     }
 }

@@ -1,14 +1,24 @@
 ﻿// File: Pages/TrashPage.xaml.cs
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+
+// ✅ Types WPF (évite ambiguïtés avec System.Drawing)
+using MediaBrush = System.Windows.Media.Brush;
+using MediaBrushes = System.Windows.Media.Brushes;
+using MediaColor = System.Windows.Media.Color;
+using MediaColorConverter = System.Windows.Media.ColorConverter;
+using MediaSolidColorBrush = System.Windows.Media.SolidColorBrush;
+
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
 
 namespace Iziregi.Test.Pages;
 
-public partial class TrashPage : UserControl, IReloadablePage
+public partial class TrashPage : System.Windows.Controls.UserControl, IReloadablePage
 {
     private readonly MainWindow _host;
 
@@ -17,6 +27,10 @@ public partial class TrashPage : UserControl, IReloadablePage
     {
         public WorkOrder WorkOrder { get; set; } = new();
         public bool IsSelected { get; set; }
+
+        // ✅ Couleurs entreprise
+        public MediaBrush CompanyBrush { get; set; } = MediaBrushes.Transparent;
+        public MediaBrush CompanyTextBrush { get; set; } = MediaBrushes.Black;
     }
 
     private List<WorkOrderRow> _rows = new();
@@ -25,58 +39,203 @@ public partial class TrashPage : UserControl, IReloadablePage
     {
         InitializeComponent();
         _host = host;
+
+        RefreshBatchSelectionUi();
     }
 
     public void Reload()
     {
-        var list = Db.GetTrashedWorkOrders();
-        _rows = list.Select(w => new WorkOrderRow { WorkOrder = w, IsSelected = false }).ToList();
+        var projectIdNullable = Db.GetCurrentProjectId();
+        if (!projectIdNullable.HasValue || projectIdNullable.Value <= 0)
+        {
+            _rows = new List<WorkOrderRow>();
+
+            TrashedGrid.ItemsSource = _rows;
+            TrashedGrid.Items.Refresh();
+
+            RefreshBatchSelectionUi();
+
+            System.Windows.MessageBox.Show(
+                "Aucun projet courant. Sélectionne un projet avant d’afficher la corbeille.",
+                "Info",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var projectId = projectIdNullable.Value;
+
+        var list = Db.GetTrashedWorkOrders(projectId);
+
+        // ✅ couleurs entreprises par projet
+        var colorMap = Db.GetCompanyColorMap(projectId);
+
+        _rows = list.Select(w =>
+        {
+            var company = (w.PerformedBy ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(company))
+                company = "(Non défini)";
+
+            colorMap.TryGetValue(company, out var hex);
+
+            var bg = BrushFromHexOrDefault(hex, MediaBrushes.Transparent);
+            var fg = GetTextBrushForBackground(bg);
+
+            return new WorkOrderRow
+            {
+                WorkOrder = w,
+                IsSelected = false,
+                CompanyBrush = bg,
+                CompanyTextBrush = fg
+            };
+        }).ToList();
 
         TrashedGrid.ItemsSource = _rows;
         TrashedGrid.Items.Refresh();
 
-        if (SelectAllCheckBox != null)
-            SelectAllCheckBox.IsChecked = false;
+        RefreshBatchSelectionUi();
     }
 
-    private WorkOrderRow? SelectedRow => TrashedGrid.SelectedItem as WorkOrderRow;
-    private WorkOrder? SelectedWorkOrder => SelectedRow?.WorkOrder;
+    private static MediaBrush BrushFromHexOrDefault(string? hex, MediaBrush def)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(hex))
+                return def;
 
-    private List<WorkOrder> CheckedWorkOrders =>
-        _rows.Where(r => r.IsSelected).Select(r => r.WorkOrder).ToList();
+            var s = hex.Trim();
+            if (!s.StartsWith("#", StringComparison.Ordinal))
+                s = "#" + s;
+
+            var obj = MediaColorConverter.ConvertFromString(s);
+            if (obj is MediaColor c)
+                return new MediaSolidColorBrush(c);
+
+            return def;
+        }
+        catch
+        {
+            return def;
+        }
+    }
+
+    private static bool TryGetSolidColor(MediaBrush brush, out MediaColor color)
+    {
+        if (brush is MediaSolidColorBrush scb)
+        {
+            color = scb.Color;
+            return true;
+        }
+
+        color = default;
+        return false;
+    }
+
+    private static MediaBrush GetTextBrushForBackground(MediaBrush bg)
+    {
+        if (!TryGetSolidColor(bg, out var c))
+            return MediaBrushes.Black;
+
+        double r = c.R / 255.0;
+        double g = c.G / 255.0;
+        double b = c.B / 255.0;
+        double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+        return luminance < 0.55 ? MediaBrushes.White : MediaBrushes.Black;
+    }
+
+    private static WorkOrderRow? GetRow(object sender)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is WorkOrderRow row)
+            return row;
+
+        return null;
+    }
+
+    private static WorkOrderRow? GetSelectedRow(DataGrid? grid)
+        => grid?.SelectedItem as WorkOrderRow;
+
+    private List<WorkOrderRow> GetActiveRows()
+    {
+        if (TrashedGrid?.ItemsSource == null)
+            return new List<WorkOrderRow>();
+
+        return TrashedGrid.ItemsSource.Cast<WorkOrderRow>().ToList();
+    }
+
+    private void RefreshBatchSelectionUi()
+    {
+        var rows = GetActiveRows();
+        var selectedCount = rows.Count(x => x.IsSelected);
+
+        if (RestoreSelectionButton != null)
+            RestoreSelectionButton.IsEnabled = selectedCount > 0;
+
+        if (DeleteSelectionButton != null)
+            DeleteSelectionButton.IsEnabled = selectedCount > 0;
+    }
+
+    private List<WorkOrder> GetActionSelectionOrFallbackToRow(WorkOrderRow? fallbackRow)
+    {
+        var sel = GetActiveRows().Where(r => r.IsSelected).Select(r => r.WorkOrder).ToList();
+
+        if (sel.Count == 0 && fallbackRow?.WorkOrder != null && fallbackRow.WorkOrder.Id > 0)
+            sel = new List<WorkOrder> { fallbackRow.WorkOrder };
+
+        return sel;
+    }
+
+    private void RowSelectCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        var row = GetRow(sender);
+        if (row == null || row.WorkOrder == null || row.WorkOrder.Id <= 0)
+            return;
+
+        if (sender is System.Windows.Controls.CheckBox cb)
+            row.IsSelected = cb.IsChecked == true;
+
+        RefreshBatchSelectionUi();
+    }
 
     private void SelectAllCheckBox_Click(object sender, RoutedEventArgs e)
     {
-        bool check = SelectAllCheckBox.IsChecked == true;
+        if (sender is not System.Windows.Controls.CheckBox cb)
+            return;
 
-        foreach (var r in _rows)
-            r.IsSelected = check;
+        var rows = GetActiveRows();
+        if (rows.Count == 0)
+            return;
 
-        TrashedGrid.Items.Refresh();
+        var newValue = cb.IsChecked != false;
+
+        foreach (var r in rows)
+            r.IsSelected = newValue;
+
+        TrashedGrid?.Items.Refresh();
+        RefreshBatchSelectionUi();
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => Reload();
 
     private void RestoreSelected_Click(object sender, RoutedEventArgs e)
     {
-        var sel = CheckedWorkOrders;
-
-        // fallback si aucune checkbox cochée : utiliser la ligne sélectionnée
-        if (sel.Count == 0 && SelectedWorkOrder != null)
-            sel = new List<WorkOrder> { SelectedWorkOrder };
+        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(TrashedGrid));
 
         if (sel.Count == 0)
         {
-            MessageBox.Show("Coche un ou plusieurs bons (colonne de gauche).", "Info",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(
+                "Coche un ou plusieurs bons (colonne de gauche).",
+                "Info",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
         var msg = sel.Count == 1
-            ? $"Restaurer le bon BDR-{sel[0].BdrNumber} ?"
+            ? $"Restaurer le bon {sel[0].BdrDisplay} ?"
             : $"Restaurer {sel.Count} bons ?";
 
-        var ok = MessageBox.Show(msg, "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var ok = System.Windows.MessageBox.Show(msg, "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (ok != MessageBoxResult.Yes)
             return;
 
@@ -88,24 +247,23 @@ public partial class TrashPage : UserControl, IReloadablePage
 
     private void DeleteSelected_Click(object sender, RoutedEventArgs e)
     {
-        var sel = CheckedWorkOrders;
-
-        // fallback si aucune checkbox cochée : utiliser la ligne sélectionnée
-        if (sel.Count == 0 && SelectedWorkOrder != null)
-            sel = new List<WorkOrder> { SelectedWorkOrder };
+        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(TrashedGrid));
 
         if (sel.Count == 0)
         {
-            MessageBox.Show("Coche un ou plusieurs bons (colonne de gauche).", "Info",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(
+                "Coche un ou plusieurs bons (colonne de gauche).",
+                "Info",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
         var msg = sel.Count == 1
-            ? $"Supprimer définitivement le bon BDR-{sel[0].BdrNumber} ?\n\nCette action est irréversible."
+            ? $"Supprimer définitivement le bon {sel[0].BdrDisplay} ?\n\nCette action est irréversible."
             : $"Supprimer définitivement {sel.Count} bons ?\n\nCette action est irréversible.";
 
-        var ok = MessageBox.Show(msg, "Suppression définitive", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var ok = System.Windows.MessageBox.Show(msg, "Suppression définitive", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (ok != MessageBoxResult.Yes)
             return;
 
@@ -113,5 +271,64 @@ public partial class TrashPage : UserControl, IReloadablePage
             Db.DeleteWorkOrderPermanently(wo.Id);
 
         Reload();
+    }
+
+    private void RestoreRow_Click(object sender, RoutedEventArgs e)
+    {
+        var row = GetRow(sender);
+        if (row?.WorkOrder == null || row.WorkOrder.Id <= 0)
+            return;
+
+        var ok = System.Windows.MessageBox.Show(
+            $"Restaurer le bon {row.WorkOrder.BdrDisplay} ?",
+            "Confirmation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        Db.SetTrashed(row.WorkOrder.Id, false);
+        Reload();
+    }
+
+    private void DeleteRow_Click(object sender, RoutedEventArgs e)
+    {
+        var row = GetRow(sender);
+        if (row?.WorkOrder == null || row.WorkOrder.Id <= 0)
+            return;
+
+        var ok = System.Windows.MessageBox.Show(
+            $"Supprimer définitivement le bon {row.WorkOrder.BdrDisplay} ?\n\nCette action est irréversible.",
+            "Suppression définitive",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        Db.DeleteWorkOrderPermanently(row.WorkOrder.Id);
+        Reload();
+    }
+
+    private void TrashedGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        var row = GetSelectedRow(TrashedGrid);
+        if (row?.WorkOrder == null || row.WorkOrder.Id <= 0)
+            return;
+
+        try
+        {
+            var win = new WorkOrderWindow(row.WorkOrder.Id, WorkOrderEditMode.Architecte)
+            {
+                Owner = Window.GetWindow(this)
+            };
+            win.ShowDialog();
+            Reload();
+        }
+        catch
+        {
+            // non bloquant
+        }
     }
 }

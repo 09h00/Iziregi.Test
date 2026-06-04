@@ -8,339 +8,452 @@
 
     <DockPanel>
 
-        <!-- Header + filtres -->
+        <!-- =========================
+             EN-TÊTE + BOUTONS (VISIBLE SUR LA PAGE)
+             ========================= -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
 
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Comptabilité"
                            FontSize="18"
-                           FontWeight="Bold"
+                           FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
-
-                <Button Content="Rafraîchir"
-                        Width="120"
-                        Margin="16,0,0,0"
-                        Click="Refresh_Click"/>
 
                 <Button Content="Exporter CSV (détail)"
                         Width="190"
-                        Margin="8,0,0,0"
+                        Margin="16,0,0,0"
                         Click="ExportDetailsCsv_Click"/>
 
                 <Button Content="Exporter CSV (totaux entreprises)"
                         Width="260"
                         Margin="8,0,0,0"
                         Click="ExportCompaniesCsv_Click"/>
+
+                <Button Content="Rafraîchir"
+                        Width="120"
+                        Margin="8,0,0,0"
+                        Click="Refresh_Click"/>
+
+                <Button Content="Télécharger PDF"
+                        Width="150"
+                        Margin="8,0,0,0"
+                        Click="ExportPdf_Click"/>
             </StackPanel>
 
-            <Border BorderBrush="#DDDDDD"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="10"
-                    Background="#FAFAFA"
+            <!-- =========================
+                 ZONE IMPRIMABLE (PDF) : FILTRES + CONTENU
+                 ✅ Le titre est seulement dans l'en-tête (plus de doublon)
+                 ========================= -->
+            <Border x:Name="AccountingPrintArea"
+                    BorderThickness="0"
+                    Background="Transparent"
                     Margin="0,10,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="160"/>
-                        <ColumnDefinition Width="20"/>
 
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="160"/>
-                        <ColumnDefinition Width="20"/>
+                <StackPanel>
 
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="220"/>
-                        <ColumnDefinition Width="20"/>
+                    <!-- ✅ IMPORTANT : PAS DE 2e titre ici -->
 
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="220"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+                    <!-- Filtres -->
+                    <Border BorderBrush="#DDDDDD"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10"
+                            Background="#FAFAFA"
+                            Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="20"/>
 
-                    <TextBlock Grid.Column="0" Text="Du" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <DatePicker x:Name="FromDatePicker" Grid.Column="1"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="20"/>
 
-                    <TextBlock Grid.Column="3" Text="Au" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <DatePicker x:Name="ToDatePicker" Grid.Column="4"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Column="6" Text="Entreprise" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="CompanyFilterComboBox"
-                              Grid.Column="7"
-                              IsEditable="False"
-                              SelectionChanged="Filters_Changed"/>
+                            <TextBlock Grid.Column="0" Text="Du" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <DatePicker x:Name="FromDatePicker" Grid.Column="1"/>
 
-                    <TextBlock Grid.Column="9" Text="Projet" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="ProjectFilterComboBox"
-                              Grid.Column="10"
-                              IsEditable="False"
-                              SelectionChanged="Filters_Changed"/>
-                </Grid>
+                            <TextBlock Grid.Column="3" Text="Au" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <DatePicker x:Name="ToDatePicker" Grid.Column="4"/>
+
+                            <TextBlock Grid.Column="6" Text="Entreprise" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox x:Name="CompanyFilterComboBox"
+                                      Grid.Column="7"
+                                      IsEditable="False"
+                                      SelectionChanged="Filters_Changed"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Body -->
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="1*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Colonne gauche : Totaux + Détail -->
+                            <Grid Grid.Column="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="12"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Totaux -->
+                                <Border Grid.Row="0"
+                                        BorderBrush="Black"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Padding="12"
+                                        Background="White">
+                                    <DockPanel>
+
+                                        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Column="0"
+                                                       Text="Totaux par entreprise"
+                                                       FontWeight="Bold"
+                                                       VerticalAlignment="Center"/>
+
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="Tri :"
+                                                           Margin="0,0,6,0"
+                                                           VerticalAlignment="Center"/>
+                                                <ComboBox x:Name="ChartSortComboBox"
+                                                          Width="190"
+                                                          SelectionChanged="ChartSort_Changed">
+                                                    <ComboBoxItem Content="TTC décroissant" IsSelected="True"/>
+                                                    <ComboBoxItem Content="TTC croissant"/>
+                                                    <ComboBoxItem Content="Alphabétique"/>
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <DataGrid x:Name="ByCompanyGrid"
+                                                  Style="{StaticResource IziregiGrid}"
+                                                  AutoGenerateColumns="False"
+                                                  IsReadOnly="True"
+                                                  ColumnWidth="Auto"
+                                                  CanUserResizeColumns="True"
+                                                  HeadersVisibility="Column"
+                                                  SelectionChanged="ByCompanyGrid_SelectionChanged"
+                                                  GridLinesVisibility="All"
+                                                  VerticalGridLinesBrush="Black"
+                                                  HorizontalGridLinesBrush="Black"
+                                                  BorderBrush="Black"
+                                                  BorderThickness="1"
+                                                  RowHeight="18"
+                                                  ColumnHeaderHeight="18"
+                                                  HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  FrozenColumnCount="2">
+
+                                            <DataGrid.ColumnHeaderStyle>
+                                                <Style TargetType="DataGridColumnHeader">
+                                                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    <Setter Property="BorderBrush" Value="Black"/>
+                                                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                                </Style>
+                                            </DataGrid.ColumnHeaderStyle>
+
+                                            <DataGrid.RowStyle>
+                                                <Style TargetType="DataGridRow">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsTotal}" Value="True">
+                                                            <Setter Property="FontWeight" Value="Bold"/>
+                                                            <Setter Property="Background" Value="#FAFAFA"/>
+                                                            <Setter Property="BorderBrush" Value="Black"/>
+                                                            <Setter Property="BorderThickness" Value="0,1,0,1"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </DataGrid.RowStyle>
+
+                                            <DataGrid.Columns>
+
+                                                <DataGridTemplateColumn Header="Entreprise" Width="145">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border x:Name="CompanyCell"
+                                                                    Background="{Binding CompanyBrush}"
+                                                                    Padding="6,0"
+                                                                    CornerRadius="2">
+                                                                <TextBlock x:Name="CompanyText"
+                                                                           Text="{Binding Company}"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="{Binding CompanyTextBrush}"
+                                                                           FontWeight="SemiBold"
+                                                                           TextWrapping="Wrap"/>
+                                                            </Border>
+
+                                                            <DataTemplate.Triggers>
+                                                                <DataTrigger Binding="{Binding IsTotal}" Value="True">
+                                                                    <Setter TargetName="CompanyCell" Property="Background" Value="Transparent"/>
+                                                                    <Setter TargetName="CompanyText" Property="Foreground" Value="Black"/>
+                                                                    <Setter TargetName="CompanyText" Property="FontWeight" Value="Bold"/>
+                                                                </DataTrigger>
+                                                            </DataTemplate.Triggers>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+
+                                                <DataGridTextColumn Header="Nb" Binding="{Binding Count}" Width="65">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextAlignment" Value="Center"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                                <DataGridTextColumn Header="HT" Binding="{Binding TotalHt, StringFormat={}{0:0.00}}" Width="80">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextAlignment" Value="Right"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                                <DataGridTextColumn Header="TVA" Binding="{Binding TotalTva, StringFormat={}{0:0.00}}" Width="80">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextAlignment" Value="Right"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                                <DataGridTextColumn Header="TTC" Binding="{Binding TotalTtc, StringFormat={}{0:0.00}}" Width="110" MinWidth="110">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextAlignment" Value="Right"/>
+                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            <Setter Property="Padding" Value="0,0,2,0"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+
+                                    </DockPanel>
+                                </Border>
+
+                                <!-- Détail -->
+                                <Border Grid.Row="2"
+                                        BorderBrush="Black"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Padding="12"
+                                        Background="White">
+                                    <DockPanel>
+
+                                        <Border x:Name="DetailsTitleBorder"
+                                                DockPanel.Dock="Top"
+                                                Background="Transparent"
+                                                CornerRadius="4"
+                                                Padding="8,4"
+                                                Margin="0,0,0,10">
+                                            <TextBlock x:Name="DetailsTitleTextBlock"
+                                                       Text="Détail — sélectionne une entreprise"
+                                                       FontWeight="Bold"/>
+                                        </Border>
+
+                                        <DataGrid x:Name="DetailsGrid"
+                                                  Style="{StaticResource IziregiGrid}"
+                                                  AutoGenerateColumns="False"
+                                                  IsReadOnly="True"
+                                                  ColumnWidth="Auto"
+                                                  HeadersVisibility="Column"
+                                                  GridLinesVisibility="All"
+                                                  VerticalGridLinesBrush="Black"
+                                                  HorizontalGridLinesBrush="Black"
+                                                  BorderBrush="Black"
+                                                  BorderThickness="1"
+                                                  RowHeight="18"
+                                                  ColumnHeaderHeight="18"
+                                                  SelectionChanged="DetailsGrid_SelectionChanged"
+                                                  HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  FrozenColumnCount="2">
+
+                                            <DataGrid.ColumnHeaderStyle>
+                                                <Style TargetType="DataGridColumnHeader">
+                                                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    <Setter Property="BorderBrush" Value="Black"/>
+                                                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                                </Style>
+                                            </DataGrid.ColumnHeaderStyle>
+
+                                            <DataGrid.RowStyle>
+                                                <Style TargetType="DataGridRow">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsTotal}" Value="True">
+                                                            <Setter Property="FontWeight" Value="Bold"/>
+                                                            <Setter Property="Background" Value="#FAFAFA"/>
+                                                            <Setter Property="BorderBrush" Value="Black"/>
+                                                            <Setter Property="BorderThickness" Value="0,2,0,2"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </DataGrid.RowStyle>
+
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="BDR" Binding="{Binding Bdr}" Width="145"/>
+                                                <DataGridTextColumn Header="Date" Binding="{Binding Date, StringFormat=dd.MM.yyyy}" Width="65"/>
+
+                                                <DataGridTextColumn Header="HT" Binding="{Binding Ht, StringFormat={}{0:0.00}}" Width="80">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextAlignment" Value="Right"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                                <DataGridTextColumn Header="TVA" Binding="{Binding Tva, StringFormat={}{0:0.00}}" Width="80">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextAlignment" Value="Right"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+
+                                                <DataGridTextColumn Header="TTC" Binding="{Binding Ttc, StringFormat={}{0:0.00}}" Width="110" MinWidth="110">
+                                                    <DataGridTextColumn.ElementStyle>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="TextAlignment" Value="Right"/>
+                                                            <Setter Property="FontWeight" Value="Bold"/>
+                                                            <Setter Property="Padding" Value="0,0,2,0"/>
+                                                        </Style>
+                                                    </DataGridTextColumn.ElementStyle>
+                                                </DataGridTextColumn>
+                                            </DataGrid.Columns>
+
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
+
+                            </Grid>
+
+                            <!-- Graphique -->
+                            <Border Grid.Column="2"
+                                    BorderBrush="Black"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="12"
+                                    Background="White">
+                                <DockPanel>
+
+                                    <TextBlock x:Name="ChartTitleTextBlock"
+                                               DockPanel.Dock="Top"
+                                               Text="Graphique-TTC par entreprise"
+                                               FontWeight="Bold"
+                                               Margin="0,0,0,6"/>
+
+                                    <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Total"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"/>
+
+                                        <TextBlock x:Name="ChartTotalTtcTextBlock"
+                                                   Grid.Column="1"
+                                                   Text="0.00"
+                                                   FontWeight="SemiBold"
+                                                   TextAlignment="Right"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <Border DockPanel.Dock="Top"
+                                            BorderBrush="Black"
+                                            BorderThickness="0,0,0,1"
+                                            Margin="0,4,0,20"/>
+
+                                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl x:Name="ChartItems">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Vertical"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,0,0,6">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="140"/>
+                                                            <ColumnDefinition Width="4"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="70"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Company}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextWrapping="Wrap"
+                                                                   VerticalAlignment="Center"/>
+
+                                                        <Border Grid.Column="2"
+                                                                Height="16"
+                                                                CornerRadius="3"
+                                                                Background="#FFFFFF">
+                                                            <Border Width="{Binding BarWidth}"
+                                                                    Height="16"
+                                                                    CornerRadius="2"
+                                                                    Background="{Binding BarBrush}"
+                                                                    BorderBrush="Black"
+                                                                    BorderThickness="1"
+                                                                    HorizontalAlignment="Left"/>
+                                                        </Border>
+
+                                                        <TextBlock Grid.Column="3"
+                                                                   Width="70"
+                                                                   Margin="6,0,0,4"
+                                                                   TextAlignment="Right"
+                                                                   Text="{Binding TotalTtc, StringFormat={}{0:0.00}}"
+                                                                   FontWeight="SemiBold"
+                                                                   HorizontalAlignment="Right"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                </DockPanel>
+                            </Border>
+
+                        </Grid>
+                    </Grid>
+
+                </StackPanel>
             </Border>
 
         </StackPanel>
 
         <!-- Body -->
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="12"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!-- Total général -->
-            <Border Grid.Row="0"
-                    BorderBrush="#DDDDDD"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12"
-                    Background="#FAFAFA">
-                <StackPanel>
-                    <TextBlock Text="Total général (HT / TVA / TTC)"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="HT : " FontWeight="SemiBold"/>
-                        <TextBlock x:Name="TotalHtTextBlock" Width="120"/>
-
-                        <TextBlock Text="TVA : " FontWeight="SemiBold" Margin="16,0,0,0"/>
-                        <TextBlock x:Name="TotalTvaTextBlock" Width="120"/>
-
-                        <TextBlock Text="TTC : " FontWeight="SemiBold" Margin="16,0,0,0"/>
-                        <TextBlock x:Name="TotalTtcTextBlock" Width="120" FontWeight="Bold"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- ✅ Gauche: totaux + détail | Droite: graphique (50/50) -->
-            <Grid Grid.Row="2">
-                <Grid.ColumnDefinitions>
-                    <!-- ✅ moitié / moitié -->
-                    <ColumnDefinition Width="1*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="1*"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Colonne gauche : Totaux + Détail -->
-                <Grid Grid.Column="0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="12"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- Totaux par entreprises -->
-                    <Border Grid.Row="0"
-                            BorderBrush="#DDDDDD"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Padding="12"
-                            Background="White">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top"
-                                       Text="Totaux par entreprises"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,10"/>
-
-                            <DataGrid x:Name="ByCompanyGrid"
-                                      Style="{StaticResource IziregiGrid}"
-                                      AutoGenerateColumns="False"
-                                      IsReadOnly="True"
-                                      ColumnWidth="Auto"
-                                      CanUserResizeColumns="True"
-                                      HeadersVisibility="Column"
-                                      SelectionChanged="ByCompanyGrid_SelectionChanged">
-
-                                <DataGrid.ColumnHeaderStyle>
-                                    <Style TargetType="DataGridColumnHeader">
-                                        <Setter Property="HorizontalContentAlignment" Value="Center"/>
-                                    </Style>
-                                </DataGrid.ColumnHeaderStyle>
-
-                                <DataGrid.Columns>
-
-                                    <DataGridTextColumn Header="Entreprises"
-                                                        Binding="{Binding Company}"
-                                                        Width="140"/>
-
-                                    <DataGridTextColumn Header="Nb de bons"
-                                                        Binding="{Binding Count}"
-                                                        Width="90">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextAlignment" Value="Center"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-
-                                    <DataGridTextColumn Header="HT"
-                                                        Binding="{Binding TotalHt, StringFormat={}{0:0.00}}"
-                                                        Width="70">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextAlignment" Value="Right"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-
-                                    <DataGridTextColumn Header="TVA"
-                                                        Binding="{Binding TotalTva, StringFormat={}{0:0.00}}"
-                                                        Width="70">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextAlignment" Value="Right"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-
-                                    <DataGridTextColumn Header="TTC"
-                                                        Binding="{Binding TotalTtc, StringFormat={}{0:0.00}}"
-                                                        Width="70">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextAlignment" Value="Right"/>
-                                                <Setter Property="FontWeight" Value="Bold"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </DockPanel>
-                    </Border>
-
-                    <!-- Détail des bons -->
-                    <Border Grid.Row="2"
-                            BorderBrush="#DDDDDD"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Padding="12"
-                            Background="White">
-                        <DockPanel>
-
-                            <TextBlock x:Name="DetailsTitleTextBlock"
-                                       DockPanel.Dock="Top"
-                                       Text="Détail — sélectionne une entreprise"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,10"/>
-
-                            <DataGrid x:Name="DetailsGrid"
-                                      Style="{StaticResource IziregiGrid}"
-                                      AutoGenerateColumns="False"
-                                      IsReadOnly="True"
-                                      ColumnWidth="Auto"
-                                      HeadersVisibility="Column">
-
-                                <DataGrid.ColumnHeaderStyle>
-                                    <Style TargetType="DataGridColumnHeader">
-                                        <Setter Property="HorizontalContentAlignment" Value="Center"/>
-                                    </Style>
-                                </DataGrid.ColumnHeaderStyle>
-
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="BDR" Binding="{Binding Bdr}" Width="70"/>
-                                    <DataGridTextColumn Header="Date" Binding="{Binding Date, StringFormat=dd.MM.yyyy}" Width="95"/>
-                                    <DataGridTextColumn Header="Lieu" Binding="{Binding Place}" Width="110"/>
-
-                                    <DataGridTextColumn Header="HT" Binding="{Binding Ht, StringFormat={}{0:0.00}}" Width="70">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextAlignment" Value="Right"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-
-                                    <DataGridTextColumn Header="TVA" Binding="{Binding Tva, StringFormat={}{0:0.00}}" Width="70">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextAlignment" Value="Right"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-
-                                    <DataGridTextColumn Header="TTC" Binding="{Binding Ttc, StringFormat={}{0:0.00}}" Width="70">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextAlignment" Value="Right"/>
-                                                <Setter Property="FontWeight" Value="Bold"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-                                </DataGrid.Columns>
-                            </DataGrid>
-
-                        </DockPanel>
-                    </Border>
-
-                </Grid>
-
-                <!-- Graphique à droite -->
-                <Border Grid.Column="2"
-                        BorderBrush="#DDDDDD"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Padding="12"
-                        Background="White">
-                    <DockPanel>
-
-                        <TextBlock DockPanel.Dock="Top"
-                                   Text="Graphique — Coûts TTC par entreprise"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,10"/>
-
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <ScrollViewer Grid.Row="0"
-                                          HorizontalScrollBarVisibility="Disabled"
-                                          VerticalScrollBarVisibility="Disabled">
-                                <ItemsControl x:Name="ChartItems">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Width="55" Margin="0,0,4,0" VerticalAlignment="Bottom">
-                                                <TextBlock Text="{Binding TotalTtc, StringFormat={}{0:0.00}}"
-                                                           FontSize="10"
-                                                           FontWeight="Bold"
-                                                           HorizontalAlignment="Center"
-                                                           Margin="0,0,0,4"/>
-                                                <Border Height="{Binding BarHeight}"
-                                                        Width="16"
-                                                        CornerRadius="3"
-                                                        Background="#3B82F6"
-                                                        HorizontalAlignment="Center"/>
-                                                <TextBlock Text="{Binding Company}"
-                                                           FontSize="10"
-                                                           TextAlignment="Center"
-                                                           TextWrapping="Wrap"
-                                                           Margin="0,4,0,0"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-
-                            <TextBlock Grid.Row="1"
-                                       Foreground="Gray"
-                                       FontSize="11"
-                                       Margin="0,10,0,0"
-                                       Text="(barres resserrées pour tout voir)"/>
-                        </Grid>
-
-                    </DockPanel>
-                </Border>
-
-            </Grid>
-
-        </Grid>
+        <Grid />
 
     </DockPanel>
 </UserControl>

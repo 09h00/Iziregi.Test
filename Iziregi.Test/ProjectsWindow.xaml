@@ -1,0 +1,355 @@
+﻿<!-- File: ProjectsWindow.xaml -->
+<Window x:Class="Iziregi.Test.ProjectsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Projets"
+        Height="680"
+        Width="850"
+        MinHeight="480"
+        MinWidth="760"
+        WindowStartupLocation="CenterOwner"
+        Background="#F6F7FB">
+
+    <Window.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="InputStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ✅ IMPORTANT : Template custom, sinon le thème Windows peut ignorer Background au survol -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1D4ED8"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#1D4ED8"/>
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1E40AF"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#1E40AF"/>
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Background" Value="#93C5FD"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#93C5FD"/>
+                                <Setter Property="Foreground" Value="#F8FAFC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Foreground" Value="#B91C1C"/>
+            <Setter Property="BorderBrush" Value="#FCA5A5"/>
+        </Style>
+
+        <Style x:Key="GridStyle" TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserDeleteRows" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="RowHeight" Value="38"/>
+            <Setter Property="ColumnHeaderHeight" Value="36"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#E5E7EB"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="AlternatingRowBackground" Value="#F9FAFB"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Titre -->
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="Banque de projets"
+                               FontSize="22"
+                               FontWeight="Bold"
+                               Foreground="#111827"/>
+                    <TextBlock Text="Créer et gérer les noms/adresses des projets utilisés dans les bons de régie."
+                               FontSize="13"
+                               Foreground="#6B7280"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <Button Content="Rafraîchir"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Click="Refresh_Click"
+                        DockPanel.Dock="Right"
+                        VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Contenu principal -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.25*"/>
+                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="0.85*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Liste projets -->
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="Liste des projets"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="#111827"
+                               Margin="0,0,0,10"/>
+
+                    <DataGrid x:Name="ProjectsGrid"
+                              Grid.Row="1"
+                              Style="{StaticResource GridStyle}"
+                              SelectionChanged="ProjectsGrid_SelectionChanged"
+                              HorizontalAlignment="Stretch"
+                              Width="NaN">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="55"/>
+                            <DataGridTextColumn Header="Nom du projet" Binding="{Binding Name}" Width="1.2*"/>
+                            <DataGridTextColumn Header="Adresse" Binding="{Binding Address}" Width="1.6*"/>
+                            <DataGridCheckBoxColumn Header="Actif" Binding="{Binding IsActive}" Width="70"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- Formulaire -->
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0">
+                <DockPanel LastChildFill="True">
+
+                    <!-- ACTIONS -->
+                    <Border DockPanel.Dock="Bottom"
+                            Background="#F9FAFB"
+                            BorderBrush="#E5E7EB"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Actions"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="#111827"
+                                       Margin="0,0,0,10"/>
+
+                            <WrapPanel>
+                                <Button Content="+ Nouveau"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="NewProject_Click"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Modifier"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="EditProject_Click"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Enregistrer"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Click="SaveProject_Click"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Désactiver"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Click="DisableProject_Click"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Réactiver"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="EnableProject_Click"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Supprimer"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Click="DeleteProject_Click"
+                                        Margin="0,0,8,8"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Champs -->
+                    <StackPanel>
+                        <TextBlock Text="Projet"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#111827"
+                                   Margin="0,0,0,12"/>
+
+                        <TextBlock Text="Nom du projet" Style="{StaticResource LabelStyle}"/>
+                        <TextBox x:Name="ProjectNameTextBox"
+                                 Style="{StaticResource InputStyle}"
+                                 Margin="0,0,0,12"/>
+
+                        <TextBlock Text="Couleur du badge" Style="{StaticResource LabelStyle}"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="38"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox x:Name="ProjectColorHexTextBox"
+                                     Grid.Column="0"
+                                     Style="{StaticResource InputStyle}"
+                                     Text="#111827"/>
+
+                            <Button x:Name="PickProjectColorButton"
+                                    Grid.Column="2"
+                                    Content="Choisir..."
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="PickProjectColor_Click"/>
+
+                            <Border x:Name="ProjectColorPreviewBorder"
+                                    Grid.Column="4"
+                                    Width="38"
+                                    Height="32"
+                                    CornerRadius="6"
+                                    BorderBrush="#D1D5DB"
+                                    BorderThickness="1"
+                                    Background="#111827"/>
+                        </Grid>
+
+                        <!-- ✅ Adresse séparée -->
+                        <TextBlock Text="Adresse" Style="{StaticResource LabelStyle}"/>
+                        <TextBox x:Name="ProjectAddressLineTextBox"
+                                 Style="{StaticResource InputStyle}"
+                                 Margin="0,0,0,10"/>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.35*"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="0.65*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Code postal" Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="ProjectZipTextBox"
+                                         Style="{StaticResource InputStyle}"
+                                         MaxLength="4"
+                                         PreviewTextInput="Zip_PreviewTextInput"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Ville" Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="ProjectCityTextBox"
+                                         Style="{StaticResource InputStyle}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <CheckBox x:Name="ProjectIsActiveCheckBox"
+                                  Content="Projet actif"
+                                  IsChecked="True"
+                                  Margin="0,0,0,18"/>
+
+                        <TextBlock x:Name="StatusTextBlock"
+                                   Text=""
+                                   Foreground="#6B7280"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,10,0,0"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Bas fenêtre -->
+        <Border Grid.Row="2"
+                Background="White"
+                BorderBrush="#E5E7EB"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="10"
+                Margin="0,12,0,0">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="Astuce : sélectionne un projet dans la liste puis clique sur Modifier."
+                           Foreground="#6B7280"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           DockPanel.Dock="Left"/>
+
+                <Button Content="Fermer"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Click="Close_Click"
+                        DockPanel.Dock="Right"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

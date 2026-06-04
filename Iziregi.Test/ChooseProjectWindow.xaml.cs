@@ -1,4 +1,7 @@
-﻿using System.Windows;
+﻿// File: ChooseProjectWindow.xaml.cs
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
 using System.Windows.Controls;
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
@@ -52,7 +55,11 @@ public partial class ChooseProjectWindow : Window
     {
         if (ProjectsGrid.SelectedItem is not Project p)
         {
-            MessageBox.Show("Sélectionne un projet dans la liste.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(
+                "Sélectionne un projet dans la liste.",
+                "Info",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 

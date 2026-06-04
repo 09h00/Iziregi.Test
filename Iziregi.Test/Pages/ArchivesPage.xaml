@@ -1,105 +1,746 @@
 ﻿<!-- File: Pages/ArchivesPage.xaml -->
 <UserControl x:Class="Iziregi.Test.Pages.ArchivesPage"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d">
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 mc:Ignorable="d"
+			 d:DesignHeight="820"
+			 d:DesignWidth="1280"
+			 Background="#F6F7FB">
 
-    <DockPanel>
+	<UserControl.Resources>
 
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBlock Text="Archives" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+		<Style x:Key="SmallButtonStyle" TargetType="Button">
+			<Setter Property="Height" Value="28"/>
+			<Setter Property="Padding" Value="8,0"/>
+			<Setter Property="Background" Value="White"/>
+			<Setter Property="Foreground" Value="#111827"/>
+			<Setter Property="BorderBrush" Value="#D1D5DB"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="FontSize" Value="12"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
 
-            <Button Content="Restaurer (sélection)"
-                    Width="180"
-                    Margin="16,0,0,0"
-                    Click="RestoreSelected_Click"/>
+		<Style x:Key="DangerSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+			<Setter Property="Foreground" Value="#B91C1C"/>
+			<Setter Property="BorderBrush" Value="#FCA5A5"/>
+		</Style>
 
-            <Button Content="Mettre à la corbeille (sélection)"
-                    Width="240"
-                    Margin="8,0,0,0"
-                    Click="TrashSelected_Click"/>
+		<Style x:Key="InputStyle" TargetType="TextBox">
+			<Setter Property="Height" Value="26"/>
+			<Setter Property="Padding" Value="6,2"/>
+			<Setter Property="BorderBrush" Value="#D1D5DB"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="FontSize" Value="12"/>
+		</Style>
 
-            <Button Content="Rafraîchir"
-                    Width="120"
-                    Margin="16,0,0,0"
-                    Click="Refresh_Click"/>
-        </StackPanel>
+		<!-- Texte centré -->
+		<Style x:Key="GridTextCellStyle" TargetType="TextBlock">
+			<Setter Property="VerticalAlignment" Value="Center"/>
+			<Setter Property="TextAlignment" Value="Center"/>
+			<Setter Property="TextWrapping" Value="NoWrap"/>
+			<Setter Property="TextTrimming" Value="None"/>
+		</Style>
 
-        <DataGrid x:Name="ArchivedGrid"
-                  Style="{StaticResource IziregiGrid}"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="False"
-                  SelectionMode="Single"
-                  SelectionUnit="FullRow"
-                  ColumnWidth="SizeToHeader">
+		<!-- CheckBox centrée -->
+		<Style x:Key="GridCheckBoxCellStyle" TargetType="CheckBox">
+			<Setter Property="VerticalAlignment" Value="Center"/>
+			<Setter Property="HorizontalAlignment" Value="Center"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+			<Setter Property="HorizontalContentAlignment" Value="Center"/>
+			<Setter Property="Margin" Value="0"/>
+			<Setter Property="Padding" Value="0"/>
+		</Style>
 
-            <DataGrid.Columns>
+		<!-- DataGrid -->
+		<Style x:Key="GridStyle" TargetType="DataGrid">
+			<Setter Property="AutoGenerateColumns" Value="False"/>
+			<Setter Property="CanUserAddRows" Value="False"/>
+			<Setter Property="CanUserDeleteRows" Value="False"/>
 
-                <!-- Sélection checkbox -->
-                <DataGridTemplateColumn Width="42" IsReadOnly="False">
-                    <DataGridTemplateColumn.Header>
-                        <CheckBox x:Name="SelectAllCheckBox"
-                                  ToolTip="Tout cocher / décocher"
-                                  Click="SelectAllCheckBox_Click"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"/>
-                    </DataGridTemplateColumn.Header>
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+			<Setter Property="GridLinesVisibility" Value="All"/>
+			<Setter Property="VerticalGridLinesBrush" Value="#E5E7EB"/>
+			<Setter Property="HorizontalGridLinesBrush" Value="#E5E7EB"/>
 
-                <DataGridTextColumn Header="N° Bdr" Binding="{Binding WorkOrder.BdrNumber}" Width="80" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Bat./Salle" Binding="{Binding WorkOrder.Place}" Width="90" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Date"
-                                    Binding="{Binding WorkOrder.RequestDate, StringFormat=dd.MM.yyyy}"
-                                    Width="105"
-                                    IsReadOnly="True"/>
+			<Setter Property="HeadersVisibility" Value="Column"/>
+			<Setter Property="RowHeight" Value="36"/>
+			<Setter Property="ColumnHeaderHeight" Value="44"/>
 
-                <DataGridTemplateColumn Header="Demandé par" MinWidth="110">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Style="{StaticResource IziregiGridTextCell}"
-                                       Text="{Binding WorkOrder.RequestedBy}"
-                                       ToolTip="{Binding WorkOrder.RequestedBy}"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+			<!-- Bordure extérieure -->
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="BorderBrush" Value="#111827"/>
 
-                <DataGridTemplateColumn Header="Effectué par" MinWidth="110">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Style="{StaticResource IziregiGridTextCell}"
-                                       Text="{Binding WorkOrder.PerformedBy}"
-                                       ToolTip="{Binding WorkOrder.PerformedBy}"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+			<Setter Property="Background" Value="White"/>
+			<Setter Property="AlternatingRowBackground" Value="#F9FAFB"/>
 
-                <!-- ✅ Ajouts demandés -->
-                <DataGridCheckBoxColumn Header="Validé"
-                                        Binding="{Binding WorkOrder.IsValidated}"
-                                        Width="80"
-                                        IsReadOnly="True"/>
+			<Setter Property="SelectionMode" Value="Single"/>
+			<Setter Property="SelectionUnit" Value="FullRow"/>
 
-                <DataGridCheckBoxColumn Header="Effectué"
-                                        Binding="{Binding WorkOrder.IsPerformed}"
-                                        Width="90"
-                                        IsReadOnly="True"/>
+			<Setter Property="FontSize" Value="12"/>
+			<Setter Property="IsReadOnly" Value="False"/>
 
-                <DataGridTextColumn Header="Archivé le"
-                                    Binding="{Binding WorkOrder.ArchivedAt, StringFormat=dd.MM.yyyy}"
-                                    Width="110"
-                                    IsReadOnly="True"/>
+			<!-- Sélection : bordure bleue -->
+			<Setter Property="RowStyle">
+				<Setter.Value>
+					<Style TargetType="DataGridRow">
+						<Setter Property="Background" Value="Transparent"/>
+						<Setter Property="BorderBrush" Value="Transparent"/>
+						<Setter Property="BorderThickness" Value="0"/>
+						<Setter Property="SnapsToDevicePixels" Value="True"/>
 
-            </DataGrid.Columns>
-        </DataGrid>
+						<Style.Triggers>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter Property="BorderBrush" Value="#2563EB"/>
+								<Setter Property="BorderThickness" Value="2"/>
+								<Setter Property="Background" Value="Transparent"/>
+							</Trigger>
 
-    </DockPanel>
+							<Trigger Property="IsKeyboardFocusWithin" Value="True">
+								<Setter Property="BorderBrush" Value="#2563EB"/>
+								<Setter Property="BorderThickness" Value="2"/>
+								<Setter Property="Background" Value="Transparent"/>
+							</Trigger>
+						</Style.Triggers>
+					</Style>
+				</Setter.Value>
+			</Setter>
+
+			<!-- Cellules : pas de remplissage bleu -->
+			<Setter Property="CellStyle">
+				<Setter.Value>
+					<Style TargetType="DataGridCell">
+						<Setter Property="VerticalContentAlignment" Value="Stretch"/>
+						<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+						<Setter Property="Padding" Value="6,0"/>
+						<Setter Property="BorderBrush" Value="#E5E7EB"/>
+						<Setter Property="BorderThickness" Value="0,0,1,1"/>
+						<Setter Property="Background" Value="Transparent"/>
+						<Style.Triggers>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter Property="Background" Value="Transparent"/>
+							</Trigger>
+						</Style.Triggers>
+					</Style>
+				</Setter.Value>
+			</Setter>
+
+			<!-- En-têtes : gras + noir -->
+			<Setter Property="ColumnHeaderStyle">
+				<Setter.Value>
+					<Style TargetType="DataGridColumnHeader">
+						<Setter Property="VerticalContentAlignment" Value="Center"/>
+						<Setter Property="HorizontalContentAlignment" Value="Center"/>
+						<Setter Property="Padding" Value="6,0"/>
+						<Setter Property="BorderBrush" Value="#111827"/>
+						<Setter Property="BorderThickness" Value="0,0,1,1"/>
+						<Setter Property="Foreground" Value="#111827"/>
+						<Setter Property="FontWeight" Value="Bold"/>
+					</Style>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<!-- Texte statut (base) -->
+		<Style x:Key="StatusCellTextBaseStyle" TargetType="TextBlock" BasedOn="{StaticResource GridTextCellStyle}">
+			<Setter Property="Foreground" Value="#9CA3AF"/>
+			<Setter Property="FontWeight" Value="SemiBold"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Padding" Value="4,0"/>
+		</Style>
+
+		<!-- Zone Statut : pas de séparations verticales -->
+		<Style x:Key="StatusHeaderNoVerticalSeparators" TargetType="DataGridColumnHeader">
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+			<Setter Property="HorizontalContentAlignment" Value="Center"/>
+			<Setter Property="Padding" Value="6,0"/>
+			<Setter Property="BorderBrush" Value="#111827"/>
+			<Setter Property="BorderThickness" Value="0,0,0,1"/>
+		</Style>
+
+		<Style x:Key="StatusCellNoVerticalSeparators" TargetType="DataGridCell">
+			<Setter Property="VerticalContentAlignment" Value="Stretch"/>
+			<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+			<Setter Property="Padding" Value="0"/>
+			<Setter Property="BorderBrush" Value="#E5E7EB"/>
+			<Setter Property="BorderThickness" Value="0,0,0,1"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Style.Triggers>
+				<Trigger Property="IsSelected" Value="True">
+					<Setter Property="Background" Value="Transparent"/>
+				</Trigger>
+			</Style.Triggers>
+		</Style>
+
+		<Style x:Key="StatusHeaderWithRightSeparator"
+			   TargetType="DataGridColumnHeader"
+			   BasedOn="{StaticResource StatusHeaderNoVerticalSeparators}">
+			<Setter Property="BorderBrush" Value="#111827"/>
+			<Setter Property="BorderThickness" Value="0,0,1,1"/>
+		</Style>
+
+		<Style x:Key="StatusCellWithRightSeparator"
+			   TargetType="DataGridCell"
+			   BasedOn="{StaticResource StatusCellNoVerticalSeparators}">
+			<Setter Property="BorderThickness" Value="0,0,1,1"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Style.Triggers>
+				<Trigger Property="IsSelected" Value="True">
+					<Setter Property="Background" Value="Transparent"/>
+				</Trigger>
+			</Style.Triggers>
+		</Style>
+
+		<!-- Header "Statut" -->
+		<Style x:Key="StatusHeaderTopText" TargetType="TextBlock">
+			<Setter Property="FontSize" Value="12"/>
+			<Setter Property="FontWeight" Value="Bold"/>
+			<Setter Property="Foreground" Value="#111827"/>
+			<Setter Property="HorizontalAlignment" Value="Center"/>
+		</Style>
+
+		<!-- DatePicker compact -->
+		<Style x:Key="GridDatePickerStyle" TargetType="DatePicker">
+			<Setter Property="SelectedDateFormat" Value="Short"/>
+			<Setter Property="HorizontalAlignment" Value="Center"/>
+			<Setter Property="VerticalAlignment" Value="Center"/>
+			<Setter Property="Width" Value="117"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Padding" Value="0"/>
+			<Setter Property="HorizontalContentAlignment" Value="Center"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+		</Style>
+
+		<!-- Fond vert si date renseignée -->
+		<Style x:Key="DateCellBorderStyle_Distributed" TargetType="Border">
+			<Setter Property="Background" Value="#C7F9C7"/>
+			<Setter Property="CornerRadius" Value="2"/>
+			<Setter Property="Padding" Value="0"/>
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding WorkOrder.DistributedAt}" Value="{x:Null}">
+					<Setter Property="Background" Value="Transparent"/>
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+
+		<Style x:Key="DateCellBorderStyle_Performed" TargetType="Border">
+			<Setter Property="Background" Value="#C7F9C7"/>
+			<Setter Property="CornerRadius" Value="2"/>
+			<Setter Property="Padding" Value="0"/>
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding WorkOrder.PerformedAt}" Value="{x:Null}">
+					<Setter Property="Background" Value="Transparent"/>
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+
+		<!-- DatePickerTextBox : supprime le watermark -->
+		<Style x:Key="NoWatermarkDatePickerTextBoxStyle" TargetType="{x:Type DatePickerTextBox}">
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="{x:Type DatePickerTextBox}">
+						<Border Background="{TemplateBinding Background}"
+								BorderBrush="{TemplateBinding BorderBrush}"
+								BorderThickness="{TemplateBinding BorderThickness}"
+								Padding="{TemplateBinding Padding}">
+							<TextBox Background="Transparent"
+									 BorderThickness="0"
+									 IsReadOnly="True"
+									 Foreground="#111827"
+									 TextAlignment="Center"
+									 VerticalContentAlignment="Center"
+									 Text="{Binding Path=SelectedDate,
+									 RelativeSource={RelativeSource AncestorType={x:Type DatePicker}},
+									 StringFormat=dd.MM.yyyy,
+									 TargetNullValue=''}"/>
+						</Border>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+	</UserControl.Resources>
+
+	<Grid Margin="10">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="*"/>
+		</Grid.RowDefinitions>
+
+		<!-- BARRE -->
+		<Border Grid.Row="0"
+				Background="White"
+				BorderBrush="#E5E7EB"
+				BorderThickness="1"
+				CornerRadius="10"
+				Padding="8"
+				Margin="0,0,0,8">
+
+			<Grid>
+	<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+		<TextBlock Text="Archives"
+		           FontSize="18"
+		           FontWeight="SemiBold"
+		           Foreground="#111827"
+		           Margin="0,0,10,0"/>
+
+		<Button x:Name="RestoreSelectionButton"
+		        Content="Restaurer sélection"
+		        Style="{StaticResource SmallButtonStyle}"
+		        Click="RestoreSelected_Click"
+		        IsEnabled="False"
+		        Margin="0,0,6,0"/>
+
+		<Button x:Name="TrashSelectionButton"
+		        Content="Corbeille sélection"
+		        Style="{StaticResource DangerSmallButtonStyle}"
+		        Click="TrashSelected_Click"
+		        IsEnabled="False"
+		        Margin="0,0,6,0"/>
+
+		<Button Content="Rafraîchir"
+		        Style="{StaticResource SmallButtonStyle}"
+		        Click="Refresh_Click"/>
+	</StackPanel>
+</Grid>
+		</Border>
+
+		<!-- TABLEAU -->
+		<Border Grid.Row="1"
+				Background="White"
+				BorderBrush="#E5E7EB"
+				BorderThickness="1"
+				CornerRadius="10"
+				Padding="10">
+
+			<DataGrid x:Name="ArchivedGrid"
+					  Grid.Row="1"
+					  Style="{StaticResource GridStyle}"
+					  ColumnWidth="SizeToCells"
+					  MouseDoubleClick="ArchivedGrid_MouseDoubleClick">
+
+				<DataGrid.Columns>
+
+					<!-- Sélection -->
+					<DataGridTemplateColumn Width="31" IsReadOnly="True">
+						<DataGridTemplateColumn.HeaderTemplate>
+							<DataTemplate>
+								<CheckBox x:Name="SelectAllCheckBox"
+										  Style="{StaticResource GridCheckBoxCellStyle}"
+										  Click="SelectAllCheckBox_Click"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.HeaderTemplate>
+
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<CheckBox Style="{StaticResource GridCheckBoxCellStyle}"
+										  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+										  Click="RowSelectCheckBox_Click"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- N° -->
+					<DataGridTextColumn Header="N°"
+										Binding="{Binding WorkOrder.BdrDisplay}"
+										Width="48"
+										ElementStyle="{StaticResource GridTextCellStyle}"
+										IsReadOnly="True"/>
+
+					<!-- Concerne -->
+					<DataGridTextColumn Width="SizeToCells"
+										MinWidth="90"
+										Binding="{Binding WorkOrder.Reserve}"
+										ElementStyle="{StaticResource GridTextCellStyle}"
+										IsReadOnly="True">
+						<DataGridTextColumn.Header>
+							<TextBlock Text="Concerne"/>
+						</DataGridTextColumn.Header>
+					</DataGridTextColumn>
+
+					<!-- Demandé par -->
+					<DataGridTextColumn Width="SizeToCells"
+										MinWidth="90"
+										Binding="{Binding WorkOrder.RequestedBy}"
+										ElementStyle="{StaticResource GridTextCellStyle}"
+										IsReadOnly="True">
+						<DataGridTextColumn.Header>
+							<TextBlock Text="Demandé par"/>
+						</DataGridTextColumn.Header>
+					</DataGridTextColumn>
+
+					<!-- Entreprise (avec couleur) -->
+					<DataGridTemplateColumn Width="SizeToCells" MinWidth="76" IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<TextBlock Text="Entreprise"/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border Background="{Binding CompanyBrush}" CornerRadius="2" Padding="6,0">
+									<TextBlock Text="{Binding WorkOrder.PerformedBy}"
+											   Foreground="{Binding CompanyTextBrush}"
+											   FontWeight="Bold"
+											   VerticalAlignment="Center"
+											   TextAlignment="Center"
+											   TextWrapping="NoWrap"/>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Date -->
+					<DataGridTextColumn Header="Créé le"
+										Binding="{Binding WorkOrder.RequestDate, StringFormat=dd.MM.yyyy}"
+										Width="SizeToCells"
+										MinWidth="70"
+										ElementStyle="{StaticResource GridTextCellStyle}"
+										IsReadOnly="True"/>
+
+					<!-- ========================= -->
+					<!-- STATUT (5 colonnes) -->
+					<!-- ========================= -->
+
+					<!-- 1) Créé -->
+					<DataGridTemplateColumn Width="SizeToCells"
+											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+											IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<Grid/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border CornerRadius="2">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="Transparent"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding WorkOrder.IsInCreation}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsSentToCompany}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsQuoteReceived}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+
+									<TextBlock>
+										<TextBlock.Style>
+											<Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+												<Setter Property="Text" Value="Créé"/>
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding WorkOrder.IsInCreation}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsSentToCompany}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsQuoteReceived}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</TextBlock.Style>
+									</TextBlock>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- 2) Demande devis envoyée -->
+					<DataGridTemplateColumn Width="SizeToCells"
+											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+											IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<Grid/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border CornerRadius="2">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="Transparent"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding WorkOrder.IsSentToCompany}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsQuoteReceived}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+
+									<TextBlock>
+										<TextBlock.Style>
+											<Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+												<Setter Property="Text" Value="Demande devis envoyée"/>
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding WorkOrder.IsSentToCompany}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsQuoteReceived}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</TextBlock.Style>
+									</TextBlock>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- 3) Devis reçu -->
+					<DataGridTemplateColumn Width="SizeToCells"
+											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+											IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<Grid>
+								<Grid.RowDefinitions>
+									<RowDefinition Height="*"/>
+									<RowDefinition Height="*"/>
+								</Grid.RowDefinitions>
+
+								<TextBlock Text="Statut"
+										   Grid.Row="0"
+										   Grid.RowSpan="2"
+										   Style="{StaticResource StatusHeaderTopText}"
+										   VerticalAlignment="Center"/>
+							</Grid>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border CornerRadius="2">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="Transparent"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding WorkOrder.IsQuoteReceived}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+
+									<TextBlock>
+										<TextBlock.Style>
+											<Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+												<Setter Property="Text" Value="Devis reçu"/>
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding WorkOrder.IsQuoteReceived}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</TextBlock.Style>
+									</TextBlock>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- 4) Demande validation envoyée -->
+					<DataGridTemplateColumn Width="SizeToCells"
+											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+											IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<Grid/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border CornerRadius="2">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="Transparent"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+
+									<TextBlock>
+										<TextBlock.Style>
+											<Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+												<Setter Property="Text" Value="Demande validation envoyée"/>
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding WorkOrder.IsSentToSigner}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.IsValidated}" Value="True">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</TextBlock.Style>
+									</TextBlock>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- 5) Validé -->
+					<DataGridTemplateColumn Width="SizeToCells"
+											HeaderStyle="{StaticResource StatusHeaderWithRightSeparator}"
+											CellStyle="{StaticResource StatusCellWithRightSeparator}"
+											IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<Grid/>
+						</DataGridTemplateColumn.Header>
+
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border CornerRadius="2">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="Transparent"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding WorkOrder.ValidationDecision}" Value="Validé">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+
+												<DataTrigger Binding="{Binding WorkOrder.ValidationDecision}" Value="Annulé">
+													<Setter Property="Background" Value="#FFEDD5"/>
+												</DataTrigger>
+
+												<DataTrigger Binding="{Binding WorkOrder.ValidationDecision}" Value="Refusé">
+													<Setter Property="Background" Value="#FEE2E2"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+
+									<TextBlock>
+										<TextBlock.Style>
+											<Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+												<Setter Property="Text" Value="{Binding WorkOrder.ValidationDecision}"/>
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding WorkOrder.ValidationDecision}" Value="Validé">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.ValidationDecision}" Value="Annulé">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+													<DataTrigger Binding="{Binding WorkOrder.ValidationDecision}" Value="Refusé">
+														<Setter Property="Foreground" Value="#111827"/>
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</TextBlock.Style>
+									</TextBlock>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Distribué le -->
+					<DataGridTemplateColumn Header="Distribué le" Width="94" IsReadOnly="False">
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border Style="{StaticResource DateCellBorderStyle_Distributed}">
+									<DatePicker Style="{StaticResource GridDatePickerStyle}"
+												SelectedDate="{Binding WorkOrder.DistributedAt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+												SelectedDateChanged="DistributedDate_SelectedDateChanged">
+										<DatePicker.Resources>
+											<Style TargetType="{x:Type DatePickerTextBox}"
+												   BasedOn="{StaticResource NoWatermarkDatePickerTextBoxStyle}"/>
+										</DatePicker.Resources>
+									</DatePicker>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Effectué le -->
+					<DataGridTemplateColumn Header="Effectué le" Width="94" IsReadOnly="False">
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border Style="{StaticResource DateCellBorderStyle_Performed}">
+									<DatePicker Style="{StaticResource GridDatePickerStyle}"
+												SelectedDate="{Binding WorkOrder.PerformedAt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+												SelectedDateChanged="PerformedDate_SelectedDateChanged">
+										<DatePicker.Resources>
+											<Style TargetType="{x:Type DatePickerTextBox}"
+												   BasedOn="{StaticResource NoWatermarkDatePickerTextBoxStyle}"/>
+										</DatePicker.Resources>
+									</DatePicker>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Actions -->
+					<DataGridTemplateColumn Header="Actions" Width="150" IsReadOnly="True">
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<StackPanel Orientation="Horizontal">
+									<Button Content="↩"
+											ToolTip="Restaurer"
+											Style="{StaticResource SmallButtonStyle}"
+											Click="RestoreRow_Click"
+											Margin="0,0,4,0"/>
+
+									<Button Content="🗑"
+											ToolTip="Corbeille"
+											Style="{StaticResource DangerSmallButtonStyle}"
+											Click="TrashRow_Click"/>
+								</StackPanel>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+				</DataGrid.Columns>
+			</DataGrid>
+		</Border>
+
+	</Grid>
 </UserControl>

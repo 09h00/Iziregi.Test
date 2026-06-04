@@ -2,15 +2,186 @@
 using System;
 using System.Linq;
 using System.Windows;
+using MessageBox = System.Windows.MessageBox;
 using System.Windows.Controls;
 using Iziregi.Test.Data;
 using Microsoft.VisualBasic;
+using System.Collections.Generic;
+
+using Forms = System.Windows.Forms;
+using MediaBrushes = System.Windows.Media.Brushes;
 
 namespace Iziregi.Test.Pages;
 
-public partial class ListsPage : UserControl, IReloadablePage
+public partial class ListsPage : System.Windows.Controls.UserControl, IReloadablePage
 {
     private readonly MainWindow _host;
+
+    // =========================
+    // Liste active
+    // =========================
+    private enum ActiveListKind
+    {
+        None = 0,
+        Reserves = 1,
+        Requesters = 2,
+        Companies = 3,
+        Places = 4,
+        Etages = 5,
+        PlanningTextZones = 6,
+    }
+
+    private ActiveListKind _activeList = ActiveListKind.None;
+
+    private void SetActiveList(ActiveListKind kind)
+    {
+        _activeList = kind;
+        RefreshCommonButtonsState();
+        RefreshActiveListBorders();
+    }
+
+    private void RefreshActiveListBorders()
+    {
+        var normal = (System.Windows.Media.Brush)(new System.Windows.Media.BrushConverter().ConvertFrom("#E5E7EB")!);
+        var active = (System.Windows.Media.Brush)(new System.Windows.Media.BrushConverter().ConvertFrom("#2563EB")!);
+
+        void SetBorder(System.Windows.Controls.Border? b, bool isActive)
+        {
+            if (b == null) return;
+            b.BorderBrush = isActive ? active : normal;
+        }
+
+        SetBorder(ReservesListBorder, _activeList == ActiveListKind.Reserves);
+        SetBorder(RequestersListBorder, _activeList == ActiveListKind.Requesters);
+        SetBorder(CompaniesListBorder, _activeList == ActiveListKind.Companies);
+        SetBorder(PlacesListBorder, _activeList == ActiveListKind.Places);
+        SetBorder(EtagesListBorder, _activeList == ActiveListKind.Etages);
+        SetBorder(PlanningTextZonesListBorder, _activeList == ActiveListKind.PlanningTextZones);
+    }
+
+    private static long RequireCurrentProjectId()
+    {
+        var pid = Db.GetCurrentProjectId();
+        if (!pid.HasValue || pid.Value <= 0)
+            throw new Exception("Aucun projet courant. Sélectionne un projet avant d’utiliser les listes.");
+        return pid.Value;
+    }
+
+    private long RequireCurrentProjectIdSafe()
+    {
+        try { return RequireCurrentProjectId(); }
+        catch { return 0; }
+    }
+
+    private bool HasCurrentProject()
+    {
+        var pid = Db.GetCurrentProjectId();
+        return pid.HasValue && pid.Value > 0;
+    }
+
+    private string? GetSelectedCompanyName()
+    {
+        if (CompaniesListBox.SelectedItem is CompanyListItem cli)
+            return cli.Name;
+
+        return CompaniesListBox.SelectedItem as string;
+    }
+
+    private string? GetActiveSelectedItemText()
+    {
+        return _activeList switch
+        {
+            ActiveListKind.Reserves => ReservesListBox?.SelectedItem as string,
+            ActiveListKind.Requesters => RequestersListBox?.SelectedItem as string,
+            ActiveListKind.Companies => GetSelectedCompanyName(),
+            ActiveListKind.Places => PlacesListBox?.SelectedItem as string,
+            ActiveListKind.Etages => EtagesListBox?.SelectedItem as string,
+            ActiveListKind.PlanningTextZones => PlanningTextZonesListBox?.SelectedItem as string,
+            _ => null
+        };
+    }
+
+    private string GetActiveDefaultText()
+    {
+        return _activeList switch
+        {
+            ActiveListKind.Reserves => (DefaultReserveComboBox?.Text ?? ""),
+            ActiveListKind.Requesters => (DefaultRequesterComboBox?.Text ?? ""),
+            ActiveListKind.Companies => (DefaultCompanyComboBox?.Text ?? ""),
+            ActiveListKind.Places => (DefaultPlaceComboBox?.Text ?? ""),
+            ActiveListKind.Etages => (DefaultEtageComboBox?.Text ?? ""),
+            ActiveListKind.PlanningTextZones => (DefaultPlanningTextZoneComboBox?.Text ?? ""),
+            _ => ""
+        };
+    }
+
+    private void RefreshCommonButtonsState()
+    {
+        if (CommonAddButton == null || CommonRenameButton == null || CommonDeleteButton == null || CommonSetDefaultButton == null
+            || CommonCopyButton == null || CommonPasteButton == null)
+            return;
+
+        var hasProject = HasCurrentProject();
+        var hasActiveList = _activeList != ActiveListKind.None;
+        var selected = (GetActiveSelectedItemText() ?? "").Trim();
+
+        CommonAddButton.IsEnabled = hasProject && hasActiveList;
+        CommonRenameButton.IsEnabled = hasProject && hasActiveList && !string.IsNullOrWhiteSpace(selected);
+        CommonDeleteButton.IsEnabled = hasProject && hasActiveList && !string.IsNullOrWhiteSpace(selected);
+
+        // Toujours activé si une liste est active :
+        // - si item sélectionné => utilise le nom
+        // - sinon => utilise le texte du ComboBox (peut être vide => efface)
+        CommonSetDefaultButton.IsEnabled = hasProject && hasActiveList;
+
+        CommonCopyButton.IsEnabled = hasProject && hasActiveList;
+        CommonPasteButton.IsEnabled = hasProject && hasActiveList && _listClipboard != null && _listClipboard.Items.Count > 0;
+
+        if (ActiveListLabel != null)
+        {
+            var pid = RequireCurrentProjectIdSafe();
+            ActiveListLabel.Text = _activeList switch
+            {
+                ActiveListKind.Reserves => pid > 0 ? Db.GetLabelReserve(pid) : "Concerne",
+                ActiveListKind.Requesters => pid > 0 ? Db.GetLabelRequestedBy(pid) : "Demandé par",
+                ActiveListKind.Companies => pid > 0 ? Db.GetLabelPerformedBy(pid) : "Entreprise",
+                ActiveListKind.Places => pid > 0 ? Db.GetLabelPlace(pid) : "Bâtiment",
+                ActiveListKind.Etages => pid > 0 ? Db.GetLabelEtage(pid) : "Étage",
+                ActiveListKind.PlanningTextZones => pid > 0 ? Db.GetLabelPlanningTextZone(pid) : "Zone de texte planning",
+                _ => "—",
+            };
+        }
+    }
+
+    // =========================
+    // Clipboard générique (toutes listes)
+    // =========================
+    private sealed class ListClipboardPayload
+    {
+        public List<string> Items { get; } = new();
+        public Dictionary<string, string> CompanyColorMap { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public ActiveListKind Kind { get; set; }
+        public long SourceProjectId { get; set; }
+    }
+
+    private static ListClipboardPayload? _listClipboard;
+
+    // =========================
+    // Item Entreprise (pastille + nom)
+    // =========================
+    private sealed class CompanyListItem
+    {
+        public string Name { get; }
+        public System.Windows.Media.Brush ColorBrush { get; }
+
+        public CompanyListItem(string name, System.Windows.Media.Brush colorBrush)
+        {
+            Name = name;
+            ColorBrush = colorBrush;
+        }
+
+        public override string ToString() => Name;
+    }
 
     public ListsPage(MainWindow host)
     {
@@ -18,141 +189,289 @@ public partial class ListsPage : UserControl, IReloadablePage
         _host = host;
     }
 
+    private static List<string> WithEmptyOption(List<string> items)
+    {
+        items ??= new List<string>();
+        var cleaned = items.Select(s => (s ?? "").Trim())
+                           .Where(s => !string.IsNullOrWhiteSpace(s))
+                           .Distinct(StringComparer.OrdinalIgnoreCase)
+                           .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                           .ToList();
+
+        cleaned.Insert(0, ""); // option vide sélectionnable
+        return cleaned;
+    }
+
     public void Reload()
     {
-        var places = Db.GetPlaces();
-        var companies = Db.GetCompanies();
-        var requesters = Db.GetRequesters();
+        var projectIdNullable = Db.GetCurrentProjectId();
+        if (!projectIdNullable.HasValue || projectIdNullable.Value <= 0)
+        {
+            ReservesListBox.ItemsSource = null;
+            RequestersListBox.ItemsSource = null;
+            CompaniesListBox.ItemsSource = null;
+            PlacesListBox.ItemsSource = null;
+            EtagesListBox.ItemsSource = null;
+            PlanningTextZonesListBox.ItemsSource = null;
 
-        PlacesListBox.ItemsSource = places;
-        CompaniesListBox.ItemsSource = companies;
+            DefaultReserveComboBox.ItemsSource = null;
+            DefaultRequesterComboBox.ItemsSource = null;
+            DefaultCompanyComboBox.ItemsSource = null;
+            DefaultPlaceComboBox.ItemsSource = null;
+            DefaultEtageComboBox.ItemsSource = null;
+            DefaultPlanningTextZoneComboBox.ItemsSource = null;
+
+            DefaultReserveComboBox.SelectedItem = null; DefaultReserveComboBox.Text = "";
+            DefaultRequesterComboBox.SelectedItem = null; DefaultRequesterComboBox.Text = "";
+            DefaultCompanyComboBox.SelectedItem = null; DefaultCompanyComboBox.Text = "";
+            DefaultPlaceComboBox.SelectedItem = null; DefaultPlaceComboBox.Text = "";
+            DefaultEtageComboBox.SelectedItem = null; DefaultEtageComboBox.Text = "";
+            DefaultPlanningTextZoneComboBox.SelectedItem = null; DefaultPlanningTextZoneComboBox.Text = "";
+
+            LabelReserveTextBox.Text = "";
+            LabelRequestedByTextBox.Text = "";
+            LabelPerformedByTextBox.Text = "";
+            LabelPlaceTextBox.Text = "";
+            LabelEtageTextBox.Text = "";
+            LabelDeadlineTextBox.Text = "";
+            LabelPlanningTextZoneTextBox.Text = "";
+
+            SetSelectedCompanyColorPreview(null);
+
+            SetActiveList(ActiveListKind.None);
+
+            MessageBox.Show(
+                "Aucun projet courant. Sélectionne un projet avant de gérer les listes.",
+                "Info",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        var projectId = projectIdNullable.Value;
+
+        var reserves = Db.GetReserves(projectId);
+        var requesters = Db.GetRequesters(projectId);
+        var companies = Db.GetCompanies(projectId);
+        var places = Db.GetPlaces(projectId);
+        var etages = Db.GetEtages(projectId);
+        var planningTextZones = Db.GetPlanningTextZones(projectId);
+
+        ReservesListBox.ItemsSource = reserves;
         RequestersListBox.ItemsSource = requesters;
 
-        DefaultPlaceComboBox.ItemsSource = places;
-        DefaultCompanyComboBox.ItemsSource = companies;
-        DefaultRequesterComboBox.ItemsSource = requesters;
+        CompaniesListBox.ItemsSource = companies
+            .Select(name => new CompanyListItem(name, BuildCompanyColorBrush(projectId, name)))
+            .ToList();
 
-        // Charger les valeurs par défaut depuis Settings
-        var defPlace = Db.GetDefaultPlace();
-        var defCompany = Db.GetDefaultCompany();
-        var defRequester = Db.GetDefaultRequester();
+        PlacesListBox.ItemsSource = places;
+        EtagesListBox.ItemsSource = etages;
+        PlanningTextZonesListBox.ItemsSource = planningTextZones;
 
-        if (!string.IsNullOrWhiteSpace(defPlace))
-        {
-            if (places.Contains(defPlace))
-                DefaultPlaceComboBox.SelectedItem = defPlace;
-            else
-                DefaultPlaceComboBox.Text = defPlace;
-        }
-        else
-        {
-            DefaultPlaceComboBox.SelectedItem = null;
-            DefaultPlaceComboBox.Text = "";
-        }
+        var reserveDefaults = WithEmptyOption(reserves);
+        var requesterDefaults = WithEmptyOption(requesters);
+        var companyDefaults = WithEmptyOption(companies);
+        var placeDefaults = WithEmptyOption(places);
+        var etageDefaults = WithEmptyOption(etages);
+        var planningDefaults = WithEmptyOption(planningTextZones);
 
-        if (!string.IsNullOrWhiteSpace(defCompany))
-        {
-            if (companies.Contains(defCompany))
-                DefaultCompanyComboBox.SelectedItem = defCompany;
-            else
-                DefaultCompanyComboBox.Text = defCompany;
-        }
-        else
-        {
-            DefaultCompanyComboBox.SelectedItem = null;
-            DefaultCompanyComboBox.Text = "";
-        }
+        DefaultReserveComboBox.ItemsSource = reserveDefaults;
+        DefaultRequesterComboBox.ItemsSource = requesterDefaults;
+        DefaultCompanyComboBox.ItemsSource = companyDefaults;
+        DefaultPlaceComboBox.ItemsSource = placeDefaults;
+        DefaultEtageComboBox.ItemsSource = etageDefaults;
+        DefaultPlanningTextZoneComboBox.ItemsSource = planningDefaults;
 
-        if (!string.IsNullOrWhiteSpace(defRequester))
-        {
-            if (requesters.Contains(defRequester))
-                DefaultRequesterComboBox.SelectedItem = defRequester;
-            else
-                DefaultRequesterComboBox.Text = defRequester;
-        }
-        else
-        {
-            DefaultRequesterComboBox.SelectedItem = null;
-            DefaultRequesterComboBox.Text = "";
-        }
+        var defReserve = Db.GetDefaultReserve(projectId) ?? "";
+        var defRequester = Db.GetDefaultRequester(projectId) ?? "";
+        var defCompany = Db.GetDefaultCompany(projectId) ?? "";
+        var defPlace = Db.GetDefaultPlace(projectId) ?? "";
+        var defEtage = Db.GetDefaultEtage(projectId) ?? "";
+        var defPlanning = Db.GetDefaultPlanningTextZone(projectId) ?? "";
+
+        DefaultReserveComboBox.SelectedItem = reserveDefaults.Contains(defReserve) ? defReserve : "";
+        DefaultReserveComboBox.Text = defReserve;
+
+        DefaultRequesterComboBox.SelectedItem = requesterDefaults.Contains(defRequester) ? defRequester : "";
+        DefaultRequesterComboBox.Text = defRequester;
+
+        DefaultCompanyComboBox.SelectedItem = companyDefaults.Contains(defCompany) ? defCompany : "";
+        DefaultCompanyComboBox.Text = defCompany;
+
+        DefaultPlaceComboBox.SelectedItem = placeDefaults.Contains(defPlace) ? defPlace : "";
+        DefaultPlaceComboBox.Text = defPlace;
+
+        DefaultEtageComboBox.SelectedItem = etageDefaults.Contains(defEtage) ? defEtage : "";
+        DefaultEtageComboBox.Text = defEtage;
+
+        DefaultPlanningTextZoneComboBox.SelectedItem = planningDefaults.Contains(defPlanning) ? defPlanning : "";
+        DefaultPlanningTextZoneComboBox.Text = defPlanning;
+
+        LabelReserveTextBox.Text = Db.GetLabelReserve(projectId);
+        LabelRequestedByTextBox.Text = Db.GetLabelRequestedBy(projectId);
+        LabelPerformedByTextBox.Text = Db.GetLabelPerformedBy(projectId);
+        LabelPlaceTextBox.Text = Db.GetLabelPlace(projectId);
+        LabelEtageTextBox.Text = Db.GetLabelEtage(projectId);
+        LabelDeadlineTextBox.Text = Db.GetLabelDeadline(projectId);
+        LabelPlanningTextZoneTextBox.Text = Db.GetLabelPlanningTextZone(projectId);
+
+        ApplyGroupBoxHeaders(projectId);
+        RefreshSelectedCompanyColorPreview();
+
+        if (PlanningTextZonesGroupBox != null)
+            PlanningTextZonesGroupBox.Header = Db.GetLabelPlanningTextZone(projectId);
+
+        RefreshCommonButtonsState();
+        RefreshActiveListBorders();
     }
 
-    // -------------------------
-    // Defaults
-    // -------------------------
-    private void SetDefaultPlace_Click(object sender, RoutedEventArgs e)
+    private void ApplyGroupBoxHeaders(long projectId)
     {
-        var value = (DefaultPlaceComboBox.Text ?? "").Trim();
-        Db.SetDefaultPlace(value);
-        MessageBox.Show($"Lieu par défaut défini : {value}", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-        Reload();
+        ReservesGroupBox.Header = Db.GetLabelReserve(projectId);
+        RequestersGroupBox.Header = Db.GetLabelRequestedBy(projectId);
+        CompaniesGroupBox.Header = Db.GetLabelPerformedBy(projectId);
+        PlacesGroupBox.Header = Db.GetLabelPlace(projectId);
+        EtagesGroupBox.Header = Db.GetLabelEtage(projectId);
+
+        if (PlanningTextZonesGroupBox != null)
+            PlanningTextZonesGroupBox.Header = Db.GetLabelPlanningTextZone(projectId);
     }
 
-    private void SetDefaultCompany_Click(object sender, RoutedEventArgs e)
+    // =========================
+    // Focus list
+    // =========================
+    private void ReservesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.Reserves);
+    private void RequestersListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.Requesters);
+    private void CompaniesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.Companies);
+    private void PlacesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.Places);
+    private void EtagesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.Etages);
+    private void PlanningTextZonesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.PlanningTextZones);
+
+    private void AnyListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var value = (DefaultCompanyComboBox.Text ?? "").Trim();
-        Db.SetDefaultCompany(value);
-        MessageBox.Show($"Entreprise par défaut définie : {value}", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-        Reload();
+        RefreshCommonButtonsState();
     }
 
-    private void SetDefaultRequester_Click(object sender, RoutedEventArgs e)
+    // =========================
+    // Clic dans le blanc (Border handlers)
+    // =========================
+    private void ReservesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        var value = (DefaultRequesterComboBox.Text ?? "").Trim();
-        Db.SetDefaultRequester(value);
-        MessageBox.Show($"« Demandé par » par défaut défini : {value}", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-        Reload();
+        SetActiveList(ActiveListKind.Reserves);
+        ReservesListBox.Focus();
     }
 
-    // -------------------------
-    // Places
-    // -------------------------
-    private void AddPlace_Click(object sender, RoutedEventArgs e)
+    private void RequestersListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        var name = (NewPlaceTextBox.Text ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(name)) return;
-
-        Db.InsertPlace(name);
-        NewPlaceTextBox.Text = "";
-        Reload();
+        SetActiveList(ActiveListKind.Requesters);
+        RequestersListBox.Focus();
     }
 
-    private void DeletePlace_Click(object sender, RoutedEventArgs e)
+    private void CompaniesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (PlacesListBox.SelectedItem is not string name) return;
-
-        var ok = MessageBox.Show($"Supprimer le lieu « {name} » ?",
-            "Confirmation",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (ok != MessageBoxResult.Yes) return;
-
-        Db.DeletePlace(name);
-        Reload();
+        SetActiveList(ActiveListKind.Companies);
+        CompaniesListBox.Focus();
     }
 
-    private void RenamePlace_Click(object sender, RoutedEventArgs e)
+    private void PlacesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (PlacesListBox.SelectedItem is not string oldName)
-        {
-            MessageBox.Show("Sélectionne un lieu à renommer.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
+        SetActiveList(ActiveListKind.Places);
+        PlacesListBox.Focus();
+    }
 
-        var newName = Interaction.InputBox("Nouveau nom :", "Renommer lieu", oldName).Trim();
-        if (string.IsNullOrWhiteSpace(newName) || newName == oldName) return;
+    private void EtagesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        SetActiveList(ActiveListKind.Etages);
+        EtagesListBox.Focus();
+    }
 
+    private void PlanningTextZonesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        SetActiveList(ActiveListKind.PlanningTextZones);
+        PlanningTextZonesListBox.Focus();
+    }
+
+    // =========================
+    // Barre commune
+    // =========================
+    private void CommonAdd_Click(object sender, RoutedEventArgs e)
+    {
         try
         {
-            Db.RenamePlace(oldName, newName);
-            Reload();
+            var projectId = RequireCurrentProjectId();
 
-            MessageBox.Show(
-                $"Lieu renommé.\n\n« {oldName} » → « {newName} »\n\nLes bons existants ont été mis à jour.",
-                "OK",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            var title = _activeList switch
+            {
+                ActiveListKind.Reserves => $"Ajouter ({Db.GetLabelReserve(projectId)})",
+                ActiveListKind.Requesters => $"Ajouter ({Db.GetLabelRequestedBy(projectId)})",
+                ActiveListKind.Companies => $"Ajouter ({Db.GetLabelPerformedBy(projectId)})",
+                ActiveListKind.Places => $"Ajouter ({Db.GetLabelPlace(projectId)})",
+                ActiveListKind.Etages => $"Ajouter ({Db.GetLabelEtage(projectId)})",
+                ActiveListKind.PlanningTextZones => $"Ajouter ({Db.GetLabelPlanningTextZone(projectId)})",
+                _ => "Ajouter"
+            };
+
+            var name = Interaction.InputBox("Nom :", title, "").Trim();
+            if (string.IsNullOrWhiteSpace(name))
+                return;
+
+            switch (_activeList)
+            {
+                case ActiveListKind.Reserves: Db.InsertReserve(projectId, name); break;
+                case ActiveListKind.Requesters: Db.InsertRequester(projectId, name); break;
+                case ActiveListKind.Companies: Db.InsertCompany(projectId, name); break;
+                case ActiveListKind.Places: Db.InsertPlace(projectId, name); break;
+                case ActiveListKind.Etages: Db.InsertEtage(projectId, name); break;
+                case ActiveListKind.PlanningTextZones: Db.InsertPlanningTextZone(projectId, name); break;
+                default: return;
+            }
+
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void CommonRename_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+
+            var oldName = GetActiveSelectedItemText();
+            if (string.IsNullOrWhiteSpace(oldName))
+                return;
+
+            var title = _activeList switch
+            {
+                ActiveListKind.Reserves => $"Renommer ({Db.GetLabelReserve(projectId)})",
+                ActiveListKind.Requesters => $"Renommer ({Db.GetLabelRequestedBy(projectId)})",
+                ActiveListKind.Companies => $"Renommer ({Db.GetLabelPerformedBy(projectId)})",
+                ActiveListKind.Places => $"Renommer ({Db.GetLabelPlace(projectId)})",
+                ActiveListKind.Etages => $"Renommer ({Db.GetLabelEtage(projectId)})",
+                ActiveListKind.PlanningTextZones => $"Renommer ({Db.GetLabelPlanningTextZone(projectId)})",
+                _ => "Renommer"
+            };
+
+            var newName = Interaction.InputBox("Nouveau nom :", title, oldName).Trim();
+            if (string.IsNullOrWhiteSpace(newName) || newName == oldName)
+                return;
+
+            switch (_activeList)
+            {
+                case ActiveListKind.Reserves: Db.RenameReserve(projectId, oldName, newName); break;
+                case ActiveListKind.Requesters: Db.RenameRequester(projectId, oldName, newName); break;
+                case ActiveListKind.Companies: Db.RenameCompany(projectId, oldName, newName); break;
+                case ActiveListKind.Places: Db.RenamePlace(projectId, oldName, newName); break;
+                case ActiveListKind.Etages: Db.RenameEtage(projectId, oldName, newName); break;
+                case ActiveListKind.PlanningTextZones: Db.RenamePlanningTextZone(projectId, oldName, newName); break;
+                default: return;
+            }
+
+            Reload();
         }
         catch (Exception ex)
         {
@@ -160,115 +479,344 @@ public partial class ListsPage : UserControl, IReloadablePage
         }
     }
 
-    // -------------------------
-    // Companies
-    // -------------------------
-    private void AddCompany_Click(object sender, RoutedEventArgs e)
+    private void CommonDelete_Click(object sender, RoutedEventArgs e)
     {
-        var name = (NewCompanyTextBox.Text ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(name)) return;
-
-        Db.InsertCompany(name);
-        NewCompanyTextBox.Text = "";
-        Reload();
-    }
-
-    private void DeleteCompany_Click(object sender, RoutedEventArgs e)
-    {
-        if (CompaniesListBox.SelectedItem is not string name) return;
-
-        var ok = MessageBox.Show($"Supprimer l’entreprise « {name} » ?",
-            "Confirmation",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (ok != MessageBoxResult.Yes) return;
-
-        Db.DeleteCompany(name);
-        Reload();
-    }
-
-    private void RenameCompany_Click(object sender, RoutedEventArgs e)
-    {
-        if (CompaniesListBox.SelectedItem is not string oldName)
-        {
-            MessageBox.Show("Sélectionne une entreprise à renommer.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var newName = Interaction.InputBox("Nouveau nom :", "Renommer entreprise", oldName).Trim();
-        if (string.IsNullOrWhiteSpace(newName) || newName == oldName) return;
-
         try
         {
-            Db.RenameCompany(oldName, newName);
-            Reload();
+            var projectId = RequireCurrentProjectId();
 
-            MessageBox.Show(
-                $"Entreprise renommée.\n\n« {oldName} » → « {newName} »\n\nLes bons existants ont été mis à jour.",
-                "OK",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            var name = GetActiveSelectedItemText();
+            if (string.IsNullOrWhiteSpace(name))
+                return;
+
+            var ok = MessageBox.Show($"Supprimer « {name} » ?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (ok != MessageBoxResult.Yes)
+                return;
+
+            switch (_activeList)
+            {
+                case ActiveListKind.Reserves: Db.DeleteReserve(projectId, name); break;
+                case ActiveListKind.Requesters: Db.DeleteRequester(projectId, name); break;
+                case ActiveListKind.Companies: Db.DeleteCompany(projectId, name); break;
+                case ActiveListKind.Places: Db.DeletePlace(projectId, name); break;
+                case ActiveListKind.Etages: Db.DeleteEtage(projectId, name); break;
+                case ActiveListKind.PlanningTextZones: Db.DeletePlanningTextZone(projectId, name); break;
+                default: return;
+            }
+
+            Reload();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Erreur renommage", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(ex.Message, "Erreur suppression", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    // -------------------------
-    // Requesters (Demandé par)
-    // -------------------------
-    private void AddRequester_Click(object sender, RoutedEventArgs e)
+    private void CommonSetDefault_Click(object sender, RoutedEventArgs e)
     {
-        var name = (NewRequesterTextBox.Text ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(name)) return;
-
-        Db.InsertRequester(name);
-        NewRequesterTextBox.Text = "";
-        Reload();
-    }
-
-    private void DeleteRequester_Click(object sender, RoutedEventArgs e)
-    {
-        if (RequestersListBox.SelectedItem is not string name) return;
-
-        var ok = MessageBox.Show($"Supprimer « {name} » de la liste Demandé par ?",
-            "Confirmation",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (ok != MessageBoxResult.Yes) return;
-
-        Db.DeleteRequester(name);
-        Reload();
-    }
-
-    private void RenameRequester_Click(object sender, RoutedEventArgs e)
-    {
-        if (RequestersListBox.SelectedItem is not string oldName)
-        {
-            MessageBox.Show("Sélectionne un élément à renommer.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var newName = Interaction.InputBox("Nouveau nom :", "Renommer (Demandé par)", oldName).Trim();
-        if (string.IsNullOrWhiteSpace(newName) || newName == oldName) return;
-
         try
         {
-            Db.RenameRequester(oldName, newName);
-            Reload();
+            var projectId = RequireCurrentProjectId();
 
-            MessageBox.Show(
-                $"Valeur renommée.\n\n« {oldName} » → « {newName} »\n\nLes bons existants ont été mis à jour.",
-                "OK",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            var value = GetActiveDefaultText() ?? "";
+
+            // value peut être "" => efface le défaut
+            switch (_activeList)
+            {
+                case ActiveListKind.Reserves: Db.SetDefaultReserve(projectId, value); break;
+                case ActiveListKind.Requesters: Db.SetDefaultRequester(projectId, value); break;
+                case ActiveListKind.Companies: Db.SetDefaultCompany(projectId, value); break;
+                case ActiveListKind.Places: Db.SetDefaultPlace(projectId, value); break;
+                case ActiveListKind.Etages: Db.SetDefaultEtage(projectId, value); break;
+                case ActiveListKind.PlanningTextZones: Db.SetDefaultPlanningTextZone(projectId, value); break;
+            }
+
+            Reload();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Erreur renommage", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(ex.Message, "Erreur défaut", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void CommonCopy_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+
+            var items = _activeList switch
+            {
+                ActiveListKind.Reserves => Db.GetReserves(projectId),
+                ActiveListKind.Requesters => Db.GetRequesters(projectId),
+                ActiveListKind.Companies => Db.GetCompanies(projectId),
+                ActiveListKind.Places => Db.GetPlaces(projectId),
+                ActiveListKind.Etages => Db.GetEtages(projectId),
+                ActiveListKind.PlanningTextZones => Db.GetPlanningTextZones(projectId),
+                _ => new List<string>()
+            };
+
+            items = items.Select(s => (s ?? "").Trim())
+                         .Where(s => !string.IsNullOrWhiteSpace(s))
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                         .ToList();
+
+            var payload = new ListClipboardPayload
+            {
+                Kind = _activeList,
+                SourceProjectId = projectId
+            };
+            payload.Items.AddRange(items);
+
+            if (_activeList == ActiveListKind.Companies)
+            {
+                var colors = Db.GetCompanyColorMap(projectId);
+                foreach (var kv in colors)
+                {
+                    var name = (kv.Key ?? "").Trim();
+                    var hex = (kv.Value ?? "").Trim();
+                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(hex))
+                        payload.CompanyColorMap[name] = hex;
+                }
+            }
+
+            _listClipboard = payload;
+            RefreshCommonButtonsState();
+
+            MessageBox.Show($"{items.Count} éléments copiés.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void CommonPaste_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var targetProjectId = RequireCurrentProjectId();
+
+            if (_listClipboard == null || _listClipboard.Items.Count == 0)
+                return;
+
+            var existing = _activeList switch
+            {
+                ActiveListKind.Reserves => Db.GetReserves(targetProjectId),
+                ActiveListKind.Requesters => Db.GetRequesters(targetProjectId),
+                ActiveListKind.Companies => Db.GetCompanies(targetProjectId),
+                ActiveListKind.Places => Db.GetPlaces(targetProjectId),
+                ActiveListKind.Etages => Db.GetEtages(targetProjectId),
+                ActiveListKind.PlanningTextZones => Db.GetPlanningTextZones(targetProjectId),
+                _ => new List<string>()
+            };
+
+            existing = existing.Select(s => (s ?? "").Trim())
+                               .Where(s => !string.IsNullOrWhiteSpace(s))
+                               .Distinct(StringComparer.OrdinalIgnoreCase)
+                               .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                               .ToList();
+
+            int inserted = 0;
+            int skipped = 0;
+
+            foreach (var raw in _listClipboard.Items)
+            {
+                var name = (raw ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                if (existing.Any(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                switch (_activeList)
+                {
+                    case ActiveListKind.Reserves: Db.InsertReserve(targetProjectId, name); break;
+                    case ActiveListKind.Requesters: Db.InsertRequester(targetProjectId, name); break;
+                    case ActiveListKind.Companies:
+                        Db.InsertCompany(targetProjectId, name);
+                        if (_listClipboard.CompanyColorMap.TryGetValue(name, out var hex) && !string.IsNullOrWhiteSpace(hex))
+                            Db.SetCompanyColorHex(targetProjectId, name, hex);
+                        break;
+                    case ActiveListKind.Places: Db.InsertPlace(targetProjectId, name); break;
+                    case ActiveListKind.Etages: Db.InsertEtage(targetProjectId, name); break;
+                    case ActiveListKind.PlanningTextZones: Db.InsertPlanningTextZone(targetProjectId, name); break;
+                    default: continue;
+                }
+
+                existing.Add(name);
+                inserted++;
+            }
+
+            Reload();
+
+            MessageBox.Show($"Collage terminé.\n\nAjoutés : {inserted}\nDéjà présents : {skipped}", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    // =========================
+    // Libellés
+    // =========================
+    private void SaveLabels_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+
+            Db.SetLabelReserve(projectId, (LabelReserveTextBox.Text ?? "").Trim());
+            Db.SetLabelRequestedBy(projectId, (LabelRequestedByTextBox.Text ?? "").Trim());
+            Db.SetLabelPerformedBy(projectId, (LabelPerformedByTextBox.Text ?? "").Trim());
+            Db.SetLabelPlace(projectId, (LabelPlaceTextBox.Text ?? "").Trim());
+            Db.SetLabelEtage(projectId, (LabelEtageTextBox.Text ?? "").Trim());
+            Db.SetLabelDeadline(projectId, (LabelDeadlineTextBox.Text ?? "").Trim());
+            Db.SetLabelPlanningTextZone(projectId, (LabelPlanningTextZoneTextBox.Text ?? "").Trim());
+
+            ApplyGroupBoxHeaders(projectId);
+
+            MessageBox.Show("Libellés enregistrés.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    // =========================
+    // Couleur Entreprise
+    // =========================
+    private void CompaniesListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        RefreshSelectedCompanyColorPreview();
+        RefreshCommonButtonsState();
+    }
+
+    private void RefreshSelectedCompanyColorPreview()
+    {
+        try
+        {
+            var projectId = Db.GetCurrentProjectId();
+            if (!projectId.HasValue || projectId.Value <= 0)
+            {
+                SetSelectedCompanyColorPreview(null);
+                return;
+            }
+
+            var companyName = GetSelectedCompanyName();
+            if (string.IsNullOrWhiteSpace(companyName))
+            {
+                SetSelectedCompanyColorPreview(null);
+                return;
+            }
+
+            var hex = Db.GetCompanyColorHex(projectId.Value, companyName);
+            SetSelectedCompanyColorPreview(hex);
+        }
+        catch
+        {
+            SetSelectedCompanyColorPreview(null);
+        }
+    }
+
+    private System.Windows.Media.Brush BuildCompanyColorBrush(long projectId, string companyName)
+    {
+        try
+        {
+            var hex = Db.GetCompanyColorHex(projectId, companyName);
+            if (string.IsNullOrWhiteSpace(hex))
+                return MediaBrushes.Transparent;
+
+            return (System.Windows.Media.SolidColorBrush)(
+                new System.Windows.Media.BrushConverter().ConvertFrom(hex) ?? MediaBrushes.Transparent);
+        }
+        catch
+        {
+            return MediaBrushes.Transparent;
+        }
+    }
+
+    private void SetSelectedCompanyColorPreview(string? colorHex)
+    {
+        if (SelectedCompanyColorPreview == null) return;
+
+        if (string.IsNullOrWhiteSpace(colorHex))
+        {
+            SelectedCompanyColorPreview.Background = MediaBrushes.Transparent;
+            return;
+        }
+
+        try
+        {
+            var brush = (System.Windows.Media.SolidColorBrush)(
+                new System.Windows.Media.BrushConverter().ConvertFrom(colorHex) ?? MediaBrushes.Transparent);
+
+            SelectedCompanyColorPreview.Background = brush;
+        }
+        catch
+        {
+            SelectedCompanyColorPreview.Background = MediaBrushes.Transparent;
+        }
+    }
+
+    private void PickCompanyColor_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+
+            var companyName = GetSelectedCompanyName();
+            if (string.IsNullOrWhiteSpace(companyName))
+                return;
+
+            var currentHex = Db.GetCompanyColorHex(projectId, companyName);
+
+            var dlg = new Forms.ColorDialog { FullOpen = true };
+            if (!string.IsNullOrWhiteSpace(currentHex))
+            {
+                try { dlg.Color = System.Drawing.ColorTranslator.FromHtml(currentHex); }
+                catch { }
+            }
+
+            if (dlg.ShowDialog() != Forms.DialogResult.OK)
+                return;
+
+            var c = dlg.Color;
+            var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            Db.SetCompanyColorHex(projectId, companyName, hex);
+
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur couleur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ClearCompanyColor_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+
+            var companyName = GetSelectedCompanyName();
+            if (string.IsNullOrWhiteSpace(companyName))
+                return;
+
+            Db.DeleteCompanyColor(projectId, companyName);
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur couleur", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File: Models/WorkOrderLine.cs
+using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -8,6 +9,10 @@ namespace Iziregi.Test.Models;
 public class WorkOrderLine : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    // ✅ A4/PDF sync : limite de caractères sur 1 ligne pour "Libellé / Matériel"
+    // Calé sur ce que le PDF supporte réellement en 1 ligne (tests : 42).
+    private const int LabelMaxChars = 42;
 
     private long _id;
     public long Id
@@ -27,7 +32,22 @@ public class WorkOrderLine : INotifyPropertyChanged
     public string Label
     {
         get => _label;
-        set { _label = value ?? ""; OnPropertyChanged(); }
+        set
+        {
+            var s = value ?? "";
+            s = s.Replace("\r\n", "\n").Replace("\r", "\n");
+
+            // Interdit les retours à la ligne dans le DataGrid (1 ligne)
+            if (s.Contains('\n'))
+                s = s.Replace("\n", " ");
+
+            // Limite la longueur
+            if (s.Length > LabelMaxChars)
+                s = s.Substring(0, LabelMaxChars);
+
+            _label = s;
+            OnPropertyChanged();
+        }
     }
 
     private double _qty;
@@ -68,7 +88,7 @@ public class WorkOrderLine : INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(s)) return 0;
 
-        // Autorise "," ou "." en saisie, sans limiter le nombre de décimales
+        // Autorise "," ou "." en saisie
         s = s.Trim().Replace(',', '.');
 
         return double.TryParse(
@@ -83,8 +103,13 @@ public class WorkOrderLine : INotifyPropertyChanged
         if (Math.Abs(v) < 0.0000000001) return "";
 
         // "G17" = représentation compacte qui conserve la précision d’un double
-        // (et n’impose pas 2 décimales)
         return v.ToString("G17", CultureInfo.InvariantCulture);
+    }
+
+    private static string EmptyIfZero2Decimals(double v)
+    {
+        if (Math.Abs(v) < 0.0000000001) return "";
+        return v.ToString("0.00", CultureInfo.InvariantCulture);
     }
 
     // =========================
@@ -98,14 +123,14 @@ public class WorkOrderLine : INotifyPropertyChanged
         set => Qty = ParseDouble(value);
     }
 
-    // ✅ Prix/pc : décimales illimitées (pas de 0.00 forcé)
+    // ✅ Prix/pc : TOUJOURS 2 décimales (112.00), sauf vide si 0
     public string UnitPriceDisplay
     {
-        get => EmptyIfZeroUnlimited(UnitPrice);
+        get => EmptyIfZero2Decimals(UnitPrice);
         set => UnitPrice = ParseDouble(value);
     }
 
-    // ✅ Les totaux restent à 2 décimales (si tu veux)
+    // ✅ Les totaux restent à 2 décimales
     public void RecomputeLineTotal()
     {
         LineTotal = Math.Round(Qty * UnitPrice, 2);

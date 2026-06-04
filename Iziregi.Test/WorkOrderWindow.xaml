@@ -1,392 +1,1169 @@
-﻿<!-- File: WorkOrderWindow.xaml -->
-<Window x:Class="Iziregi.Test.WorkOrderWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Bon de régie"
-        Width="530"
-        Height="490"
-        MinWidth="520"
-        MinHeight="460"
-        WindowStartupLocation="CenterOwner"
-        WindowState="Normal">
+﻿<Window x:Class="Iziregi.Test.WorkOrderWindow"
+xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+mc:Ignorable="d"
+Title="Bon de régie"
+Height="586"
+Width="844"
+MinHeight="540"
+MinWidth="798"
+WindowStartupLocation="CenterOwner"
+Background="#F6F7FB"
+FontFamily="Arial">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled">
+    <Window.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,0,0,14"/>
+        </Style>
 
-        <Grid Margin="16">
-            <Grid.LayoutTransform>
-                <ScaleTransform ScaleX="0.7" ScaleY="0.7"/>
-            </Grid.LayoutTransform>
+        <Style x:Key="CardDemandeStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Background" Value="#FFF7ED"/>
+            <Setter Property="BorderBrush" Value="#FDBA74"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
 
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <Style x:Key="CardDevisStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Background" Value="#EAF2FF"/>
+            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
 
-            <!-- Header -->
-            <DockPanel Grid.Row="0" Margin="0,0,0,12">
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Button Content="← Retour" Width="110" Click="Back_Click"/>
-                    <Button x:Name="SaveHeaderButton"
-                            Content="Enregistrer Demande"
-                            Width="160"
-                            Margin="8,0,0,0"
-                            Click="SaveHeader_Click"/>
+        <Style x:Key="CardValidationStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Background" Value="#E9FBEA"/>
+            <Setter Property="BorderBrush" Value="#15803D"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="LabelTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource LabelStyle}">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+
+        <Style x:Key="InputStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="InlineMoneyInputStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Padding" Value="6,1"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+
+        <Style x:Key="RightAlignedCellTextStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <Style x:Key="CenterAlignedCellTextStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <Style x:Key="TotalsLabelStyle" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,18,6"/>
+        </Style>
+
+        <Style x:Key="TotalsAmountStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="ComboStyle" TargetType="ComboBox">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="6"
+SnapsToDevicePixels="True">
+                            <ContentPresenter
+Margin="{TemplateBinding Padding}"
+HorizontalAlignment="Center"
+VerticalAlignment="Center"
+RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1E40AF"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#1E40AF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1D4ED8"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#1D4ED8"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#93C5FD"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#93C5FD"/>
+                                <Setter Property="Foreground" Value="#EFF6FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="SmallButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="SmallActionButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush" Value="#94A3B8"/>
+            <Setter Property="Padding" Value="12,0"/>
+        </Style>
+
+        <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Foreground" Value="#B91C1C"/>
+            <Setter Property="BorderBrush" Value="#FCA5A5"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Margin="14">
+
+        <!-- Barre d'actions bas -->
+        <Border DockPanel.Dock="Bottom"
+Background="White"
+BorderBrush="Black"
+BorderThickness="2"
+CornerRadius="14"
+Padding="10"
+Margin="0,12,18,0">
+            <DockPanel LastChildFill="False">
+                <TextBlock x:Name="StatusTextBlock"
+Text=""
+Foreground="#6B7280"
+VerticalAlignment="Center"
+DockPanel.Dock="Left"/>
+
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button x:Name="ExportQuoteRequestButton"
+Content="Envoyer demande devis"
+Style="{StaticResource SecondaryButtonStyle}"
+Click="ExportQuoteRequestButton_Click"
+Margin="0,0,8,0"/>
+
+                    <Button x:Name="ExportSignatureRequestButton"
+Content="Envoyer demande validation"
+Style="{StaticResource SecondaryButtonStyle}"
+Click="ExportSignatureRequestButton_Click"
+Margin="0,0,8,0"/>
+
+                    <Button x:Name="ResetValidationBottomButton"
+Content="Reset validation"
+Style="{StaticResource SecondaryButtonStyle}"
+Click="ResetValidationBottomButton_Click"
+Margin="0,0,8,0"/>
+
+                    <Button x:Name="PdfButton"
+Content="Télécharger PDF"
+Style="{StaticResource SecondaryButtonStyle}"
+Click="PdfButton_Click"
+Margin="0,0,8,0"/>
+
+                    <Button x:Name="CancelButton"
+Content="Annuler"
+Style="{StaticResource SecondaryButtonStyle}"
+Click="CancelButton_Click"
+Margin="0,0,8,0"/>
+
+                    <Button x:Name="SaveButton"
+Content="Enregistrer"
+Style="{StaticResource PrimaryButtonStyle}"
+Click="SaveButton_Click"/>
                 </StackPanel>
-
-                <TextBlock x:Name="TitleTextBlock"
-                           DockPanel.Dock="Right"
-                           FontSize="18"
-                           FontWeight="Bold"
-                           HorizontalAlignment="Right"/>
             </DockPanel>
+        </Border>
 
-            <!-- DEMANDE -->
-            <Border x:Name="DemandBorder"
-                    Grid.Row="1"
-                    BorderBrush="#DDDDDD"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12"
-                    Background="#FAFAFA"
-                    Margin="0,0,0,12">
-                <StackPanel x:Name="DemandPanel">
-                    <DockPanel Margin="0,0,0,10">
-                        <TextBlock Text="Demande" FontSize="16" FontWeight="Bold" DockPanel.Dock="Left"/>
-                        <Button x:Name="SendToCompanyButton"
-                                Content="Envoyer à l’entreprise (devis)"
-                                Width="220"
-                                DockPanel.Dock="Right"
-                                Click="SendToCompany_Click"/>
-                    </DockPanel>
+        <!-- ✅ A4 PORTRAIT : largeur de page utile calée sur le PDF (A4 - marges) -->
+        <ScrollViewer x:Name="MainScrollViewer"
+VerticalScrollBarVisibility="Auto"
+HorizontalScrollBarVisibility="Disabled">
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+            <!-- 724px ≈ (A4 largeur 595pt - marges 26pt*2) * 96/72 -->
+            <Border Background="White"
+					BorderBrush="#D1D5DB"
+					BorderThickness="1"
+					CornerRadius="6"
+					Padding="14"
+					Margin="18"
+					Width="724"
+					HorizontalAlignment="Center">
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Bat./Salle" VerticalAlignment="Center"/>
-                        <!-- ✅ éditable -->
-                        <ComboBox x:Name="PlaceComboBox"
-                                  Grid.Row="0" Grid.Column="1"
-                                  Margin="0,4"
-                                  IsEditable="True"/>
+                <StackPanel>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Demandé par" VerticalAlignment="Center"/>
-                        <!-- déjà éditable -->
-                        <ComboBox x:Name="RequestedByComboBox"
-                                  Grid.Row="1" Grid.Column="1"
-                                  Margin="0,4"
-                                  IsEditable="True"/>
+                    <!-- En-tête BDR -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="1*"/>
+                            </Grid.ColumnDefinitions>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Effectué par" VerticalAlignment="Center"/>
-                        <!-- ✅ éditable -->
-                        <ComboBox x:Name="PerformedByComboBox"
-                                  Grid.Row="2" Grid.Column="1"
-                                  Margin="0,4"
-                                  IsEditable="True"/>
-
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Date" VerticalAlignment="Center"/>
-                        <DatePicker x:Name="RequestDatePicker" Grid.Row="3" Grid.Column="1" Margin="0,4"/>
-                    </Grid>
-
-                    <TextBlock Text="Descriptif" FontWeight="SemiBold" Margin="0,12,0,6"/>
-                    <TextBox x:Name="DescriptionTextBox"
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             MinHeight="90"/>
-                </StackPanel>
-            </Border>
-
-            <!-- DEVIS -->
-            <Border x:Name="QuoteBorder"
-                    Grid.Row="2"
-                    BorderBrush="#DDDDDD"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12"
-                    Background="#FAFAFA"
-                    Margin="0,0,0,12">
-                <StackPanel x:Name="QuotePanel">
-
-                    <DockPanel>
-                        <TextBlock Text="Devis" FontSize="16" FontWeight="Bold" DockPanel.Dock="Left"/>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                            <Button x:Name="AddMaterialLineButton"
-                                    Content="+ Ajouter"
-                                    Width="90"
-                                    Click="AddMaterialLine_Click"/>
-                            <Button x:Name="DeleteMaterialLineButton"
-                                    Content="Effacer ligne"
-                                    Width="120"
-                                    Margin="8,0,0,0"
-                                    Click="DeleteMaterialLine_Click"/>
-                        </StackPanel>
-                    </DockPanel>
-
-                    <DataGrid x:Name="LinesGrid"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              IsReadOnly="False"
-                              Margin="0,10,0,0"
-                              MinHeight="140">
-                        <DataGrid.Columns>
-
-                            <DataGridTextColumn Header="Libellé"
-                                                Binding="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
-                                                Width="*"/>
-
-                            <DataGridTextColumn Header="Qt"
-                                                Width="64"
-                                                Binding="{Binding QtyDisplay, UpdateSourceTrigger=PropertyChanged}">
-                                <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="TextAlignment" Value="Right"/>
-                                    </Style>
-                                </DataGridTextColumn.ElementStyle>
-                                <DataGridTextColumn.EditingElementStyle>
-                                    <Style TargetType="TextBox">
-                                        <Setter Property="TextAlignment" Value="Right"/>
-                                        <Setter Property="MaxLength" Value="0"/>
-                                    </Style>
-                                </DataGridTextColumn.EditingElementStyle>
-                            </DataGridTextColumn>
-
-                            <DataGridTextColumn Header="Prix/pc"
-                                                Width="100"
-                                                Binding="{Binding UnitPriceDisplay, UpdateSourceTrigger=PropertyChanged}">
-                                <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="TextAlignment" Value="Right"/>
-                                    </Style>
-                                </DataGridTextColumn.ElementStyle>
-                                <DataGridTextColumn.EditingElementStyle>
-                                    <Style TargetType="TextBox">
-                                        <Setter Property="TextAlignment" Value="Right"/>
-                                        <Setter Property="MaxLength" Value="0"/>
-                                    </Style>
-                                </DataGridTextColumn.EditingElementStyle>
-                            </DataGridTextColumn>
-
-                            <DataGridTextColumn Header="Total"
-                                                Width="100"
-                                                IsReadOnly="True"
-                                                Binding="{Binding LineTotal, StringFormat={}{0:0.00}}">
-                                <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="TextAlignment" Value="Right"/>
-                                    </Style>
-                                </DataGridTextColumn.ElementStyle>
-                            </DataGridTextColumn>
-
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="64"/>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="100"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Main d'œuvre (heures / prix-h)" VerticalAlignment="Center"/>
-                        <TextBox x:Name="LaborHoursTextBox"
-                                 Grid.Row="0" Grid.Column="1"
-                                 Margin="6,2"
-                                 TextAlignment="Right"
-                                 Text="{Binding LaborHoursDisplay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBox x:Name="LaborRateTextBox"
-                                 Grid.Row="0" Grid.Column="2"
-                                 Margin="6,2"
-                                 TextAlignment="Right"
-                                 Text="{Binding LaborRateDisplay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock x:Name="LaborTotalTextBlock"
-                                   Grid.Row="0" Grid.Column="3"
-                                   Margin="6,2"
-                                   TextAlignment="Right"/>
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Déplacements (qt / prix)" VerticalAlignment="Center"/>
-                        <TextBox x:Name="TravelQtyTextBox"
-                                 Grid.Row="1" Grid.Column="1"
-                                 Margin="6,2"
-                                 TextAlignment="Right"
-                                 Text="{Binding TravelQtyDisplay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBox x:Name="TravelRateTextBox"
-                                 Grid.Row="1" Grid.Column="2"
-                                 Margin="6,2"
-                                 TextAlignment="Right"
-                                 Text="{Binding TravelRateDisplay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock x:Name="TravelTotalTextBlock"
-                                   Grid.Row="1" Grid.Column="3"
-                                   Margin="6,2"
-                                   TextAlignment="Right"/>
-
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="TVA (%)" VerticalAlignment="Center"/>
-                        <TextBox x:Name="TvaRateTextBox"
-                                 Grid.Row="2" Grid.Column="1"
-                                 Margin="6,2"
-                                 TextAlignment="Right"
-                                 Text="{Binding TvaRateDisplay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock x:Name="TvaAmountTextBlock"
-                                   Grid.Row="2" Grid.Column="3"
-                                   Margin="6,2"
-                                   TextAlignment="Right"/>
-                    </Grid>
-
-                    <Border BorderBrush="#D6D6D6"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Padding="10"
-                            Background="White"
-                            Margin="0,14,0,0">
-                        <StackPanel>
-
-                            <Grid>
+                            <Grid Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="78"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <Button x:Name="SaveQuoteButton"
-                                        Grid.Column="0"
-                                        Content="Enregistrer le devis"
-                                        Width="160"
-                                        Click="SaveQuote_Click"/>
+                                <Border Grid.Column="0"
+Width="66"
+Height="66"
+BorderBrush="#D1D5DB"
+BorderThickness="1"
+CornerRadius="10"
+Background="#F9FAFB"
+HorizontalAlignment="Left"
+VerticalAlignment="Top">
+                                    <Grid>
+                                        <Image x:Name="ArchitectLogoImage"
+Stretch="Uniform"
+Margin="5"/>
+                                        <TextBlock x:Name="ArchitectLogoEmptyText"
+Text="Logo"
+Foreground="#9CA3AF"
+FontSize="11"
+HorizontalAlignment="Center"
+VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                                    <TextBlock x:Name="TotalHtTextBlock" FontWeight="SemiBold" TextAlignment="Right"/>
-                                    <TextBlock x:Name="TotalTtcTextBlock" FontWeight="SemiBold" TextAlignment="Right" Margin="0,6,0,0"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock x:Name="ArchitectNameTextBlock"
+Text="Architecte"
+FontSize="15"
+FontWeight="SemiBold"
+Foreground="#111827"/>
+
+                                    <TextBlock x:Name="ArchitectAddressLine1TextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,4,0,0"/>
+
+                                    <TextBlock x:Name="ArchitectAddressLine2TextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,0,0,0"/>
                                 </StackPanel>
                             </Grid>
 
-                            <Grid Margin="0,12,0,10">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="1"/>
-                                    <RowDefinition Height="5"/>
-                                    <RowDefinition Height="1"/>
-                                </Grid.RowDefinitions>
-                                <Border Grid.Row="0" Background="#BDBDBD" Height="1"/>
-                                <Border Grid.Row="2" Background="#BDBDBD" Height="1"/>
-                            </Grid>
+                            <!-- ✅ Bloc central vraiment centré + espacement autour du "-" -->
+                            <StackPanel Grid.Column="1"
+HorizontalAlignment="Center"
+VerticalAlignment="Center"
+Margin="0,0,0,0">
+                                <TextBlock Text="Bon de régie"
+FontSize="19"
+FontWeight="Bold"
+Foreground="#111827"
+HorizontalAlignment="Center"/>
+
+                                <StackPanel Orientation="Horizontal"
+HorizontalAlignment="Center"
+Margin="0,10,0,0">
+                                    <TextBlock Text="N°"
+VerticalAlignment="Center"
+Foreground="#6B7280"
+FontSize="14"
+Margin="0,0,8,0"/>
+
+                                    <TextBox x:Name="BdrNumberTextBox"
+Width="40"
+FontSize="28"
+FontWeight="Bold"
+HorizontalContentAlignment="Center"
+VerticalContentAlignment="Center"
+BorderThickness="0"
+Background="Transparent"
+Padding="0"
+Margin="0"/>
+
+                                    <TextBlock x:Name="ProjectTagTextBlock"
+Text="- P1"
+VerticalAlignment="Bottom"
+Foreground="#6B7280"
+FontSize="14"
+FontWeight="SemiBold"
+Margin="0,0,0,4"/>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal"
+HorizontalAlignment="Center"
+Margin="0,8,0,0">
+                                    <TextBlock Text="Créé le"
+VerticalAlignment="Center"
+Foreground="#6B7280"
+Margin="0,0,6,0"/>
+                                    <DatePicker x:Name="RequestDatePicker"
+Width="105"
+Height="22"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2"
+VerticalAlignment="Center"
+Margin="12,0,0,0"
+HorizontalAlignment="Right"
+Width="160">
+                                <TextBlock x:Name="ProjectNameTextBlock"
+Text=""
+FontSize="15"
+FontWeight="Bold"
+Foreground="#111827"
+TextWrapping="Wrap"/>
+
+                                <TextBlock x:Name="ProjectAddressLine1TextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,4,0,0"/>
+
+                                <TextBlock x:Name="ProjectAddressLine2TextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,0,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Demande + Descriptif -->
+                    <Border Style="{StaticResource CardDemandeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Demande"
+Style="{StaticResource SectionTitleStyle}"
+Foreground="#111827"/>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="13*"/>
-                                    <ColumnDefinition Width="7*"/>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="2*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                    <TextBlock Text="Remarques" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                    <TextBox x:Name="QuoteNotesTextBox"
-                                             AcceptsReturn="True"
-                                             TextWrapping="Wrap"
-                                             Height="70"/>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="10"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="10"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ReserveLabelTextBlock"
+Style="{StaticResource LabelTitleStyle}"
+Text="Concerne"/>
+                                        <TextBlock Style="{StaticResource LabelStyle}"
+Text=" (20 caract. max.)"
+Foreground="#9CA3AF"/>
+                                    </StackPanel>
+                                    <ComboBox x:Name="ReserveComboBox"
+Style="{StaticResource ComboStyle}"
+IsEditable="True"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                    <Button x:Name="SaveReplyButtonQuote"
-                                            Content="Enregistrer la réponse"
-                                            Width="180"
-                                            Click="SaveReply_Click"
-                                            Visibility="Collapsed"/>
+                                <StackPanel Grid.Row="2" Grid.Column="0">
+                                    <TextBlock x:Name="PlaceLabelTextBlock" Text="Bâtiment" Style="{StaticResource LabelTitleStyle}"/>
+                                    <ComboBox x:Name="PlaceComboBox" Style="{StaticResource ComboStyle}" IsEditable="True"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="4" Grid.Column="0">
+                                    <TextBlock x:Name="PerformedByLabelTextBlock"
+Text="Entreprise"
+Style="{StaticResource LabelTitleStyle}"/>
+                                    <ComboBox x:Name="PerformedByComboBox"
+Style="{StaticResource ComboStyle}"
+IsEditable="True"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="0" Grid.Column="2">
+                                    <TextBlock x:Name="RequestedByLabelTextBlock"
+Text="Demandé par"
+Style="{StaticResource LabelTitleStyle}"/>
+                                    <ComboBox x:Name="RequestedByComboBox"
+Style="{StaticResource ComboStyle}"
+IsEditable="True"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="2" Grid.Column="2">
+                                    <TextBlock x:Name="EtageLabelTextBlock" Text="Étage" Style="{StaticResource LabelTitleStyle}"/>
+                                    <ComboBox x:Name="EtageComboBox" Style="{StaticResource ComboStyle}" IsEditable="True"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="4" Grid.Column="2">
+                                    <TextBlock x:Name="DeadlineLabelTextBlock" Text="Délai" Style="{StaticResource LabelTitleStyle}"/>
+                                    <DatePicker x:Name="DeadlineDatePicker" Height="32"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="0" Grid.Column="4" Grid.RowSpan="5">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Descriptif" Style="{StaticResource LabelTitleStyle}"/>
+                                        <TextBlock Text=" (10 lignes max.)" Style="{StaticResource LabelStyle}" Foreground="#9CA3AF"/>
+                                    </StackPanel>
+                                    <TextBox x:Name="DescriptionTextBox"
+MinHeight="140"
+Padding="10"
+AcceptsReturn="True"
+TextWrapping="Wrap"
+VerticalScrollBarVisibility="Auto"
+BorderBrush="#D1D5DB"
+BorderThickness="1"
+FontSize="10"/>
                                 </StackPanel>
                             </Grid>
 
                         </StackPanel>
                     </Border>
 
-                </StackPanel>
-            </Border>
+                    <!-- Devis -->
+                    <Border Style="{StaticResource CardDevisStyle}">
+                        <StackPanel>
 
-            <!-- SIGNATURE -->
-            <Border x:Name="SignatureBorder"
-                    Grid.Row="3"
-                    BorderBrush="#DDDDDD"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12"
-                    Background="#FAFAFA"
-                    Margin="0,0,0,12">
-                <StackPanel x:Name="SignaturePanel">
-                    <TextBlock Text="Validation / Signature" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="140"/>
-                        </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+Text="Devis"
+Style="{StaticResource SectionTitleStyle}"
+Margin="0,0,0,0"/>
 
-                        <TextBlock Grid.Column="0" Text="Nom" VerticalAlignment="Center"/>
-                        <TextBox x:Name="SignatureNameTextBox" Grid.Column="1" Margin="6,0,12,0"/>
+                                <Button Grid.Column="2" x:Name="AddLineButton"
+Content="+ Ajouter ligne (15 max.)"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="AddLineButton_Click"
+VerticalAlignment="Bottom"
+Margin="0,0,0,2"/>
 
-                        <TextBlock Grid.Column="2" Text="Date" VerticalAlignment="Center"/>
-                        <DatePicker x:Name="SignatureDatePicker" Grid.Column="3" IsEnabled="False"/>
-                    </Grid>
+                                <Button Grid.Column="4" x:Name="DeleteLineButton"
+Content="Supprimer ligne"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="DeleteLineButton_Click"
+VerticalAlignment="Bottom"
+Margin="0,0,0,2"/>
 
-                    <Border BorderBrush="#D6D6D6" BorderThickness="1" CornerRadius="6" Background="White">
-                        <Grid>
-                            <Image x:Name="SignatureImage"
-                                   Stretch="Uniform"
-                                   Height="110"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Center"/>
-                            <InkCanvas x:Name="SignatureInkCanvas" Height="110" Background="Transparent"/>
-                        </Grid>
+                                <StackPanel Grid.Column="6">
+                                    <TextBlock Text="Nom" Style="{StaticResource LabelStyle}" Margin="0,0,0,2"/>
+                                    <TextBox x:Name="QuoteNameTextBox" Style="{StaticResource InputStyle}" Width="200"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="8">
+                                    <TextBlock Text="Date du devis" Style="{StaticResource LabelStyle}" Margin="0,0,0,2"/>
+                                    <DatePicker x:Name="QuoteDatePicker" Height="32" Width="140"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <DataGrid x:Name="LinesGrid"
+AutoGenerateColumns="False"
+CanUserAddRows="False"
+CanUserDeleteRows="False"
+HeadersVisibility="Column"
+GridLinesVisibility="All"
+VerticalGridLinesBrush="#94A3B8"
+HorizontalGridLinesBrush="#E5E7EB"
+RowHeight="24"
+ColumnHeaderHeight="24"
+BorderBrush="#E5E7EB"
+BorderThickness="1"
+MinHeight="50"
+MaxHeight="450"
+VerticalAlignment="Top"
+SelectionUnit="FullRow"
+SelectionMode="Single"
+PreviewMouseLeftButtonDown="LinesGrid_PreviewMouseLeftButtonDown"
+PreviewMouseWheel="LinesGrid_PreviewMouseWheel"
+CurrentCellChanged="LinesGrid_CurrentCellChanged"
+RowEditEnding="LinesGrid_RowEditEnding"
+ScrollViewer.VerticalScrollBarVisibility="Auto"
+ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+ScrollViewer.CanContentScroll="True"
+AlternationCount="1000000">
+
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow">
+                                        <Setter Property="Background" Value="White"/>
+                                        <Setter Property="Foreground" Value="#111827"/>
+                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter Property="BorderBrush" Value="#2563EB"/>
+                                                <Setter Property="BorderThickness" Value="0,2,0,2"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.RowStyle>
+
+                                <DataGrid.CellStyle>
+                                    <Style TargetType="DataGridCell">
+                                        <Setter Property="BorderBrush" Value="#94A3B8"/>
+                                        <Setter Property="BorderThickness" Value="0,1,1,1"/>
+                                        <Setter Property="Padding" Value="6,0,6,0"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="#111827"/>
+                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Foreground" Value="#111827"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEditing" Value="True">
+                                                <Setter Property="Background" Value="White"/>
+                                                <Setter Property="Foreground" Value="#111827"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.CellStyle>
+
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Libellé / Matériel"
+Binding="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+Width="*"/>
+
+                                    <DataGridTextColumn Header="Qt"
+Binding="{Binding QtyDisplay, UpdateSourceTrigger=PropertyChanged}"
+Width="54"
+ElementStyle="{StaticResource CenterAlignedCellTextStyle}"/>
+
+                                    <DataGridTextColumn Header="Prix/pc"
+Binding="{Binding UnitPriceDisplay, UpdateSourceTrigger=PropertyChanged}"
+Width="78"
+ElementStyle="{StaticResource RightAlignedCellTextStyle}"/>
+
+                                    <DataGridTextColumn Header="Total"
+Binding="{Binding LineTotal, StringFormat=0.00}"
+IsReadOnly="True"
+Width="82"
+ElementStyle="{StaticResource RightAlignedCellTextStyle}"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="7"/>
+                                    <ColumnDefinition Width="1.7*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0">
+                                        <TextBlock Text="Devis forfait (PDF)" Style="{StaticResource LabelStyle}" Margin="0,27,0,2"/>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="CompanyPdfUploadButton"
+Content="Ajouter PDF"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="CompanyPdfUploadButton_Click"
+Margin="0,0,2,0"/>
+
+                                            <Button x:Name="CompanyPdfOpenButton"
+Content="Ouvrir"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="CompanyPdfOpenButton_Click"
+Margin="0,0,2,0"/>
+
+                                            <Button x:Name="CompanyPdfRemoveButton"
+Content="Supprimer"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="CompanyPdfRemoveButton_Click"
+Margin="0,0,2,0"/>
+
+                                            <TextBlock x:Name="CompanyPdfFileNameTextBlock"
+Text=""
+Foreground="#6B7280"
+VerticalAlignment="Center"
+TextTrimming="CharacterEllipsis"
+Margin="6,0,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" VerticalAlignment="Stretch" Margin="0,32,0,0">
+                                        <TextBlock Text="Note (9 lignes max.)" Style="{StaticResource LabelStyle}"/>
+                                        <TextBox x:Name="QuoteNotesTextBox"
+AcceptsReturn="True"
+TextWrapping="Wrap"
+VerticalScrollBarVisibility="Disabled"
+HorizontalScrollBarVisibility="Disabled"
+BorderBrush="#D1D5DB"
+BorderThickness="1"
+Padding="10"
+FontSize="10"
+VerticalAlignment="Stretch"
+MinHeight="0"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Grid.Column="2">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="40"/>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="70"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0"
+Grid.ColumnSpan="4"
+Background="White"
+BorderBrush="#2563EB"
+BorderThickness="1"
+CornerRadius="10"
+Padding="8,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="40"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Column="0"
+Text="Total Matériel"
+Foreground="#111827"
+VerticalAlignment="Center"/>
+
+                                                <TextBlock Grid.Column="3"
+x:Name="MaterialTotalTextBlock"
+Text="0.00"
+FontWeight="SemiBold"
+Style="{StaticResource TotalsAmountStyle}"/>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+
+                                    <Border Background="White"
+BorderBrush="#E5E7EB"
+BorderThickness="1"
+CornerRadius="0"
+Margin="0,10,0,0">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="24"/>
+                                                <RowDefinition Height="24"/>
+                                                <RowDefinition Height="24"/>
+                                                <RowDefinition Height="24"/>
+                                                <RowDefinition Height="24"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="40"/>
+                                                <ColumnDefinition Width="70"/>
+                                                <ColumnDefinition Width="70"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Row="0" Grid.Column="0"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="6,0">
+                                                <TextBlock Text="Main d’œuvre" VerticalAlignment="Center" Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="0" Grid.Column="1"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0">
+                                                <TextBox x:Name="LaborHoursTextBox"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+BorderThickness="0"
+Background="Transparent"
+VerticalContentAlignment="Center"/>
+                                            </Border>
+
+                                            <Border Grid.Row="0" Grid.Column="2"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0">
+                                                <TextBox x:Name="LaborRateTextBox"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
+BorderThickness="0"
+Background="Transparent"
+VerticalContentAlignment="Center"/>
+                                            </Border>
+
+                                            <Border Grid.Row="0" Grid.Column="3"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,0,1"
+Padding="8,0">
+                                                <TextBlock x:Name="LaborTotalTextBlock"
+Text="0.00"
+VerticalAlignment="Center"
+TextAlignment="Right"
+FontWeight="SemiBold"
+Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="1" Grid.Column="0"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="6,0">
+                                                <TextBlock Text="Déplacements" VerticalAlignment="Center" Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="1" Grid.Column="1"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0">
+                                                <TextBox x:Name="TravelQtyTextBox"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+BorderThickness="0"
+Background="Transparent"
+VerticalContentAlignment="Center"/>
+                                            </Border>
+
+                                            <Border Grid.Row="1" Grid.Column="2"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0">
+                                                <TextBox x:Name="TravelRateTextBox"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
+BorderThickness="0"
+Background="Transparent"
+VerticalContentAlignment="Center"/>
+                                            </Border>
+
+                                            <Border Grid.Row="1" Grid.Column="3"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,0,1"
+Padding="8,0">
+                                                <TextBlock x:Name="TravelTotalTextBlock"
+Text="0.00"
+VerticalAlignment="Center"
+TextAlignment="Right"
+FontWeight="SemiBold"
+Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="2" Grid.Column="0"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="6,0">
+                                                <TextBlock Text="Forfait selon doc annexé" VerticalAlignment="Center" Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="2" Grid.Column="1"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0">
+                                                <TextBox x:Name="ForfaitQtyTextBox"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+BorderThickness="0"
+Background="Transparent"
+VerticalContentAlignment="Center"/>
+                                            </Border>
+
+                                            <Border Grid.Row="2" Grid.Column="2"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0">
+                                                <TextBox x:Name="ForfaitUnitPriceTextBox"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
+BorderThickness="0"
+Background="Transparent"
+VerticalContentAlignment="Center"/>
+                                            </Border>
+
+                                            <Border Grid.Row="2" Grid.Column="3"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,0,1"
+Padding="8,0">
+                                                <TextBlock x:Name="ForfaitTotalTextBlock"
+Text="0.00"
+VerticalAlignment="Center"
+TextAlignment="Right"
+FontWeight="SemiBold"
+Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="3" Grid.Column="0"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="6,0">
+                                                <TextBlock Text="Rabais (%)" VerticalAlignment="Center" Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="3" Grid.Column="1"
+Background="#F3F4F6"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0"
+IsHitTestVisible="False">
+                                                <TextBlock Text="" />
+                                            </Border>
+
+                                            <Border Grid.Row="3" Grid.Column="2"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,1"
+Padding="1,0">
+                                                <TextBox x:Name="DiscountRateTextBox"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+PreviewLostKeyboardFocus="PercentInt_LostFocus"
+PreviewMouseLeftButtonDown="DiscountRateTextBox_PreviewMouseLeftButtonDown"
+BorderThickness="0"
+Background="Transparent"
+VerticalContentAlignment="Center"/>
+                                            </Border>
+
+                                            <Border Grid.Row="3" Grid.Column="3"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,0,1"
+Padding="8,0">
+                                                <TextBlock x:Name="DiscountAmountTextBlock"
+Text="0.00"
+VerticalAlignment="Center"
+TextAlignment="Right"
+FontWeight="SemiBold"
+Foreground="#111827"/>
+                                            </Border>
+
+                                            <Border Grid.Row="4" Grid.Column="0"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,0"
+Padding="6,0">
+                                                <TextBlock Text="Total HT" VerticalAlignment="Center" Foreground="#111827" FontWeight="Bold"/>
+                                            </Border>
+
+                                            <Border Grid.Row="4" Grid.Column="1"
+Background="#F3F4F6"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,0"
+Padding="1,0"
+IsHitTestVisible="False">
+                                                <TextBlock Text="" />
+                                            </Border>
+
+                                            <Border Grid.Row="4" Grid.Column="2"
+Background="#F3F4F6"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,1,0"
+Padding="1,0"
+IsHitTestVisible="False">
+                                                <TextBlock Text="" />
+                                            </Border>
+
+                                            <Border Grid.Row="4" Grid.Column="3"
+Background="White"
+BorderBrush="#94A3B8"
+BorderThickness="0,0,0,0"
+Padding="8,0">
+                                                <TextBlock x:Name="TotalHtTextBlock"
+Text="0.00"
+VerticalAlignment="Center"
+TextAlignment="Right"
+FontWeight="Bold"
+Foreground="#111827"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Background="White"
+BorderBrush="#1D4ED8"
+BorderThickness="1"
+CornerRadius="10"
+Padding="7"
+Margin="0,10,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="56"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="40"/>
+                                                <ColumnDefinition Width="90"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0"
+Text="TVA (%)"
+Foreground="#111827"
+Style="{StaticResource TotalsLabelStyle}"/>
+                                            <TextBox x:Name="TvaRateTextBox"
+Grid.Row="0"
+Grid.Column="3"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
+VerticalAlignment="Center"
+Margin="0,0,0,6"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="5"
+x:Name="TvaAmountTextBlock"
+Text="0.00"
+FontWeight="SemiBold"
+Style="{StaticResource TotalsAmountStyle}"
+Margin="0,0,0,6"/>
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0"
+Text="Total TTC"
+FontWeight="Bold"
+FontSize="15"
+Foreground="#111827"
+Margin="0,0,18,2"
+VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="5"
+x:Name="TotalTtcTextBlock"
+Text="0.00"
+FontWeight="Bold"
+FontSize="15"
+Foreground="#111827"
+Style="{StaticResource TotalsAmountStyle}"
+Margin="0,0,0,2"/>
+
+                                            <Border Grid.Row="2"
+Grid.ColumnSpan="6"
+BorderBrush="#111827"
+BorderThickness="0,2,0,0"
+Margin="0,6,0,0"/>
+                                        </Grid>
+                                    </Border>
+
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
                     </Border>
 
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button x:Name="ClearSignatureButton" Content="Effacer" Width="110" Click="ClearSignature_Click"/>
-                        <Button x:Name="SaveSignatureButton" Content="Enregistrer signature" Width="180" Margin="8,0,0,0" Click="SaveSignature_Click"/>
-                        <Button x:Name="SaveReplyButtonSignature"
-                                Content="Enregistrer la réponse"
-                                Width="180"
-                                Margin="8,0,0,0"
-                                Click="SaveReply_Click"
-                                Visibility="Collapsed"/>
-                    </StackPanel>
+                    <!-- Validation -->
+                    <Border Style="{StaticResource CardValidationStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Validation" Style="{StaticResource SectionTitleStyle}"/>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="1.4*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0">
+                                        <TextBlock Text="Décision (obligatoire)" Style="{StaticResource LabelStyle}"/>
+
+                                        <RadioButton x:Name="DecisionValidateRadio"
+Content="Je valide le devis"
+GroupName="QuoteDecision"
+Margin="0,6,0,0"/>
+
+                                        <RadioButton x:Name="DecisionRefuseRadio"
+Content="Je refuse le devis"
+GroupName="QuoteDecision"
+Margin="0,6,0,0"/>
+
+                                        <RadioButton x:Name="DecisionCancelRadio"
+Content="J’annule la demande du devis"
+GroupName="QuoteDecision"
+Margin="0,6,0,0"/>
+                                    </StackPanel>
+
+                                    <Grid Grid.Row="1">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="56"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Text=" " Style="{StaticResource LabelStyle}"/>
+
+                                        <Grid Grid.Row="1" VerticalAlignment="Stretch">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="1*"/>
+                                                <ColumnDefinition Width="14"/>
+                                                <ColumnDefinition Width="0.8*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
+                                                <TextBlock Text="Nom (obligatoire)" Style="{StaticResource LabelStyle}"/>
+                                                <TextBox x:Name="SignatureNameTextBox" Style="{StaticResource InputStyle}"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                                                <TextBlock Text="Date (obligatoire)" Style="{StaticResource LabelStyle}"/>
+                                                <DatePicker x:Name="SignatureDatePicker" Height="32"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Grid>
+
+                                <Grid Grid.Column="2">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="140"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Text="Signature (obligatoire)" Style="{StaticResource LabelStyle}"/>
+
+                                    <Border Grid.Row="1"
+BorderBrush="#15803D"
+BorderThickness="1"
+CornerRadius="10"
+Background="White"
+Height="140">
+                                        <InkCanvas x:Name="SignatureInkCanvas" Background="White"/>
+                                    </Border>
+
+                                    <StackPanel Grid.Row="2">
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button x:Name="ImportSignatureButton"
+Content="Importer"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="ImportSignatureButton_Click"
+Margin="0,0,8,0"/>
+
+                                            <Button x:Name="ClearSignatureButton"
+Content="Effacer la signature"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="ClearSignatureButton_Click"/>
+                                        </StackPanel>
+
+                                        <TextBlock Text="Signer avec la souris / tactile, ou importer une signature PNG."
+FontSize="11"
+Foreground="#166534"
+Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
                 </StackPanel>
             </Border>
-
-            <!-- ACTIONS -->
-            <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="ExportForSignatureButton"
-                        Content="Envoyer au signataire"
-                        Width="190"
-                        Margin="0,0,8,0"
-                        Click="ExportForSignature_Click"/>
-
-                <Button x:Name="SendValidatedToCompanyButton"
-                        Content="Envoyer le document validé"
-                        Width="220"
-                        Margin="0,0,8,0"
-                        Click="SendValidatedToCompany_Click"
-                        Visibility="Collapsed"/>
-
-                <Button x:Name="CreatePdfButton"
-                        Content="Créer PDF validé"
-                        Width="140"
-                        Margin="0,0,8,0"
-                        Click="CreatePdf_Click"/>
-            </StackPanel>
-
-        </Grid>
-    </ScrollViewer>
+        </ScrollViewer>
+    </DockPanel>
 </Window>
