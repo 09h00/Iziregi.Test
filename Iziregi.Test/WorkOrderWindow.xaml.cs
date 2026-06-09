@@ -1,41 +1,50 @@
 ﻿// File: WorkOrderWindow.xaml.cs
+using Iziregi.Test.Data;
+using Iziregi.Test.Models;
+using Iziregi.Test.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using System.Diagnostics;
-using System.Threading.Tasks;
-
-using Iziregi.Test.Data;
-using Iziregi.Test.Models;
-using Iziregi.Test.Services;
-
 using MediaBrushes = System.Windows.Media.Brushes;
-
+using WpfDataFormats = System.Windows.DataFormats;
+// ✅ Fix ambiguïtés DataObject + DataFormats (WinForms vs WPF)
+using WpfDataObject = System.Windows.DataObject;
+using WpfInkCanvas = System.Windows.Controls.InkCanvas;
 // ✅ Fix ambiguïtés WinForms/WPF (TextBox, etc.)
 using WpfTextBox = System.Windows.Controls.TextBox;
 using WpfUIElement = System.Windows.UIElement;
-using WpfInkCanvas = System.Windows.Controls.InkCanvas;
-
-// ✅ Fix ambiguïtés DataObject + DataFormats (WinForms vs WPF)
-using WpfDataObject = System.Windows.DataObject;
-using WpfDataFormats = System.Windows.DataFormats;
 
 namespace Iziregi.Test;
 
 public partial class WorkOrderWindow : Window
 {
+    // =========================
+    // ✅ Liens magiques (serveur)
+    // =========================
+    private const string ServerBaseUrl = "https://iziregi.com";
+    private const string ServerApiKey = "iziregi_internal_key_2026_ChangeMeToSomethingLong_123456789";
+
+    private static readonly HttpClient Http = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(20)
+    };
+
     private readonly ObservableCollection<WorkOrderLine> _lines = new();
     private readonly List<long> _deletedLineIds = new();
 
@@ -1718,7 +1727,113 @@ public partial class WorkOrderWindow : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void ExportQuoteRequestButton_Click(object sender, RoutedEventArgs e)
+    private static string NormalizeServerBaseUrl(string? baseUrl)
+    {
+        var v = (baseUrl ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(v)) v = "https://iziregi.com";
+        return v.TrimEnd('/');
+    }
+
+    private static string ExtractFirstHref(string html)
+    {
+        html ??= "";
+        var m = Regex.Match(html, "href=\"([^\"]+)\"", RegexOptions.IgnoreCase);
+        return m.Success ? (m.Groups[1].Value ?? "") : "";
+    }
+    private sealed class WorkOrderUpsertDto
+    {
+        public string WorkOrderRef { get; set; } = "";
+        public string ProjectName { get; set; } = "";
+        public string ProjectAddressLine { get; set; } = "";
+        public string ProjectZipCity { get; set; } = "";
+
+        public string Place { get; set; } = "";
+        public string Etage { get; set; } = "";
+        public string RequestedBy { get; set; } = "";
+        public string PerformedBy { get; set; } = "";
+        public string RequestDate { get; set; } = "";
+        public string DeadlineDate { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    private static string IsoDate(System.DateTime dt)
+        => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private async Task PublishWorkOrderToServerAsync(string workOrderRef)
+    {
+        if (_workOrder == null || _workOrder.Id <= 0)
+            throw new InvalidOperationException("Le bon doit être enregistré avant publication serveur.");
+
+        workOrderRef = (workOrderRef ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(workOrderRef))
+            throw new InvalidOperationException("Référence du bon invalide.");
+
+        Project? project = null;
+        try
+        {
+            if (_workOrder.ProjectId.HasValue && _workOrder.ProjectId.Value > 0)
+                project = Db.GetProjectById(_workOrder.ProjectId.Value);
+        }
+        catch { }
+
+        var dto = new WorkOrderUpsertDto
+        {
+            WorkOrderRef = workOrderRef,
+            ProjectName = project?.Name ?? "",
+            ProjectAddressLine = project?.AddressLine ?? "",
+            ProjectZipCity = project?.ZipCity ?? "",
+
+            Place = _workOrder.Place ?? "",
+            Etage = _workOrder.Etage ?? "",
+            RequestedBy = _workOrder.RequestedBy ?? "",
+            PerformedBy = _workOrder.PerformedBy ?? "",
+            RequestDate = IsoDate(_workOrder.RequestDate),
+            DeadlineDate = IsoDate(_workOrder.DeadlineDate),
+            Description = _workOrder.Description ?? "",
+        };
+
+        var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+        var url = $"{baseUrl}/internal/workorders/upsert?apiKey={Uri.EscapeDataString(ServerApiKey)}";
+
+        var json = JsonSerializer.Serialize(dto, ReplyJsonOptions);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var resp = await Http.PostAsync(url, content);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Publication serveur impossible : HTTP {(int)resp.StatusCode}.");
+    }
+
+    private async Task<string> CreateMagicLinkAsync(string role, string workOrderRef)
+    {
+        role = (role ?? "").Trim().ToLowerInvariant();
+        workOrderRef = (workOrderRef ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(workOrderRef))
+            throw new InvalidOperationException("Référence du bon invalide.");
+
+        var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+
+        // ✅ même endpoint que celui utilisé sur le VPS (admin)
+        var url =
+            $"{baseUrl}/internal/create-link?apiKey={Uri.EscapeDataString(ServerApiKey)}&role={Uri.EscapeDataString(role)}&workOrderRef={Uri.EscapeDataString(workOrderRef)}";
+
+        using var resp = await Http.GetAsync(url);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Serveur : HTTP {(int)resp.StatusCode}.");
+
+        var html = await resp.Content.ReadAsStringAsync();
+        var href = ExtractFirstHref(html);
+        if (string.IsNullOrWhiteSpace(href))
+            throw new InvalidOperationException("Lien introuvable dans la réponse du serveur.");
+
+        // href est du style "/company?..." ou "http://127.0.0.1:5000/company?..."
+        if (href.StartsWith("/", StringComparison.Ordinal))
+            return baseUrl + href;
+
+        return href;
+    }
+
+    private async void ExportQuoteRequestButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -1734,14 +1849,30 @@ public partial class WorkOrderWindow : Window
             if (!saved) return;
 
             if (_workOrder == null || _workOrder.Id <= 0)
-                throw new InvalidOperationException("Le bon doit être enregistré avant l’envoi.");
+                throw new InvalidOperationException("Le bon doit être enregistré avant génération du lien.");
+
+            var workOrderRef = (_workOrder.BdrDisplay ?? "").Trim(); // ex: "24-P1"
+
+            var link = await CreateMagicLinkAsync(role: "company", workOrderRef: workOrderRef);
+
+            System.Windows.Clipboard.SetText(link);
+
+            // ✅ Option B : ouvre un nouveau mail (destinataire vide) avec le lien
+            try
+            {
+                var subject = Uri.EscapeDataString($"Iziregi — Bon {workOrderRef} — Devis à compléter");
+                var body = Uri.EscapeDataString($"Bonjour,\r\n\r\nVoici le lien pour compléter le devis du bon {workOrderRef} :\r\n{link}\r\n");
+                var mailto = $"mailto:?subject={subject}&body={body}";
+                Process.Start(new ProcessStartInfo(mailto) { UseShellExecute = true });
+            }
+            catch { }
 
             Db.SetStageSentToCompany(_workOrder.Id);
             _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
 
             System.Windows.MessageBox.Show(
                 this,
-                "Demande devis envoyée (statut mis à jour).",
+                "Lien pour devis copié (mail ouvert).",
                 "Devis",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -1750,14 +1881,14 @@ public partial class WorkOrderWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                $"Impossible d’envoyer la demande devis.\n\n{ex.Message}",
+                $"Impossible de générer le lien pour devis.\n\n{ex.Message}",
                 "Devis",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
     }
 
-    private void ExportSignatureRequestButton_Click(object sender, RoutedEventArgs e)
+    private async void ExportSignatureRequestButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -1773,14 +1904,30 @@ public partial class WorkOrderWindow : Window
             if (!saved) return;
 
             if (_workOrder == null || _workOrder.Id <= 0)
-                throw new InvalidOperationException("Le bon doit être enregistré avant l’envoi.");
+                throw new InvalidOperationException("Le bon doit être enregistré avant génération du lien.");
+
+            var workOrderRef = (_workOrder.BdrDisplay ?? "").Trim(); // ex: "24-P1"
+
+            var link = await CreateMagicLinkAsync(role: "signer", workOrderRef: workOrderRef);
+
+            System.Windows.Clipboard.SetText(link);
+
+            // ✅ Option B : ouvre un nouveau mail (destinataire vide) avec le lien
+            try
+            {
+                var subject = Uri.EscapeDataString($"Iziregi — Bon {workOrderRef} — Validation / signature");
+                var body = Uri.EscapeDataString($"Bonjour,\r\n\r\nVoici le lien pour valider et signer le bon {workOrderRef} :\r\n{link}\r\n");
+                var mailto = $"mailto:?subject={subject}&body={body}";
+                Process.Start(new ProcessStartInfo(mailto) { UseShellExecute = true });
+            }
+            catch { }
 
             Db.SetStageSentToSigner(_workOrder.Id);
             _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
 
             System.Windows.MessageBox.Show(
                 this,
-                "Demande validation envoyée (statut mis à jour).",
+                "Lien pour validation copié (mail ouvert).",
                 "Validation",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -1789,7 +1936,7 @@ public partial class WorkOrderWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                $"Impossible d’envoyer la demande de validation.\n\n{ex.Message}",
+                $"Impossible de générer le lien pour validation.\n\n{ex.Message}",
                 "Validation",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

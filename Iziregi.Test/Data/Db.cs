@@ -575,6 +575,12 @@ public static class Db
 
     public static string GetDefaultRequester() => GetSetting("DefaultRequester") ?? "";
     public static void SetDefaultRequester(string value) => SetSetting("DefaultRequester", (value ?? "").Trim());
+    // ✅ NEW: Server sync cursor (UTC ISO string, e.g. 2026-06-05T13:10:00Z)
+    public static string? GetLastServerSyncUtc()
+        => GetSetting("LastServerSyncUtc");
+
+    public static void SetLastServerSyncUtc(string utcIso)
+        => SetSetting("LastServerSyncUtc", (utcIso ?? "").Trim());
 
     public static string GetDefaultReserve() => GetSetting("DefaultReserve") ?? "";
     public static void SetDefaultReserve(string value) => SetSetting("DefaultReserve", (value ?? "").Trim());

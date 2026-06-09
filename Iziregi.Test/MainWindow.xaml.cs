@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -47,6 +49,26 @@ public partial class MainWindow : Window
     private bool _isProcessingInboxQueue = false;
 
     // =========================
+    // ✅ Server sync (polling 60s)
+    // =========================
+    private readonly DispatcherTimer _serverSyncTimer = new();
+    private bool _isServerSyncRunning = false;
+
+    private static readonly HttpClient Http = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(20)
+    };
+
+    // =========================
+    // ✅ Server sync config (MVP)
+    // =========================
+    private const string ServerBaseUrl = "https://iziregi.com";
+    private const string ServerApiKey = "iziregi_internal_key_2026_ChangeMeToSomethingLong_123456789";
+
+    // Anti-spam popups "not found"
+    private readonly HashSet<string> _warnedNotFoundLocal = new(StringComparer.OrdinalIgnoreCase);
+
+    // =========================
     // Pages (UserControls)
     // =========================
     private DashboardPage? _dashboardPage;
@@ -80,6 +102,285 @@ public partial class MainWindow : Window
 
         // Page par défaut
         ShowDashboard();
+
+        // ✅ Auto sync serveur (toutes les 60s)
+        StartServerSyncTimer();
+    }
+
+    // =========================
+    // ✅ Server sync timer
+    // =========================
+    private void StartServerSyncTimer()
+    {
+        _serverSyncTimer.Interval = TimeSpan.FromSeconds(60);
+        _serverSyncTimer.Tick += async (_, __) => await ServerSyncTickAsync();
+        _serverSyncTimer.Start();
+
+        // 1er tick rapide au démarrage
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(async () =>
+        {
+            await ServerSyncTickAsync();
+        }));
+    }
+
+    private static string NormalizeServerBaseUrl(string? baseUrl)
+    {
+        var v = (baseUrl ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(v)) v = "https://iziregi.com";
+        return v.TrimEnd('/');
+    }
+
+    private static bool TryParseUtc(string? s, out DateTime utc)
+    {
+        utc = default;
+
+        s = (s ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(s)) return false;
+
+        if (!DateTime.TryParse(
+                s,
+                null,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var dt))
+            return false;
+
+        utc = dt.ToUniversalTime();
+        return true;
+    }
+
+    private static string GetSinceUtcForQuery()
+    {
+        // ✅ IMPORTANT : ta Db.cs stocke bien LastServerSyncUtc dans Settings.
+        // Si invalide -> on repart loin dans le passé
+        var raw = Db.GetLastServerSyncUtc();
+
+        if (!TryParseUtc(raw, out var lastUtc))
+            return "2000-01-01T00:00:00Z";
+
+        // protection si la valeur est "dans le futur"
+        if (lastUtc > DateTime.UtcNow.AddMinutes(5))
+            return "2000-01-01T00:00:00Z";
+
+        return lastUtc.ToString("o");
+    }
+
+    private async Task ServerSyncTickAsync()
+    {
+        if (_isServerSyncRunning) return;
+        _isServerSyncRunning = true;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(ServerApiKey))
+                return;
+
+            var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+            var sinceUtc = GetSinceUtcForQuery();
+
+            var url =
+                $"{baseUrl}/internal/submissions/since?apiKey={Uri.EscapeDataString(ServerApiKey)}&sinceUtc={Uri.EscapeDataString(sinceUtc)}";
+
+            // ✅ IMPORTANT : GetAsync nève PAS d’exception sur 404/401.
+            using var resp = await Http.GetAsync(url);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                // On ne bloque pas l’app en cas d’erreur serveur / route manquante.
+                // On réessaiera au prochain tick.
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+
+            var items = JsonSerializer.Deserialize<List<ServerSubmission>>(json, JsonOptions) ?? new List<ServerSubmission>();
+
+            if (items.Count == 0)
+            {
+                Db.SetLastServerSyncUtc(DateTime.UtcNow.ToString("o"));
+                return;
+            }
+
+            foreach (var it in items)
+            {
+                await ApplySubmissionToLocalDbAsync(baseUrl, ServerApiKey, it);
+            }
+
+            Db.SetLastServerSyncUtc(DateTime.UtcNow.ToString("o"));
+
+            if (MainContent.Content is IReloadablePage p)
+                p.Reload();
+        }
+        catch
+        {
+            // MVP : pas de crash, on réessaie au prochain tick
+        }
+        finally
+        {
+            _isServerSyncRunning = false;
+        }
+    }
+
+    private sealed class ServerSubmission
+    {
+        public string Role { get; set; } = "";              // "company" | "signer"
+        public string WorkOrderRef { get; set; } = "";       // ex: "19-P1"
+        public string SubmittedAtUtc { get; set; } = "";     // ISO
+        public string Summary { get; set; } = "";
+        public Dictionary<string, string> Data { get; set; } = new();
+    }
+
+    private static bool TryParseWorkOrderRef(string workOrderRef, out int bdrNumber, out long projectIdFromRef)
+    {
+        bdrNumber = 0;
+        projectIdFromRef = 0;
+
+        var s = (workOrderRef ?? "").Trim(); // "19-P1"
+        var parts = s.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2) return false;
+
+        if (!int.TryParse(parts[0], out bdrNumber)) return false;
+
+        var p = parts[1].Trim(); // "P1"
+        if (p.StartsWith("P", StringComparison.OrdinalIgnoreCase))
+            p = p.Substring(1);
+
+        return long.TryParse(p, out projectIdFromRef);
+    }
+
+    // ✅ Définitif : utilise la Db.cs que tu m’as donnée
+    // - Db.GetWorkOrders(projectId) existe (overload)
+    // - fallback : tous les bons si jamais le mapping Pn->projectId ne correspond pas
+    private static WorkOrder? FindLocalWorkOrderRobust(string workOrderRef)
+    {
+        if (!TryParseWorkOrderRef(workOrderRef, out var bdr, out var projectIdFromRef))
+            return null;
+
+        // 1) strict : bons du projet "Pn"
+        try
+        {
+            var strictList = Db.GetWorkOrders(projectIdFromRef);
+            var strict = strictList.FirstOrDefault(w => w.BdrNumber == bdr);
+            if (strict != null) return strict;
+        }
+        catch
+        {
+            // ignore => fallback
+        }
+
+        // 2) fallback : cherche bdr dans tous les projets
+        try
+        {
+            var all = Db.GetWorkOrders();
+            var matches = all.Where(w => w.BdrNumber == bdr).ToList();
+
+            if (matches.Count == 1)
+                return matches[0];
+
+            // 0 match ou plusieurs => on ne peut pas décider sans risque
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task ApplySubmissionToLocalDbAsync(string baseUrl, string apiKey, ServerSubmission it)
+    {
+        var role = (it.Role ?? "").Trim().ToLowerInvariant();
+        var wor = (it.WorkOrderRef ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(role) || string.IsNullOrWhiteSpace(wor))
+            return;
+
+        // ✅ Définitif : ignore tout ce qui n’est pas au format "NN-PN"
+        if (!TryParseWorkOrderRef(wor, out _, out _))
+            return;
+
+        var wo = FindLocalWorkOrderRobust(wor);
+        if (wo == null)
+        {
+            // avertit 1x max par workOrderRef pour éviter le spam
+            if (_warnedNotFoundLocal.Add(wor))
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    $"Sync : bon introuvable en local pour {wor}.",
+                    "Iziregi",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+            }
+            return;
+        }
+
+        // NOTE: ne pas filtrer ici — on veut voir la pop-up même si le statut est déjà atteint.
+
+        if (role == "company")
+        {
+            if (it.Data.TryGetValue("quoteName", out var quoteName))
+                wo.QuoteName = (quoteName ?? "").Trim();
+
+            if (it.Data.TryGetValue("note", out var note))
+                wo.QuoteNotes = note ?? "";
+
+            Db.UpdateWorkOrderQuote(wo);
+            Db.SetStageQuoteReceived(wo.Id);
+
+            System.Windows.MessageBox.Show(
+                this,
+                $"Réponse entreprise reçue pour {wor}",
+                "Iziregi",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+
+            return;
+        }
+
+        if (role == "signer")
+        {
+            if (it.Data.TryGetValue("decision", out var decision))
+                Db.UpdateWorkOrderValidationDecision(wo.Id, decision);
+
+            if (it.Data.TryGetValue("name", out var name))
+                wo.SignatureName = (name ?? "").Trim();
+
+            if (it.Data.TryGetValue("date", out var dateStr))
+            {
+                if (DateTime.TryParse(dateStr, out var dt))
+                    wo.SignatureDate = dt.Date;
+            }
+
+            // Télécharge signature PNG (si endpoint disponible)
+            try
+            {
+                var normalized = NormalizeServerBaseUrl(baseUrl);
+                var sigUrl =
+                    $"{normalized}/internal/signatures/get?apiKey={Uri.EscapeDataString(apiKey)}&workOrderRef={Uri.EscapeDataString(wor)}";
+
+                using var sigResp = await Http.GetAsync(sigUrl);
+                if (sigResp.IsSuccessStatusCode)
+                {
+                    var bytes = await sigResp.Content.ReadAsByteArrayAsync();
+                    if (bytes != null && bytes.Length > 0)
+                        wo.SignaturePng = bytes;
+                }
+            }
+            catch
+            {
+                // on continue sans bloquer la validation
+            }
+
+            Db.UpdateWorkOrderSignatureRaw(wo);
+            Db.SetStageValidated(wo.Id);
+
+            System.Windows.MessageBox.Show(
+                this,
+                $"Réponse signataire reçue pour {wor}",
+                "Iziregi",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+
+            return;
+        }
     }
 
     // =========================
@@ -125,13 +426,11 @@ public partial class MainWindow : Window
         if (!TryGetSolidColor(bg, out var c))
             return MediaBrushes.White;
 
-        // luminance relative
         double r = c.R / 255.0;
         double g = c.G / 255.0;
         double b = c.B / 255.0;
         double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-        // clair => noir, foncé => blanc
         return luminance >= 0.55 ? MediaBrushes.Black : MediaBrushes.White;
     }
 
@@ -152,12 +451,10 @@ public partial class MainWindow : Window
                 : "Projet : (aucun)";
         }
 
-        // ✅ Couleur du badge (fond) + contraste auto (texte)
         if (ProjectBadgeContainer != null)
         {
             var bg = p != null ? BrushFromHexOrNull(p.ColorHex) : MediaBrushes.Transparent;
 
-            // fallback si pas de couleur -> couleur par défaut existante
             if (bg == null || bg == MediaBrushes.Transparent)
                 bg = BrushFromHexOrNull("#111827");
 
@@ -237,14 +534,12 @@ public partial class MainWindow : Window
     // =========================
     private void PlanningPdf_Click(object sender, RoutedEventArgs e)
     {
-        // Pour l’instant : handler "placeholder" pour compiler.
-        // (On branchera ensuite sur le vrai export PDF du planning.)
         System.Windows.MessageBox.Show(
             this,
             "Export PDF planning : TODO",
             "Planning",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            System.Windows.MessageBoxButton.OK,
+            System.Windows.MessageBoxImage.Information);
     }
 
     // =========================
@@ -257,7 +552,6 @@ public partial class MainWindow : Window
         _selectedProject = p;
         Db.SetCurrentProjectId(_selectedProject?.Id);
 
-        // Comme on change de projet, on met à jour le badge si visible
         var show = ProjectBadgeContainer != null && ProjectBadgeContainer.Visibility == Visibility.Visible;
         UpdateProjectBadge(show: show);
     }
@@ -283,7 +577,6 @@ public partial class MainWindow : Window
             Db.SetCurrentProjectId(_selectedProject.Id);
         }
 
-        // Mise à jour badge si visible
         var show = ProjectBadgeContainer != null && ProjectBadgeContainer.Visibility == Visibility.Visible;
         UpdateProjectBadge(show: show);
 
@@ -299,19 +592,16 @@ public partial class MainWindow : Window
         var projectId = Db.GetCurrentProjectId();
         _selectedProject = projectId.HasValue ? Db.GetProjectById(projectId.Value) : null;
 
-        // Lieu par défaut
         var defaultPlace = projectId.HasValue ? (Db.GetDefaultPlace(projectId.Value) ?? "").Trim() : "";
         var place = !string.IsNullOrWhiteSpace(defaultPlace)
             ? defaultPlace
             : (projectId.HasValue ? (Db.GetPlaces(projectId.Value).FirstOrDefault() ?? "D21") : "D21");
 
-        // Entreprise par défaut
         var defaultCompany = projectId.HasValue ? (Db.GetDefaultCompany(projectId.Value) ?? "").Trim() : "";
         var performedBy = !string.IsNullOrWhiteSpace(defaultCompany)
             ? defaultCompany
             : (projectId.HasValue ? (Db.GetCompanies(projectId.Value).FirstOrDefault() ?? "Electricien") : "Electricien");
 
-        // Demandé par par défaut
         var defaultRequester = projectId.HasValue ? (Db.GetDefaultRequester(projectId.Value) ?? "").Trim() : "";
         var requestedBy = !string.IsNullOrWhiteSpace(defaultRequester)
             ? defaultRequester
@@ -381,7 +671,12 @@ public partial class MainWindow : Window
         try { ImportReplyFile(ofd.FileName); }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, "Erreur import devis", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(
+                this,
+                ex.Message,
+                "Erreur import devis",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
         }
     }
 
@@ -399,7 +694,12 @@ public partial class MainWindow : Window
         try { ImportReplyFile(ofd.FileName); }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, "Erreur import signataire", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(
+                this,
+                ex.Message,
+                "Erreur import signataire",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
         }
     }
 
@@ -430,7 +730,12 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, "Erreur INBOX", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(
+                this,
+                ex.Message,
+                "Erreur INBOX",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
         }
     }
 
@@ -488,7 +793,7 @@ public partial class MainWindow : Window
 
                 try
                 {
-                    var kind = DetectReplyKindSafe(path); // "devis" | "signature" | ""
+                    var kind = DetectReplyKindSafe(path);
                     ImportReplyFile(path);
                     MoveToImported(path);
 
@@ -504,8 +809,8 @@ public partial class MainWindow : Window
                         this,
                         $"{displayKind}.\n\nFichier : {Path.GetFileName(path)}",
                         "Retour Iziregi",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
@@ -513,8 +818,8 @@ public partial class MainWindow : Window
                         this,
                         $"Import impossible.\n\n{ex.Message}\n\nLe fichier sera déplacé dans INBOX\\Error.",
                         "Erreur import INBOX",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
 
                     MoveToError(path);
                 }
@@ -546,10 +851,7 @@ public partial class MainWindow : Window
 
             File.Move(path, target);
         }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "Erreur déplacement INBOX", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+        catch { }
     }
 
     private void MoveToError(string path)
@@ -572,10 +874,7 @@ public partial class MainWindow : Window
 
             File.Move(path, target);
         }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "Erreur déplacement INBOX\\Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+        catch { }
     }
 
     // =========================

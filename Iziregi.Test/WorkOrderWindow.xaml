@@ -215,13 +215,13 @@ DockPanel.Dock="Left"/>
 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                     <Button x:Name="ExportQuoteRequestButton"
-Content="Envoyer demande devis"
+Content="Envoyer lien pour devis"
 Style="{StaticResource SecondaryButtonStyle}"
 Click="ExportQuoteRequestButton_Click"
 Margin="0,0,8,0"/>
 
                     <Button x:Name="ExportSignatureRequestButton"
-Content="Envoyer demande validation"
+Content="Envoyer lien pour validation"
 Style="{StaticResource SecondaryButtonStyle}"
 Click="ExportSignatureRequestButton_Click"
 Margin="0,0,8,0"/>
@@ -259,13 +259,13 @@ HorizontalScrollBarVisibility="Disabled">
 
             <!-- 724px ≈ (A4 largeur 595pt - marges 26pt*2) * 96/72 -->
             <Border Background="White"
-					BorderBrush="#D1D5DB"
-					BorderThickness="1"
-					CornerRadius="6"
-					Padding="14"
-					Margin="18"
-					Width="724"
-					HorizontalAlignment="Center">
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="14"
+                    Margin="18"
+                    Width="724"
+                    HorizontalAlignment="Center">
 
                 <StackPanel>
 
@@ -801,7 +801,6 @@ TextAlignment="Right"
 FontWeight="SemiBold"
 Foreground="#111827"/>
                                             </Border>
-
                                             <Border Grid.Row="1" Grid.Column="0"
 Background="White"
 BorderBrush="#94A3B8"
@@ -912,7 +911,7 @@ BorderBrush="#94A3B8"
 BorderThickness="0,0,1,1"
 Padding="1,0"
 IsHitTestVisible="False">
-                                                <TextBlock Text="" />
+                                                <TextBlock Text=""/>
                                             </Border>
 
                                             <Border Grid.Row="3" Grid.Column="2"
@@ -957,7 +956,7 @@ BorderBrush="#94A3B8"
 BorderThickness="0,0,1,0"
 Padding="1,0"
 IsHitTestVisible="False">
-                                                <TextBlock Text="" />
+                                                <TextBlock Text=""/>
                                             </Border>
 
                                             <Border Grid.Row="4" Grid.Column="2"
@@ -966,7 +965,7 @@ BorderBrush="#94A3B8"
 BorderThickness="0,0,1,0"
 Padding="1,0"
 IsHitTestVisible="False">
-                                                <TextBlock Text="" />
+                                                <TextBlock Text=""/>
                                             </Border>
 
                                             <Border Grid.Row="4" Grid.Column="3"
