@@ -35,6 +35,80 @@ public class WorkOrder
     public bool IsSentToSigner { get; set; }
     public bool IsValidated { get; set; }
 
+    // Timestamps des envois de liens BDR (pour détecter l'expiration)
+    public System.DateTime? CompanyLinkSentAt { get; set; }
+    public System.DateTime? SignerLinkSentAt { get; set; }
+
+    // Lien entreprise expire après 15 jours sans devis reçu
+    public bool IsCompanyLinkExpired =>
+        IsSentToCompany && !IsQuoteReceived &&
+        CompanyLinkSentAt.HasValue &&
+        (System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays > 15;
+
+    // Lien signataire expire après 7 jours sans validation
+    public bool IsSignerLinkExpired =>
+        IsSentToSigner && !IsValidated &&
+        SignerLinkSentAt.HasValue &&
+        (System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays > 7;
+
+    // Avertissement : lien va expirer dans ≤ 5 jours (entreprise) ou ≤ 3 jours (signataire)
+    public bool IsCompanyLinkExpiringSoon =>
+        IsSentToCompany && !IsQuoteReceived && CompanyLinkSentAt.HasValue &&
+        !IsCompanyLinkExpired &&
+        (System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays >= 10;
+
+    public bool IsSignerLinkExpiringSoon =>
+        IsSentToSigner && !IsValidated && SignerLinkSentAt.HasValue &&
+        !IsSignerLinkExpired &&
+        (System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays >= 4;
+
+    // Jours restants (pour affichage J-X)
+    public int CompanyLinkDaysRemaining =>
+        CompanyLinkSentAt.HasValue
+            ? System.Math.Max(0, 15 - (int)System.Math.Floor((System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays))
+            : 0;
+
+    public int SignerLinkDaysRemaining =>
+        SignerLinkSentAt.HasValue
+            ? System.Math.Max(0, 7 - (int)System.Math.Floor((System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays))
+            : 0;
+
+    public string CompanyLinkDaysRemainingLabel
+    {
+        get
+        {
+            if (!IsCompanyLinkExpiringSoon) return "";
+            var d = CompanyLinkDaysRemaining;
+            return d <= 1 ? "J-1" : $"J-{d}";
+        }
+    }
+
+    public string SignerLinkDaysRemainingLabel
+    {
+        get
+        {
+            if (!IsSignerLinkExpiringSoon) return "";
+            var d = SignerLinkDaysRemaining;
+            return d <= 1 ? "J-1" : $"J-{d}";
+        }
+    }
+
+    public bool HasExpiredLink => IsCompanyLinkExpired || IsSignerLinkExpired;
+
+    public string ExpiredLinkTooltip
+    {
+        get
+        {
+            if (IsCompanyLinkExpired && IsSignerLinkExpired)
+                return "Lien entreprise et lien signataire expirés — Regénérer dans la fiche";
+            if (IsCompanyLinkExpired)
+                return "Lien entreprise expiré (> 15 jours) — Regénérer dans la fiche";
+            if (IsSignerLinkExpired)
+                return "Lien signataire expiré (> 7 jours) — Regénérer dans la fiche";
+            return "";
+        }
+    }
+
     // ✅ NOUVEAU : décision de validation (affichée sur le dashboard)
     // Valeurs attendues : "Validé" | "Refusé" | "Annulé" | "" (non choisi)
     public string ValidationDecision { get; set; } = "";

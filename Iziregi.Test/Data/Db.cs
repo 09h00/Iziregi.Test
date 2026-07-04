@@ -199,6 +199,10 @@ public static class Db
         // ✅ NOUVEAU : décision de validation (Validé / Refusé / Annulé)
         TryAddColumn(con, "WorkOrders", "ValidationDecision", "TEXT");
 
+        // ✅ NOUVEAU : timestamps des envois de liens BDR (expiration)
+        TryAddColumn(con, "WorkOrders", "CompanyLinkSentAt", "TEXT");
+        TryAddColumn(con, "WorkOrders", "SignerLinkSentAt", "TEXT");
+
         // =========================
         // ✅ Refactor "Listes par projet"
         // =========================
@@ -897,7 +901,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -927,7 +931,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -958,7 +962,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -987,7 +991,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1017,7 +1021,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1047,7 +1051,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1078,7 +1082,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1108,7 +1112,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1139,7 +1143,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1174,7 +1178,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1208,7 +1212,7 @@ public static class Db
                 Description,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                DistributedAt, PerformedAt,
+                DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
@@ -1530,6 +1534,12 @@ public static class Db
         var performedAtStr = AsString(row.PerformedAt, "");
         DateTime? performedAt = AsNullableDate(performedAtStr);
 
+        var companyLinkSentAtStr = AsString(row.CompanyLinkSentAt, "");
+        DateTime? companyLinkSentAt = AsNullableDate(companyLinkSentAtStr);
+
+        var signerLinkSentAtStr = AsString(row.SignerLinkSentAt, "");
+        DateTime? signerLinkSentAt = AsNullableDate(signerLinkSentAtStr);
+
         byte[]? forfaitPdfBytes = null;
         try { forfaitPdfBytes = row.ForfaitPdfFileBytes as byte[]; } catch { }
 
@@ -1558,6 +1568,9 @@ public static class Db
 
             DistributedAt = distributedAt,
             PerformedAt = performedAt,
+
+            CompanyLinkSentAt = companyLinkSentAt,
+            SignerLinkSentAt = signerLinkSentAt,
 
             IsTrashed = AsBool01(row.IsTrashed),
             TrashedAt = trashedAt,
@@ -1892,7 +1905,8 @@ public static class Db
                 IsSentToCompany=1,
                 IsQuoteReceived=0,
                 IsSentToSigner=0,
-                IsValidated=0
+                IsValidated=0,
+                CompanyLinkSentAt=datetime('now')
             WHERE Id=@Id;
         """, new { Id = workOrderId });
     }
@@ -1924,7 +1938,8 @@ public static class Db
                 IsSentToCompany=0,
                 IsQuoteReceived=0,
                 IsSentToSigner=1,
-                IsValidated=0
+                IsValidated=0,
+                SignerLinkSentAt=datetime('now')
             WHERE Id=@Id;
         """, new { Id = workOrderId });
     }

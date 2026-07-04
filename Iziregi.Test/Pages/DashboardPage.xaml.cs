@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
+using Iziregi.Test.Pages;
 using Iziregi.Test.Services;
 
 // ✅ Aliases WPF (évite ambiguïtés avec WinForms / System.Drawing)
@@ -26,7 +27,15 @@ using System.Windows.Data;
 
 namespace Iziregi.Test;
 
-public partial class DashboardPage : System.Windows.Controls.UserControl
+// ✅ BUG (statut qui ne change pas après le pop-up "Réponse reçue") : DashboardPage avait déjà
+// une méthode publique Reload() avec la BONNE signature, mais la classe ne déclarait PAS
+// implémenter IReloadablePage. Du coup partout où le code fait
+// "if (MainContent.Content is IReloadablePage p) p.Reload();" (après ApplySubmissionToLocalDbAsync,
+// après import INBOX, etc.), le test échouait silencieusement quand le Dashboard était la page
+// affichée : aucune exception, mais le Reload() n'était JAMAIS appelé. Résultat : la grille du
+// Dashboard restait sur l'ancien statut tant qu'on n'ouvrait pas le bon (lecture fraîche depuis
+// la DB) — exactement le symptôme "je suis obligé de l'ouvrir pour qu'il se mette à jour".
+public partial class DashboardPage : System.Windows.Controls.UserControl, IReloadablePage
 {
     private bool _isLoadingProjects;
     private string _logoPath = "";
@@ -37,6 +46,12 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
     private bool _identityDirty;
     private bool _suspendDirtyTracking;
     private long? _lastProjectId;
+
+    // Filtre dashboard
+    private System.Collections.Generic.List<WorkOrder> _allWorkOrders = new();
+    private System.ComponentModel.ICollectionView? _workOrdersView;
+    private string _filterStatus = "Tous";
+    private string _filterText = "";
 
     public DashboardPage()
     {
@@ -83,10 +98,9 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
     // =========================
     private void HookDirtyTracking()
     {
-        HookDirty(ArchitectNameTextBox);
-        HookDirty(ArchitectAddressTextBox);
-        HookDirty(ArchitectZipCityTextBox);
-        HookDirty(ArchitectWebsiteTextBox);
+        // ✅ Champs Identité architecte désormais en lecture seule sur le Dashboard
+        // (édition exclusivement via la fenêtre "Identité architecte") : plus de
+        // suivi dirty nécessaire ici.
 
         HookDirty(ProjectNameEditTextBox);
         HookDirty(ProjectAddressEditTextBox);
@@ -130,21 +144,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
         // ✅ Bannière visible
         if (DirtyBanner != null)
             DirtyBanner.Visibility = allowContinue ? Visibility.Collapsed : Visibility.Visible;
-
-        // ✅ OK mis en évidence quand dirty
-        try
-        {
-            if (SaveIdentityButton != null)
-            {
-                SaveIdentityButton.Style = allowContinue
-                    ? (Style)FindResource("SmallButtonStyle")
-                    : (Style)FindResource("OkHighlightButtonStyle");
-            }
-        }
-        catch
-        {
-            // non bloquant
-        }
 
         // ✅ Désactive TOUTES les actions tant que dirty (silencieux)
         if (NewWorkOrderTopButton != null) NewWorkOrderTopButton.IsEnabled = allowContinue;
@@ -446,6 +445,8 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
 
         if (ProjectComboBox?.SelectedItem is not Project selectedProject)
         {
+            _allWorkOrders = new System.Collections.Generic.List<WorkOrder>();
+            _workOrdersView = null;
             WorkOrdersGrid.ItemsSource = Array.Empty<WorkOrder>();
             RefreshBatchSelectionUi();
             UpdateSelectedWorkOrderPreview();
@@ -453,14 +454,74 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
             return;
         }
 
-        var workOrders = Db.GetWorkOrders(selectedProject.Id);
+        _allWorkOrders = Db.GetWorkOrders(selectedProject.Id);
 
-        foreach (var wo in workOrders)
+        foreach (var wo in _allWorkOrders)
             wo.IsBatchSelected = false;
 
-        WorkOrdersGrid.ItemsSource = workOrders;
+        _workOrdersView = System.Windows.Data.CollectionViewSource.GetDefaultView(_allWorkOrders);
+        _workOrdersView.Filter = WorkOrderFilter;
+        WorkOrdersGrid.ItemsSource = _workOrdersView;
 
         RefreshBatchSelectionUi();
+    }
+
+    // =========================
+    // Filtre dashboard
+    // =========================
+    private bool WorkOrderFilter(object obj)
+    {
+        if (obj is not WorkOrder wo) return false;
+
+        var matchStatus = _filterStatus switch
+        {
+            "En cours"      => !wo.IsValidated && string.IsNullOrEmpty(wo.ValidationDecision) && !wo.HasExpiredLink,
+            "Lien expiré"   => wo.HasExpiredLink,
+            "Validé"        => wo.ValidationDecision == "Validé",
+            "Refusé/Annulé" => wo.ValidationDecision == "Refusé" || wo.ValidationDecision == "Annulé",
+            _               => true
+        };
+        if (!matchStatus) return false;
+
+        if (!string.IsNullOrWhiteSpace(_filterText))
+        {
+            var q = _filterText.Trim().ToLowerInvariant();
+            return (wo.BdrDisplay?.ToLowerInvariant().Contains(q) == true)
+                || (wo.PerformedBy?.ToLowerInvariant().Contains(q) == true)
+                || (wo.RequestedBy?.ToLowerInvariant().Contains(q) == true)
+                || (wo.Place?.ToLowerInvariant().Contains(q) == true)
+                || (wo.Reserve?.ToLowerInvariant().Contains(q) == true)
+                || (wo.Description?.ToLowerInvariant().Contains(q) == true);
+        }
+
+        return true;
+    }
+
+    private void ApplyWorkOrderFilter() => _workOrdersView?.Refresh();
+
+    private void SetFilterChip(string status)
+    {
+        _filterStatus = status;
+        var active   = (System.Windows.Style)FindResource("FilterChipActiveStyle");
+        var inactive = (System.Windows.Style)FindResource("FilterChipStyle");
+        if (FilterAllButton        != null) FilterAllButton.Style        = status == "Tous"           ? active : inactive;
+        if (FilterInProgressButton != null) FilterInProgressButton.Style = status == "En cours"       ? active : inactive;
+        if (FilterExpiredButton    != null) FilterExpiredButton.Style    = status == "Lien expiré"    ? active : inactive;
+        if (FilterValidatedButton  != null) FilterValidatedButton.Style  = status == "Validé"         ? active : inactive;
+        if (FilterRefusedButton    != null) FilterRefusedButton.Style    = status == "Refusé/Annulé"  ? active : inactive;
+        ApplyWorkOrderFilter();
+    }
+
+    private void FilterAll_Click(object sender, RoutedEventArgs e)        => SetFilterChip("Tous");
+    private void FilterInProgress_Click(object sender, RoutedEventArgs e) => SetFilterChip("En cours");
+    private void FilterExpired_Click(object sender, RoutedEventArgs e)     => SetFilterChip("Lien expiré");
+    private void FilterValidated_Click(object sender, RoutedEventArgs e)   => SetFilterChip("Validé");
+    private void FilterRefused_Click(object sender, RoutedEventArgs e)     => SetFilterChip("Refusé/Annulé");
+
+    private void WorkOrderSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _filterText = WorkOrderSearchBox?.Text ?? "";
+        ApplyWorkOrderFilter();
     }
 
     private void RefreshArchived()
@@ -767,7 +828,21 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
             Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
         };
 
-        win.ShowDialog();
+        try
+        {
+            win.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("Exception opening WorkOrderWindow from Dashboard: " + ex);
+                var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
+                System.IO.File.WriteAllText(path, ex.ToString());
+                // Silent fallback: no MessageBox shown
+            }
+            catch { }
+        }
         RefreshAll();
     }
 
@@ -782,15 +857,22 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
             if (ArchitectNameTextBox != null)
                 ArchitectNameTextBox.Text = Db.GetArchitectName();
 
-            // ✅ champs séparés + website
+            // ✅ L'adresse architecte est saisie comme un seul champ (avec un
+            // retour à la ligne entre la rue et le NPA/Ville). On la découpe ici
+            // pour retrouver le même affichage à 2 lignes (Adresse / NPA-Ville)
+            // que le bloc "Projet" voisin.
+            var fullAddress = (Db.GetArchitectAddress() ?? "").Replace("\r\n", "\n");
+            var addressParts = fullAddress.Split('\n');
+            var addressLine = addressParts.Length > 0 ? addressParts[0].Trim() : "";
+            var addressZipCity = addressParts.Length > 1
+                ? string.Join(", ", addressParts.Skip(1).Select(p => p.Trim()).Where(p => p.Length > 0))
+                : "";
+
             if (ArchitectAddressTextBox != null)
-                ArchitectAddressTextBox.Text = Db.GetArchitectAddressLine();
+                ArchitectAddressTextBox.Text = addressLine;
 
             if (ArchitectZipCityTextBox != null)
-                ArchitectZipCityTextBox.Text = Db.GetArchitectZipCity();
-
-            if (ArchitectWebsiteTextBox != null)
-                ArchitectWebsiteTextBox.Text = Db.GetArchitectWebsite();
+                ArchitectZipCityTextBox.Text = addressZipCity;
 
             _logoPath = Db.GetArchitectLogoPath();
             LoadLogoPreview(_logoPath);
@@ -868,30 +950,44 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
         MarkIdentityDirty(true);
     }
 
-    private void SaveIdentity_Click(object sender, RoutedEventArgs e)
+    private async System.Threading.Tasks.Task SyncArchitectToServerAsync(string name, string address, string logoPath)
     {
-        _suspendDirtyTracking = true;
         try
         {
-            Db.SetArchitectName(ArchitectNameTextBox?.Text ?? "");
+            byte[]? logoBytes = null;
+            string? contentType = null;
 
-            // ✅ persiste champs séparés + website
-            Db.SetArchitectAddressLine(ArchitectAddressTextBox?.Text ?? "");
-            Db.SetArchitectZipCity(ArchitectZipCityTextBox?.Text ?? "");
-            Db.SetArchitectWebsite(ArchitectWebsiteTextBox?.Text ?? "");
+            if (!string.IsNullOrWhiteSpace(logoPath) && System.IO.File.Exists(logoPath))
+            {
+                logoBytes = System.IO.File.ReadAllBytes(logoPath);
+                var ext = System.IO.Path.GetExtension(logoPath).ToLowerInvariant();
+                contentType = ext is ".jpg" or ".jpeg" ? "image/jpeg" : "image/png";
+            }
 
-            // ✅ Compat : on maintient aussi l'ancien champ ArchitectAddress
-            var line = (ArchitectAddressTextBox?.Text ?? "").Trim();
-            var zipCity = (ArchitectZipCityTextBox?.Text ?? "").Trim();
-            Db.SetArchitectAddress(string.IsNullOrWhiteSpace(zipCity) ? line : $"{line}, {zipCity}");
+            var payload = new
+            {
+                name,
+                address,
+                logoBase64      = logoBytes != null ? Convert.ToBase64String(logoBytes) : (string?)null,
+                logoContentType = contentType
+            };
 
-            Db.SetArchitectLogoPath(_logoPath);
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            };
+            var json    = System.Text.Json.JsonSerializer.Serialize(payload, options);
 
-            MarkIdentityDirty(false);
+            using var client  = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            client.DefaultRequestHeaders.Add("User-Agent", "IziregiClient/1.0"); // ✅ voir MainWindow/WorkOrderWindow
+            using var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var url  = $"{MainWindow.ServerBaseUrl}/internal/architect-identity/upsert?apiKey={Uri.EscapeDataString(MainWindow.ServerApiKey)}";
+            var resp = await client.PostAsync(url, content);
+            resp.EnsureSuccessStatusCode();
         }
-        finally
+        catch (Exception ex)
         {
-            _suspendDirtyTracking = false;
+            System.Diagnostics.Debug.WriteLine("SyncArchitectToServerAsync failed: " + ex.Message);
         }
     }
 
@@ -991,7 +1087,27 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
 
         if (ProjectComboBox?.SelectedItem is Project project)
         {
-            Db.SetCurrentProjectId(project.Id);
+            // Informe MainWindow via son API afin qu'il mette à jour son état et l'affichage global
+            try
+            {
+                var mw = Window.GetWindow(this) as Iziregi.Test.MainWindow ?? System.Windows.Application.Current.MainWindow as Iziregi.Test.MainWindow;
+                if (mw != null)
+                {
+                    mw.SetSelectedProject(project);
+                    // si MainWindow expose un rafraîchisseur de sélecteur, on l'appelle pour synchroniser l'UI
+                    try { mw.RefreshProjectSelector(); } catch { /* non bloquant */ }
+                }
+                else
+                {
+                    Db.SetCurrentProjectId(project.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("ProjectComboBox_SelectionChanged exception: " + ex);
+                Db.SetCurrentProjectId(project.Id);
+            }
+
             _lastProjectId = project.Id;
 
             LoadSelectedProjectIntoFields();
@@ -1046,8 +1162,21 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
             {
                 Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
             };
-
+        try
+        {
             win.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("Exception opening ProjectsWindow from Dashboard: " + ex);
+                var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
+                System.IO.File.WriteAllText(path, ex.ToString());
+                System.Windows.MessageBox.Show($"Erreur à l'ouverture de la fenêtre Projets : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch { }
+        }
 
             LoadProjects();
             RefreshAll();
@@ -1201,7 +1330,21 @@ public partial class DashboardPage : System.Windows.Controls.UserControl
             win = new WorkOrderWindow(workOrder.Id, WorkOrderEditMode.Architecte);
 
         win.Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow;
-        win.ShowDialog();
+        try
+        {
+            win.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("Exception opening WorkOrderWindow from Dashboard (helper): " + ex);
+                var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
+                System.IO.File.WriteAllText(path, ex.ToString());
+                System.Windows.MessageBox.Show($"Erreur à l'ouverture du bon : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch { }
+        }
 
         ApplyDashboardLabels();
     }

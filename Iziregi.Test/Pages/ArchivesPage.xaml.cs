@@ -323,7 +323,21 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
             {
                 Owner = Window.GetWindow(this)
             };
-            win.ShowDialog();
+            try
+            {
+                win.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine("Exception opening WorkOrderWindow from ArchivesPage: " + ex);
+                    var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
+                    System.IO.File.WriteAllText(path, ex.ToString());
+                    // Silent fallback: no MessageBox shown
+                }
+                catch { }
+            }
             Reload();
         }
         catch

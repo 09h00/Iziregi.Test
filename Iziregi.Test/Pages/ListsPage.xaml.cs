@@ -639,8 +639,12 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                     case ActiveListKind.Requesters: Db.InsertRequester(targetProjectId, name); break;
                     case ActiveListKind.Companies:
                         Db.InsertCompany(targetProjectId, name);
-                        if (_listClipboard.CompanyColorMap.TryGetValue(name, out var hex) && !string.IsNullOrWhiteSpace(hex))
-                            Db.SetCompanyColorHex(targetProjectId, name, hex);
+                        // N'applique la couleur copiée QUE si la source du clipboard est le même projet
+                        if (_listClipboard.SourceProjectId == targetProjectId)
+                        {
+                            if (_listClipboard.CompanyColorMap.TryGetValue(name, out var hex) && !string.IsNullOrWhiteSpace(hex))
+                                Db.SetCompanyColorHex(targetProjectId, name, hex);
+                        }
                         break;
                     case ActiveListKind.Places: Db.InsertPlace(targetProjectId, name); break;
                     case ActiveListKind.Etages: Db.InsertEtage(targetProjectId, name); break;
@@ -793,7 +797,9 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
             Db.SetCompanyColorHex(projectId, companyName, hex);
 
+            // Forcer le reload de la page Planning pour prendre en compte la nouvelle couleur
             Reload();
+            try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
         }
         catch (Exception ex)
         {
@@ -812,7 +818,9 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 return;
 
             Db.DeleteCompanyColor(projectId, companyName);
+            // Forcer le reload de la page Planning pour prendre en compte la suppression
             Reload();
+            try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
         }
         catch (Exception ex)
         {

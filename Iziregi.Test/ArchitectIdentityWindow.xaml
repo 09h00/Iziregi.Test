@@ -107,15 +107,12 @@
 
                     <TextBlock Text="Adresse" Style="{StaticResource LabelStyle}"/>
                     <TextBox x:Name="ArchitectAddressTextBox"
-                             Height="120"
-                             Padding="8"
-                             BorderBrush="#D1D5DB"
-                             BorderThickness="1"
-                             Background="White"
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             VerticalScrollBarVisibility="Auto"
-                             VerticalContentAlignment="Top"
+                             Style="{StaticResource InputStyle}"
+                             Margin="0,0,0,12"/>
+
+                    <TextBlock Text="NPA/Ville" Style="{StaticResource LabelStyle}"/>
+                    <TextBox x:Name="ArchitectZipCityTextBox"
+                             Style="{StaticResource InputStyle}"
                              Margin="0,0,0,12"/>
 
                     <TextBlock x:Name="StatusTextBlock"

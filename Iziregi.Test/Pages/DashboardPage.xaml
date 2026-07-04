@@ -80,6 +80,17 @@
             <Setter Property="BorderBrush" Value="#FCA5A5"/>
         </Style>
 
+        <!-- ✅ Bouton "Banque de projets" : avant, il réutilisait ButtonWithChevronStyle
+             (un "▾" affiché à droite, comme pour un menu déroulant), ce qui n'a pas de sens
+             ici puisque le clic ouvre directement une fenêtre (ProjectsWindow), pas un menu.
+             Ce chevron prenait de la place et écrasait le texte "Banque de projets" contre
+             le bord du bouton. Nouveau style dédié : pas de chevron, icône + texte centrés,
+             texte qui peut passer sur 2 lignes proprement (TextWrapping) au lieu de déborder. -->
+        <Style x:Key="ProjectBankButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="6,4"/>
+        </Style>
+
         <Style x:Key="InputStyle" TargetType="TextBox">
             <Setter Property="Height" Value="26"/>
             <Setter Property="Padding" Value="6,2"/>
@@ -329,6 +340,37 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Chips de filtre statut -->
+        <Style x:Key="FilterChipStyle" TargetType="Button">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Background" Value="#F3F4F6"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="13"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FilterChipActiveStyle" TargetType="Button" BasedOn="{StaticResource FilterChipStyle}">
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+        </Style>
+
     </UserControl.Resources>
 
     <Grid Margin="10">
@@ -425,6 +467,7 @@
                         <TextBox x:Name="ArchitectNameTextBox"
                                  Grid.Row="0"
                                  Grid.Column="1"
+                                 IsReadOnly="True"
                                  Style="{StaticResource InputStyle}"/>
 
                         <TextBlock Grid.Row="1"
@@ -438,6 +481,7 @@
                         <TextBox x:Name="ArchitectAddressTextBox"
                                  Grid.Row="1"
                                  Grid.Column="1"
+                                 IsReadOnly="True"
                                  Style="{StaticResource InputStyle}"
                                  Margin="0,4,0,0"/>
 
@@ -449,50 +493,12 @@
                                    VerticalAlignment="Center"
                                    Margin="0,4,0,0"/>
 
-                        <Grid Grid.Row="2" Grid.Column="1" Margin="0,4,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="0.46*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="0.54*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBox x:Name="ArchitectZipCityTextBox"
-			                         Grid.Column="0"
-			                         Style="{StaticResource InputStyle}"/>
-
-                            <TextBox x:Name="ArchitectWebsiteTextBox"
-			                         Grid.Column="2"
-			                         Style="{StaticResource InputStyle}"
-			                         ToolTip="Website"/>
-                        </Grid>
-
-                        <StackPanel Grid.Row="0"
-                                    Grid.Column="3"
-                                    Orientation="Horizontal"
-                                    HorizontalAlignment="Left"
-                                    VerticalAlignment="Center"
-                                    Margin="0,0,2,0">
-                            <Button Content="Logo"
-                                    Width="60"
-                                    Style="{StaticResource SmallButtonStyle}"
-                                    Click="ImportLogo_Click"
-                                    Margin="0,0,8,0"/>
-                            <Button Content="X"
-                                    Width="30"
-                                    Style="{StaticResource SmallButtonStyle}"
-                                    Click="RemoveLogo_Click"/>
-                        </StackPanel>
-
-                        <Button x:Name="SaveIdentityButton"
-                                Grid.Row="1"
-                                Grid.Column="3"
-                                Content="OK"
-                                Width="98"
-                                HorizontalAlignment="Left"
-                                VerticalAlignment="Center"
-                                Style="{StaticResource SmallButtonStyle}"
-                                Click="SaveIdentity_Click"
-                                Margin="0,4,2,0"/>
+                        <TextBox x:Name="ArchitectZipCityTextBox"
+                                 Grid.Row="2"
+                                 Grid.Column="1"
+                                 IsReadOnly="True"
+                                 Style="{StaticResource InputStyle}"
+                                 Margin="0,4,0,0"/>
                     </Grid>
 
                     <!-- Projet (lecture seule sur Dashboard) -->
@@ -506,7 +512,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="55"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="130"/>
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0"
@@ -525,7 +531,7 @@
                              Focusable="False"
                              Background="#F9FAFB"/>
 
-                        <!-- ✅ Choix du projet autorisé -->
+                        <!-- ✅ Choix du projet autorisé (hidden, remplacé par bandeau coloré) -->
                         <ComboBox x:Name="ProjectComboBox"
                               Grid.Row="0"
                               Grid.Column="2"
@@ -535,7 +541,8 @@
                               DisplayMemberPath="Name"
                               SelectedValuePath="Id"
                               SelectionChanged="ProjectComboBox_SelectionChanged"
-                              Margin="6,0,0,0"/>
+                              Margin="6,0,0,0"
+                              Visibility="Collapsed"/>
 
                         <TextBlock Grid.Row="1" Grid.Column="0"
                                Text="Adresse"
@@ -573,17 +580,32 @@
                              Focusable="False"
                              Background="#F9FAFB"/>
 
-                        <!-- ✅ Accès Banque de projets -->
+                        <!-- ✅ Accès Banque de projets : icône + texte sur 2 lignes si besoin,
+                             plus de chevron trompeur, fond bleu cohérent avec PrimaryButtonStyle. -->
                         <Button x:Name="ManageProjectsButton"
                             Grid.Row="1"
                             Grid.Column="2"
                             Grid.RowSpan="2"
-                            Content="Gérer projets"
-                            Width="110"
-                            Style="{StaticResource SmallButtonStyle}"
+                            Width="122"
+                            Height="48"
+                            Style="{StaticResource ProjectBankButtonStyle}"
                             Click="ManageProjects_Click"
                             VerticalAlignment="Top"
-                            Margin="6,4,0,0"/>
+                            Margin="4,4,0,0"
+                            ToolTip="Ouvrir la banque de projets">
+                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                <TextBlock Text="🗂"
+                                           FontSize="16"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,2"/>
+                                <TextBlock Text="Banque de projets"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </Grid>
                 </Grid>
             </Grid>
@@ -599,6 +621,7 @@
 
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
@@ -646,30 +669,65 @@
                                 Padding="10,0"/>
                     </StackPanel>
 
-                    <Border x:Name="SelectedWorkOrderDescriptionPreviewBorder"
-							Grid.Column="1"
-                            HorizontalAlignment="Stretch"
-                            VerticalAlignment="Center"
-                            BorderBrush="#2563EB"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Background="#F9FAFB"
-                            Padding="10,6"
-                            Margin="12,0,0,0">
-                        <TextBlock x:Name="SelectedWorkOrderDescriptionPreviewTextBlock"
-                                   Text=""
-                                   Foreground="#374151"
-                                   FontSize="12"
-                                   TextAlignment="Left"
-                                   TextWrapping="Wrap"
-                                   MaxHeight="44"
-                                   TextTrimming="CharacterEllipsis"/>
-                    </Border>
+                    <StackPanel Grid.Column="1"
+                                Orientation="Vertical"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Margin="12,0,0,0">
+
+                        <TextBlock Text="Résumé demande"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="#6B7280"
+                                   Margin="0,0,0,2"/>
+
+                        <Border x:Name="SelectedWorkOrderDescriptionPreviewBorder"
+                                HorizontalAlignment="Stretch"
+                                BorderBrush="#2563EB"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Background="#F9FAFB"
+                                Padding="10,6">
+                            <TextBlock x:Name="SelectedWorkOrderDescriptionPreviewTextBlock"
+                                       Text=""
+                                       Foreground="#374151"
+                                       FontSize="12"
+                                       TextAlignment="Left"
+                                       TextWrapping="Wrap"
+                                       MaxHeight="44"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </Border>
+                    </StackPanel>
                 </Grid>
+
+                <!-- Barre de filtre : chips statut + recherche texte -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                    <Button x:Name="FilterAllButton"        Content="Tous"           Click="FilterAll_Click"        Style="{StaticResource FilterChipActiveStyle}" Margin="0,0,6,0"/>
+                    <Button x:Name="FilterInProgressButton" Content="En cours"       Click="FilterInProgress_Click" Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                    <Button x:Name="FilterExpiredButton"    Content="⚠ Lien expiré" Click="FilterExpired_Click"    Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                    <Button x:Name="FilterValidatedButton"  Content="Validé"         Click="FilterValidated_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                    <Button x:Name="FilterRefusedButton"    Content="Refusé / Annulé" Click="FilterRefused_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,16,0"/>
+
+                    <!-- Recherche texte libre -->
+                    <Border BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6"
+                            Padding="8,0" Background="White" VerticalAlignment="Center" Height="26">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="🔍" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="#9CA3AF"/>
+                            <TextBox x:Name="WorkOrderSearchBox"
+                                     Width="180"
+                                     BorderThickness="0"
+                                     VerticalAlignment="Center"
+                                     FontSize="12"
+                                     Foreground="#374151"
+                                     Background="Transparent"
+                                     TextChanged="WorkOrderSearchBox_TextChanged"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
                 <!-- ✅ Grille principale -->
                 <DataGrid x:Name="WorkOrdersGrid"
-                          Grid.Row="1"
+                          Grid.Row="2"
                           Style="{StaticResource GridStyle}"
                           ColumnWidth="SizeToCells"
                           MouseDoubleClick="WorkOrdersGrid_MouseDoubleClick"
@@ -838,6 +896,16 @@
                                                     <DataTrigger Binding="{Binding IsValidated}" Value="True">
                                                         <Setter Property="Background" Value="#C7F9C7"/>
                                                     </DataTrigger>
+                                                    <!-- Lien expire bientôt : jaune -->
+                                                    <DataTrigger Binding="{Binding IsCompanyLinkExpiringSoon}" Value="True">
+                                                        <Setter Property="Background" Value="#FEF9C3"/>
+                                                        <Setter Property="ToolTip" Value="Lien entreprise expire bientôt — Relancer si nécessaire"/>
+                                                    </DataTrigger>
+                                                    <!-- ⚠ Lien entreprise expiré : orange (prioritaire car placé après jaune) -->
+                                                    <DataTrigger Binding="{Binding IsCompanyLinkExpired}" Value="True">
+                                                        <Setter Property="Background" Value="#FED7AA"/>
+                                                        <Setter Property="ToolTip" Value="Lien entreprise expiré (> 15 jours) — Regénérer dans la fiche"/>
+                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
@@ -858,6 +926,16 @@
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsValidated}" Value="True">
                                                             <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <!-- J-X si expire bientôt -->
+                                                        <DataTrigger Binding="{Binding IsCompanyLinkExpiringSoon}" Value="True">
+                                                            <Setter Property="Text" Value="{Binding CompanyLinkDaysRemainingLabel}"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
+                                                        </DataTrigger>
+                                                        <!-- ⚠ texte + couleur si lien expiré -->
+                                                        <DataTrigger Binding="{Binding IsCompanyLinkExpired}" Value="True">
+                                                            <Setter Property="Text" Value="⚠ Lien expiré"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -951,6 +1029,16 @@
                                                     <DataTrigger Binding="{Binding IsValidated}" Value="True">
                                                         <Setter Property="Background" Value="#C7F9C7"/>
                                                     </DataTrigger>
+                                                    <!-- Lien expire bientôt : jaune -->
+                                                    <DataTrigger Binding="{Binding IsSignerLinkExpiringSoon}" Value="True">
+                                                        <Setter Property="Background" Value="#FEF9C3"/>
+                                                        <Setter Property="ToolTip" Value="Lien signataire expire bientôt — Relancer si nécessaire"/>
+                                                    </DataTrigger>
+                                                    <!-- ⚠ Lien signataire expiré : orange (prioritaire car placé après jaune) -->
+                                                    <DataTrigger Binding="{Binding IsSignerLinkExpired}" Value="True">
+                                                        <Setter Property="Background" Value="#FED7AA"/>
+                                                        <Setter Property="ToolTip" Value="Lien signataire expiré (> 7 jours) — Regénérer dans la fiche"/>
+                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
@@ -965,6 +1053,16 @@
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsValidated}" Value="True">
                                                             <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <!-- J-X si expire bientôt -->
+                                                        <DataTrigger Binding="{Binding IsSignerLinkExpiringSoon}" Value="True">
+                                                            <Setter Property="Text" Value="{Binding SignerLinkDaysRemainingLabel}"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
+                                                        </DataTrigger>
+                                                        <!-- ⚠ texte + couleur si lien expiré -->
+                                                        <DataTrigger Binding="{Binding IsSignerLinkExpired}" Value="True">
+                                                            <Setter Property="Text" Value="⚠ Lien expiré"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

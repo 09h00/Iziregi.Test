@@ -1,0 +1,1210 @@
+﻿<!-- File: DashboardPage.xaml -->
+<UserControl x:Class="Iziregi.Test.DashboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="820"
+             d:DesignWidth="1280"
+             Background="#F6F7FB">
+
+    <UserControl.Resources>
+
+        <Style x:Key="SmallButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <!-- ✅ OK en surbrillance quand dirty -->
+        <Style x:Key="OkHighlightButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+            <Setter Property="Background" Value="#F59E0B"/>
+            <Setter Property="BorderBrush" Value="#F59E0B"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- ✅ Primary : hover bleu foncé + texte blanc (contraste net) -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1E40AF"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#1E40AF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1D4ED8"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#1D4ED8"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#93C5FD"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#93C5FD"/>
+                                <Setter Property="Foreground" Value="#EFF6FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DangerSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+            <Setter Property="Foreground" Value="#B91C1C"/>
+            <Setter Property="BorderBrush" Value="#FCA5A5"/>
+        </Style>
+
+        <!-- ✅ Bouton "Banque de projets" : avant, il réutilisait ButtonWithChevronStyle
+             (un "▾" affiché à droite, comme pour un menu déroulant), ce qui n'a pas de sens
+             ici puisque le clic ouvre directement une fenêtre (ProjectsWindow), pas un menu.
+             Ce chevron prenait de la place et écrasait le texte "Banque de projets" contre
+             le bord du bouton. Nouveau style dédié : pas de chevron, icône + texte centrés,
+             texte qui peut passer sur 2 lignes proprement (TextWrapping) au lieu de déborder. -->
+        <Style x:Key="ProjectBankButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="6,4"/>
+        </Style>
+
+        <Style x:Key="InputStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- Texte centré -->
+        <Style x:Key="GridTextCellStyle" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="TextTrimming" Value="None"/>
+        </Style>
+
+        <!-- CheckBox centrée -->
+        <Style x:Key="GridCheckBoxCellStyle" TargetType="CheckBox">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <!-- DataGrid -->
+        <Style x:Key="GridStyle" TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserDeleteRows" Value="False"/>
+
+            <Setter Property="GridLinesVisibility" Value="All"/>
+            <Setter Property="VerticalGridLinesBrush" Value="#E5E7EB"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#E5E7EB"/>
+
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="RowHeight" Value="36"/>
+            <Setter Property="ColumnHeaderHeight" Value="44"/>
+
+            <!-- ✅ Bordure extérieure du tableau : NOIR -->
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#111827"/>
+
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="AlternatingRowBackground" Value="#F9FAFB"/>
+
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
+
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="IsReadOnly" Value="False"/>
+
+            <!-- ✅ Sélection : pas de remplissage, seulement bordure bleue épaisse -->
+            <Setter Property="RowStyle">
+                <Setter.Value>
+                    <Style TargetType="DataGridRow">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderBrush" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="SnapsToDevicePixels" Value="True"/>
+
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="BorderBrush" Value="#2563EB"/>
+                                <Setter Property="BorderThickness" Value="0,2,0,2"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                            </Trigger>
+
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter Property="BorderBrush" Value="#2563EB"/>
+                                <Setter Property="BorderThickness" Value="0,2,0,2"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+
+            <!-- ✅ IMPORTANT : pas de remplissage bleu dans les cellules -->
+            <Setter Property="CellStyle">
+                <Setter.Value>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="6,0"/>
+                        <Setter Property="BorderBrush" Value="#E5E7EB"/>
+                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="#111827"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter Property="Foreground" Value="#111827"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+
+            <!-- ✅ En-têtes : gras + noir + bordure NOIRE -->
+            <Setter Property="ColumnHeaderStyle">
+                <Setter.Value>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                        <Setter Property="Padding" Value="6,0"/>
+                        <Setter Property="BorderBrush" Value="#111827"/>
+                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                        <Setter Property="Foreground" Value="#111827"/>
+                        <Setter Property="FontWeight" Value="Bold"/>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Texte statut (base) -->
+        <Style x:Key="StatusCellTextBaseStyle" TargetType="TextBlock" BasedOn="{StaticResource GridTextCellStyle}">
+            <Setter Property="Foreground" Value="#9CA3AF"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="4,0"/>
+        </Style>
+
+        <!-- Zone Statut : pas de séparations verticales -->
+        <Style x:Key="StatusHeaderNoVerticalSeparators" TargetType="DataGridColumnHeader">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="BorderBrush" Value="#111827"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+
+        <!-- ✅ FIX : cellules statut ne deviennent pas bleues à la sélection -->
+        <Style x:Key="StatusCellNoVerticalSeparators" TargetType="DataGridCell">
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderBrush" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Dernière colonne Statut : séparation à droite (avant Distribué le) -->
+        <Style x:Key="StatusHeaderWithRightSeparator"
+               TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource StatusHeaderNoVerticalSeparators}">
+            <Setter Property="BorderBrush" Value="#111827"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
+
+        <!-- ✅ FIX : idem pour la dernière cellule statut -->
+        <Style x:Key="StatusCellWithRightSeparator"
+               TargetType="DataGridCell"
+               BasedOn="{StaticResource StatusCellNoVerticalSeparators}">
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Header "Statut" : gras + noir -->
+        <Style x:Key="StatusHeaderTopText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- DatePicker compact -->
+        <Style x:Key="GridDatePickerStyle" TargetType="DatePicker">
+            <Setter Property="SelectedDateFormat" Value="Short"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="117"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Fond vert si date renseignée -->
+        <Style x:Key="DateCellBorderStyle_Distributed" TargetType="Border">
+            <Setter Property="Background" Value="#C7F9C7"/>
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="Padding" Value="0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DistributedAt}" Value="{x:Null}">
+                    <Setter Property="Background" Value="Transparent"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DateCellBorderStyle_Performed" TargetType="Border">
+            <Setter Property="Background" Value="#C7F9C7"/>
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="Padding" Value="0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding PerformedAt}" Value="{x:Null}">
+                    <Setter Property="Background" Value="Transparent"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- DatePickerTextBox : supprime le watermark -->
+        <Style x:Key="NoWatermarkDatePickerTextBoxStyle" TargetType="{x:Type DatePickerTextBox}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type DatePickerTextBox}">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBox Background="Transparent"
+                                     BorderThickness="0"
+                                     IsReadOnly="True"
+                                     Foreground="#111827"
+                                     TextAlignment="Center"
+                                     VerticalContentAlignment="Center"
+                                     Text="{Binding Path=SelectedDate,
+                                                    RelativeSource={RelativeSource AncestorType={x:Type DatePicker}},
+                                                    StringFormat=dd.MM.yyyy,
+                                                    TargetNullValue=''}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Fond gris si texte vide -->
+        <Style x:Key="EmptyTextCellStyle" TargetType="TextBlock" BasedOn="{StaticResource GridTextCellStyle}">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Foreground" Value="#9CA3AF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Chips de filtre statut -->
+        <Style x:Key="FilterChipStyle" TargetType="Button">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Background" Value="#F3F4F6"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="13"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FilterChipActiveStyle" TargetType="Button" BasedOn="{StaticResource FilterChipStyle}">
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- BARRE COMPACTE -->
+        <Border Grid.Row="0"
+                Background="White"
+                BorderBrush="#E5E7EB"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="8"
+                Margin="0,0,0,8">
+
+            <!-- ✅ Bannière "dirty" en haut -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border x:Name="DirtyBanner"
+                        Grid.Row="0"
+                        Background="#FEF3C7"
+                        BorderBrush="#F59E0B"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10,6"
+                        Margin="0,0,0,8"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="DirtyBannerText"
+                               Text="Modifications non enregistrées — clique sur OK."
+                               Foreground="#92400E"
+                               FontWeight="SemiBold"
+                               FontSize="12"/>
+                </Border>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="1.1*"/>
+                        <ColumnDefinition Width="20"/>
+                        <ColumnDefinition Width="0.9*"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Logo compact -->
+                    <Border Grid.Column="0"
+                            Width="42"
+                            Height="42"
+                            BorderBrush="#D1D5DB"
+                            BorderThickness="1"
+                            CornerRadius="7"
+                            Background="#F9FAFB"
+                            VerticalAlignment="Center">
+                        <Grid>
+                            <Image x:Name="LogoImage" Stretch="Uniform" Margin="3"/>
+                            <TextBlock x:Name="LogoEmptyText"
+                                       Text="Logo"
+                                       FontSize="9"
+                                       Foreground="#9CA3AF"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Architecte compact (3 lignes) -->
+                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="55"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="150"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   Text="Bureau"
+                                   FontSize="11"
+                                   Foreground="#6B7280"
+                                   VerticalAlignment="Center"/>
+
+                        <TextBox x:Name="ArchitectNameTextBox"
+                                 Grid.Row="0"
+                                 Grid.Column="1"
+                                 IsReadOnly="True"
+                                 Style="{StaticResource InputStyle}"/>
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   Text="Adresse"
+                                   FontSize="11"
+                                   Foreground="#6B7280"
+                                   VerticalAlignment="Center"
+                                   Margin="0,4,0,0"/>
+
+                        <TextBox x:Name="ArchitectAddressTextBox"
+                                 Grid.Row="1"
+                                 Grid.Column="1"
+                                 IsReadOnly="True"
+                                 Style="{StaticResource InputStyle}"
+                                 Margin="0,4,0,0"/>
+
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="0"
+                                   Text="NPA/Ville"
+                                   FontSize="11"
+                                   Foreground="#6B7280"
+                                   VerticalAlignment="Center"
+                                   Margin="0,4,0,0"/>
+
+                        <TextBox x:Name="ArchitectZipCityTextBox"
+                                 Grid.Row="2"
+                                 Grid.Column="1"
+                                 IsReadOnly="True"
+                                 Style="{StaticResource InputStyle}"
+                                 Margin="0,4,0,0"/>
+                    </Grid>
+
+                    <!-- Projet (lecture seule sur Dashboard) -->
+                    <Grid Grid.Column="4" VerticalAlignment="Center">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="55"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="130"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="Nom"
+                                   FontSize="11"
+                                   Foreground="#6B7280"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- ✅ Lecture seule -->
+                        <TextBox x:Name="ProjectNameEditTextBox"
+                             Grid.Row="0"
+                             Grid.Column="1"
+                             Style="{StaticResource InputStyle}"
+                             IsReadOnly="True"
+                             IsTabStop="False"
+                             Focusable="False"
+                             Background="#F9FAFB"/>
+
+                        <!-- ✅ Choix du projet autorisé (hidden, remplacé par bandeau coloré) -->
+                        <ComboBox x:Name="ProjectComboBox"
+                              Grid.Row="0"
+                              Grid.Column="2"
+                              Height="26"
+                              Width="110"
+                              FontSize="12"
+                              DisplayMemberPath="Name"
+                              SelectedValuePath="Id"
+                              SelectionChanged="ProjectComboBox_SelectionChanged"
+                              Margin="6,0,0,0"
+                              Visibility="Collapsed"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0"
+                               Text="Adresse"
+                               FontSize="11"
+                               Foreground="#6B7280"
+                               VerticalAlignment="Center"
+                               Margin="0,4,0,0"/>
+
+                        <!-- ✅ Lecture seule -->
+                        <TextBox x:Name="ProjectAddressEditTextBox"
+                             Grid.Row="1"
+                             Grid.Column="1"
+                             Style="{StaticResource InputStyle}"
+                             Margin="0,4,0,0"
+                             IsReadOnly="True"
+                             IsTabStop="False"
+                             Focusable="False"
+                             Background="#F9FAFB"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0"
+                               Text="NPA/Ville"
+                               FontSize="11"
+                               Foreground="#6B7280"
+                               VerticalAlignment="Center"
+                               Margin="0,4,0,0"/>
+
+                        <!-- ✅ Lecture seule -->
+                        <TextBox x:Name="ProjectZipCityEditTextBox"
+                             Grid.Row="2"
+                             Grid.Column="1"
+                             Style="{StaticResource InputStyle}"
+                             Margin="0,4,0,0"
+                             IsReadOnly="True"
+                             IsTabStop="False"
+                             Focusable="False"
+                             Background="#F9FAFB"/>
+
+                        <!-- ✅ Accès Banque de projets : icône + texte sur 2 lignes si besoin,
+                             plus de chevron trompeur, fond bleu cohérent avec PrimaryButtonStyle. -->
+                        <Button x:Name="ManageProjectsButton"
+                            Grid.Row="1"
+                            Grid.Column="2"
+                            Grid.RowSpan="2"
+                            Width="122"
+                            Height="48"
+                            Style="{StaticResource ProjectBankButtonStyle}"
+                            Click="ManageProjects_Click"
+                            VerticalAlignment="Top"
+                            Margin="4,4,0,0"
+                            ToolTip="Ouvrir la banque de projets">
+                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                <TextBlock Text="🗂"
+                                           FontSize="16"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,2"/>
+                                <TextBlock Text="Banque de projets"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- TABLEAU DE BORD -->
+        <Border Grid.Row="1"
+                Background="White"
+                BorderBrush="#E5E7EB"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="10">
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Titre gauche + aperçu descriptif (60% / 40%) => aperçu réduit de 20% -->
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.3*"/>
+                        <ColumnDefinition Width="0.7*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="Mes bons actifs"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="#111827"
+                                   Margin="0,0,10,0"/>
+
+                        <Button x:Name="ArchiveSelectionButton"
+                                Content="Archiver sélection"
+                                Style="{StaticResource SmallButtonStyle}"
+                                Click="ArchiveSelection_Click"
+                                IsEnabled="False"
+                                Margin="0,0,6,0"/>
+
+                        <Button x:Name="TrashSelectionButton"
+                                Content="Corbeille sélection"
+                                Style="{StaticResource DangerSmallButtonStyle}"
+                                Click="TrashSelection_Click"
+                                IsEnabled="False"
+                                Margin="0,0,6,0"/>
+
+                        <Button x:Name="RefreshTopButton"
+                                Content="Rafraîchir"
+                                Style="{StaticResource SmallButtonStyle}"
+                                Click="Refresh_Click"
+                                Margin="0,0,6,0"/>
+
+                        <Button x:Name="NewWorkOrderTopButton"
+                                Content="+ Nouveau bon"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Click="NewWorkOrder_Click"
+                                VerticalContentAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                Padding="10,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Vertical"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center"
+                                Margin="12,0,0,0">
+
+                        <TextBlock Text="Résumé demande"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="#6B7280"
+                                   Margin="0,0,0,2"/>
+
+                        <Border x:Name="SelectedWorkOrderDescriptionPreviewBorder"
+                                HorizontalAlignment="Stretch"
+                                BorderBrush="#2563EB"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Background="#F9FAFB"
+                                Padding="10,6">
+                            <TextBlock x:Name="SelectedWorkOrderDescriptionPreviewTextBlock"
+                                       Text=""
+                                       Foreground="#374151"
+                                       FontSize="12"
+                                       TextAlignment="Left"
+                                       TextWrapping="Wrap"
+                                       MaxHeight="44"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Barre de filtre : chips statut + recherche texte -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                    <Button x:Name="FilterAllButton"        Content="Tous"           Click="FilterAll_Click"        Style="{StaticResource FilterChipActiveStyle}" Margin="0,0,6,0"/>
+                    <Button x:Name="FilterInProgressButton" Content="En cours"       Click="FilterInProgress_Click" Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                    <Button x:Name="FilterExpiredButton"    Content="⚠ Lien expiré" Click="FilterExpired_Click"    Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                    <Button x:Name="FilterValidatedButton"  Content="Validé"         Click="FilterValidated_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                    <Button x:Name="FilterRefusedButton"    Content="Refusé / Annulé" Click="FilterRefused_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,16,0"/>
+
+                    <!-- Recherche texte libre -->
+                    <Border BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6"
+                            Padding="8,0" Background="White" VerticalAlignment="Center" Height="26">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="🔍" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="#9CA3AF"/>
+                            <TextBox x:Name="WorkOrderSearchBox"
+                                     Width="180"
+                                     BorderThickness="0"
+                                     VerticalAlignment="Center"
+                                     FontSize="12"
+                                     Foreground="#374151"
+                                     Background="Transparent"
+                                     TextChanged="WorkOrderSearchBox_TextChanged"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ✅ Grille principale -->
+                <DataGrid x:Name="WorkOrdersGrid"
+                          Grid.Row="2"
+                          Style="{StaticResource GridStyle}"
+                          ColumnWidth="SizeToCells"
+                          MouseDoubleClick="WorkOrdersGrid_MouseDoubleClick"
+                          SelectionChanged="WorkOrdersGrid_SelectionChanged">
+
+                    <DataGrid.Columns>
+
+                        <!-- Sélection -->
+                        <DataGridTemplateColumn Width="28" IsReadOnly="True">
+                            <DataGridTemplateColumn.HeaderTemplate>
+                                <DataTemplate>
+                                    <CheckBox x:Name="SelectAllWorkOrdersCheckBox"
+                                              Style="{StaticResource GridCheckBoxCellStyle}"
+                                              Click="SelectAllWorkOrdersCheckBox_Click"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.HeaderTemplate>
+
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox Style="{StaticResource GridCheckBoxCellStyle}"
+                                              IsChecked="{Binding IsBatchSelected}"
+                                              Click="BatchSelectCheckBox_Click"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- N° -->
+                        <DataGridTextColumn Header="N°"
+                                            Binding="{Binding BdrDisplay}"
+                                            Width="70"
+                                            ElementStyle="{StaticResource GridTextCellStyle}"
+                                            IsReadOnly="True"/>
+
+                        <!-- Concerne -->
+                        <DataGridTextColumn Width="SizeToCells"
+                                            MinWidth="110"
+                                            Binding="{Binding Reserve}"
+                                            ElementStyle="{StaticResource EmptyTextCellStyle}"
+                                            IsReadOnly="True">
+                            <DataGridTextColumn.Header>
+                                <TextBlock x:Name="ReserveHeaderTextBlock" Text="Concerne"/>
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+
+                        <!-- Demandé par -->
+                        <DataGridTextColumn Width="SizeToCells"
+                                            MinWidth="90"
+                                            Binding="{Binding RequestedBy}"
+                                            ElementStyle="{StaticResource GridTextCellStyle}"
+                                            IsReadOnly="True">
+                            <DataGridTextColumn.Header>
+                                <TextBlock x:Name="RequestedByHeaderTextBlock" Text="Demandé par"/>
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+
+                        <!-- Entreprise -->
+                        <DataGridTextColumn Width="SizeToCells"
+                                            MinWidth="98"
+                                            Binding="{Binding PerformedBy}"
+                                            ElementStyle="{StaticResource GridTextCellStyle}"
+                                            IsReadOnly="True">
+                            <DataGridTextColumn.Header>
+                                <TextBlock x:Name="PerformedByHeaderTextBlock" Text="Entreprise"/>
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+
+                        <!-- Date -->
+                        <DataGridTextColumn Header="Créé le"
+                                            Binding="{Binding RequestDate, StringFormat=dd.MM.yyyy}"
+                                            Width="SizeToCells"
+                                            MinWidth="65"
+                                            ElementStyle="{StaticResource GridTextCellStyle}"
+                                            IsReadOnly="True"/>
+
+                        <!-- ========================= -->
+                        <!-- STATUT (5 colonnes) -->
+                        <!-- ========================= -->
+
+                        <!-- 1) Créé -->
+                        <DataGridTemplateColumn Width="SizeToCells"
+                                                HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+                                                CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+                                                IsReadOnly="True">
+                            <DataGridTemplateColumn.Header>
+                                <Grid/>
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="2">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsInCreation}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsSentToCompany}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsQuoteReceived}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+                                                    <Setter Property="Text" Value="Créé"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsInCreation}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsSentToCompany}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsQuoteReceived}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 2) Demande devis envoyée -->
+                        <DataGridTemplateColumn Width="SizeToCells"
+                                                HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+                                                CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+                                                IsReadOnly="True">
+                            <DataGridTemplateColumn.Header>
+                                <Grid/>
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="2">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSentToCompany}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsQuoteReceived}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <!-- Lien expire bientôt : jaune -->
+                                                    <DataTrigger Binding="{Binding IsCompanyLinkExpiringSoon}" Value="True">
+                                                        <Setter Property="Background" Value="#FEF9C3"/>
+                                                        <Setter Property="ToolTip" Value="Lien entreprise expire bientôt — Relancer si nécessaire"/>
+                                                    </DataTrigger>
+                                                    <!-- ⚠ Lien entreprise expiré : orange (prioritaire car placé après jaune) -->
+                                                    <DataTrigger Binding="{Binding IsCompanyLinkExpired}" Value="True">
+                                                        <Setter Property="Background" Value="#FED7AA"/>
+                                                        <Setter Property="ToolTip" Value="Lien entreprise expiré (> 15 jours) — Regénérer dans la fiche"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+                                                    <Setter Property="Text" Value="Demande devis envoyée"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSentToCompany}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsQuoteReceived}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <!-- J-X si expire bientôt -->
+                                                        <DataTrigger Binding="{Binding IsCompanyLinkExpiringSoon}" Value="True">
+                                                            <Setter Property="Text" Value="{Binding CompanyLinkDaysRemainingLabel}"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
+                                                        </DataTrigger>
+                                                        <!-- ⚠ texte + couleur si lien expiré -->
+                                                        <DataTrigger Binding="{Binding IsCompanyLinkExpired}" Value="True">
+                                                            <Setter Property="Text" Value="⚠ Lien expiré"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 3) Devis reçu -->
+                        <DataGridTemplateColumn Width="SizeToCells"
+                                                HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+                                                CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+                                                IsReadOnly="True">
+                            <DataGridTemplateColumn.Header>
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Text="Statut"
+                                               Grid.Row="0"
+                                               Grid.RowSpan="2"
+                                               Style="{StaticResource StatusHeaderTopText}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="2">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsQuoteReceived}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+                                                    <Setter Property="Text" Value="Devis reçu"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsQuoteReceived}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 4) Demande validation envoyée -->
+                        <DataGridTemplateColumn Width="SizeToCells"
+                                                HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
+                                                CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
+                                                IsReadOnly="True">
+                            <DataGridTemplateColumn.Header>
+                                <Grid/>
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="2">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <!-- Lien expire bientôt : jaune -->
+                                                    <DataTrigger Binding="{Binding IsSignerLinkExpiringSoon}" Value="True">
+                                                        <Setter Property="Background" Value="#FEF9C3"/>
+                                                        <Setter Property="ToolTip" Value="Lien signataire expire bientôt — Relancer si nécessaire"/>
+                                                    </DataTrigger>
+                                                    <!-- ⚠ Lien signataire expiré : orange (prioritaire car placé après jaune) -->
+                                                    <DataTrigger Binding="{Binding IsSignerLinkExpired}" Value="True">
+                                                        <Setter Property="Background" Value="#FED7AA"/>
+                                                        <Setter Property="ToolTip" Value="Lien signataire expiré (> 7 jours) — Regénérer dans la fiche"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+                                                    <Setter Property="Text" Value="Demande validation envoyée"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSentToSigner}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsValidated}" Value="True">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <!-- J-X si expire bientôt -->
+                                                        <DataTrigger Binding="{Binding IsSignerLinkExpiringSoon}" Value="True">
+                                                            <Setter Property="Text" Value="{Binding SignerLinkDaysRemainingLabel}"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
+                                                        </DataTrigger>
+                                                        <!-- ⚠ texte + couleur si lien expiré -->
+                                                        <DataTrigger Binding="{Binding IsSignerLinkExpired}" Value="True">
+                                                            <Setter Property="Text" Value="⚠ Lien expiré"/>
+                                                            <Setter Property="Foreground" Value="#92400E"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 5) Validé -->
+                        <DataGridTemplateColumn Width="SizeToCells"
+                                                HeaderStyle="{StaticResource StatusHeaderWithRightSeparator}"
+                                                CellStyle="{StaticResource StatusCellWithRightSeparator}"
+                                                IsReadOnly="True">
+                            <DataGridTemplateColumn.Header>
+                                <Grid/>
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="2">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ValidationDecision}" Value="Validé">
+                                                        <Setter Property="Background" Value="#C7F9C7"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ValidationDecision}" Value="Annulé">
+                                                        <Setter Property="Background" Value="#FFEDD5"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ValidationDecision}" Value="Refusé">
+                                                        <Setter Property="Background" Value="#FEE2E2"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource StatusCellTextBaseStyle}">
+                                                    <Setter Property="Text" Value="{Binding ValidationDecision}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ValidationDecision}" Value="Validé">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding ValidationDecision}" Value="Annulé">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding ValidationDecision}" Value="Refusé">
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Distribué le -->
+                        <DataGridTemplateColumn Header="Distribué le" Width="90" IsReadOnly="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource DateCellBorderStyle_Distributed}">
+                                        <DatePicker Style="{StaticResource GridDatePickerStyle}"
+                                                    SelectedDate="{Binding DistributedAt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    SelectedDateChanged="DistributedDate_SelectedDateChanged">
+                                            <DatePicker.Resources>
+                                                <Style TargetType="{x:Type DatePickerTextBox}"
+                                                       BasedOn="{StaticResource NoWatermarkDatePickerTextBoxStyle}"/>
+                                            </DatePicker.Resources>
+                                        </DatePicker>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Effectué le -->
+                        <DataGridTemplateColumn Header="Effectué le" Width="90" IsReadOnly="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource DateCellBorderStyle_Performed}">
+                                        <DatePicker Style="{StaticResource GridDatePickerStyle}"
+                                                    SelectedDate="{Binding PerformedAt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    SelectedDateChanged="PerformedDate_SelectedDateChanged">
+                                            <DatePicker.Resources>
+                                                <Style TargetType="{x:Type DatePickerTextBox}"
+                                                       BasedOn="{StaticResource NoWatermarkDatePickerTextBoxStyle}"/>
+                                            </DatePicker.Resources>
+                                        </DatePicker>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Actions -->
+                        <DataGridTemplateColumn Header="Actions" Width="112" IsReadOnly="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="✎"
+                                                ToolTip="Modifier"
+                                                Style="{StaticResource SmallButtonStyle}"
+                                                Click="EditWorkOrder_Click"
+                                                Margin="0,0,4,0"/>
+                                        <Button Content="📦"
+                                                ToolTip="Archiver"
+                                                Style="{StaticResource SmallButtonStyle}"
+                                                Click="ArchiveWorkOrder_Click"
+                                                Margin="0,0,4,0"/>
+                                        <Button Content="🗑"
+                                                ToolTip="Corbeille"
+                                                Style="{StaticResource DangerSmallButtonStyle}"
+                                                Click="TrashWorkOrder_Click"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- ✅ Archives (même zone que WorkOrdersGrid) -->
+                <DataGrid x:Name="ArchivedGrid"
+                          Grid.Row="1"
+                          Visibility="Collapsed"
+                          Style="{StaticResource GridStyle}"
+                          ColumnWidth="SizeToCells"
+                          MouseDoubleClick="ArchivedGrid_MouseDoubleClick"/>
+
+                <!-- ✅ Corbeille (même zone que WorkOrdersGrid) -->
+                <DataGrid x:Name="TrashedGrid"
+                          Grid.Row="1"
+                          Visibility="Collapsed"
+                          Style="{StaticResource GridStyle}"
+                          ColumnWidth="SizeToCells"
+                          MouseDoubleClick="TrashedGrid_MouseDoubleClick"/>
+
+            </Grid>
+        </Border>
+
+    </Grid>
+</UserControl>

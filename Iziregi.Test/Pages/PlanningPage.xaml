@@ -314,6 +314,12 @@
             <Setter Property="Padding" Value="6"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="MinHeight" Value="72"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="CompanyColorSwatchButtonStyle" TargetType="Button">
@@ -350,7 +356,7 @@
 
     </UserControl.Resources>
 
-    <Grid Background="White">
+    <Grid Background="White" ClipToBounds="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -371,17 +377,53 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="10"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <!-- ✅ Titre "Planning" supprimé -->
 
-            <TextBlock Grid.Column="2"
-			           x:Name="WeekTextBlock"
-			           Text="Semaine …"
-			           Foreground="#111827"
-			           FontWeight="SemiBold"
-			           VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="DuplicatePrevButton"
+                        Content="⊕◀"
+                        Tag="prev"
+                        Click="DuplicateCurrentWeekTo_Click"
+                        Width="34" Height="24"
+                        Margin="0,0,4,0"
+                        Padding="0"
+                        FontSize="11"
+                        ToolTip="Copier cette semaine vers la semaine précédente"
+                        Style="{StaticResource SmallBlueButtonStyle}"/>
+                <Button x:Name="PrevWeekButton"
+                        Content="◀"
+                        Click="PrevWeekButton_Click"
+                        Width="24" Height="24"
+                        Margin="0,0,6,0"
+                        Padding="0"
+                        Style="{StaticResource SmallBlackButtonStyle}"/>
+                <TextBlock x:Name="WeekTextBlock"
+                           Text="Semaine …"
+                           Foreground="#111827"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="0,0,6,0"/>
+                <Button x:Name="NextWeekButton"
+                        Content="▶"
+                        Click="NextWeekButton_Click"
+                        Width="24" Height="24"
+                        Margin="0,0,4,0"
+                        Padding="0"
+                        Style="{StaticResource SmallBlackButtonStyle}"/>
+                <Button x:Name="DuplicateNextButton"
+                        Content="▶⊕"
+                        Tag="next"
+                        Click="DuplicateCurrentWeekTo_Click"
+                        Width="34" Height="24"
+                        Padding="0"
+                        FontSize="11"
+                        ToolTip="Copier cette semaine vers la semaine suivante"
+                        Style="{StaticResource SmallBlueButtonStyle}"/>
+            </StackPanel>
 
             <TextBlock Grid.Column="4"
 			           Text="Début semaine :"
@@ -417,6 +459,14 @@
 			            Grid.Column="13"
 			            Style="{StaticResource PlanningDatePickerStyle}"
 			            SelectedDateChanged="EndDatePicker_SelectedDateChanged"/>
+
+            <Button x:Name="ExportPdfButton"
+                    Grid.Column="14"
+                    Content="Exporter PDF"
+                    Style="{StaticResource SmallBlueButtonStyle}"
+                    HorizontalAlignment="Right"
+                    Margin="12,0,0,0"
+                    Click="ExportPdfButton_Click"/>
         </Grid>
 
         <ScrollViewer x:Name="MainScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -477,7 +527,7 @@
 						          BorderThickness="1"
 						          IsReadOnly="False">
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn x:Name="TaskRefColumn" Header="N° Réf." Width="60" IsReadOnly="True">
+                                <DataGridTemplateColumn x:Name="TaskRefColumn" Header="N° Réf." Width="60">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="0" Padding="0">
@@ -516,9 +566,21 @@
                                             </Border>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding Ref, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     HorizontalAlignment="Stretch"
+                                                     VerticalAlignment="Center"
+                                                     HorizontalContentAlignment="Center"
+                                                     BorderThickness="0"
+                                                     Background="Transparent"
+                                                     FontWeight="SemiBold"
+                                                     Padding="2,0"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskCompanyColumn" Header="Entreprise" Width="130">
+                                <DataGridTemplateColumn x:Name="TaskCompanyColumn" Header="Entreprise" MinWidth="130" Width="Auto">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="4" Padding="0">
@@ -559,7 +621,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" Header="Bâtiment" Width="90">
+                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" Header="Bâtiment" MinWidth="90" Width="Auto">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox Style="{StaticResource GridComboStyle}"
@@ -569,7 +631,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskFloorColumn" Header="Étage" Width="80">
+                                <DataGridTemplateColumn x:Name="TaskFloorColumn" Header="Étage" MinWidth="80" Width="Auto">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox Style="{StaticResource GridComboStyle}"
@@ -581,7 +643,7 @@
 
                                 <DataGridTextColumn x:Name="TaskTodoColumn" Header="Descriptif" Width="*" Binding="{Binding Todo}"/>
 
-                                <DataGridTemplateColumn x:Name="TaskCategoryColumn" Header="Cat." Width="90">
+                                <DataGridTemplateColumn x:Name="TaskCategoryColumn" Header="Cat." MinWidth="90" Width="Auto">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox Style="{StaticResource GridComboStyle}"
@@ -680,7 +742,7 @@
 						          IsReadOnly="False">
                             <DataGrid.Columns>
 
-                                <DataGridTemplateColumn x:Name="PlanningCompanyColumn" Header="Entreprise" Width="150">
+                                <DataGridTemplateColumn x:Name="PlanningCompanyColumn" Header="Entreprise" MinWidth="150" Width="Auto">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="4" Padding="0">
@@ -1226,13 +1288,6 @@
 							           Foreground="#111827"
 							           DockPanel.Dock="Left"
 							           VerticalAlignment="Center"/>
-
-                            <Button x:Name="ExportPdfButton"
-							        Content="Exporter PDF"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="0,0,8,0"
-							        Click="ExportPdfButton_Click"/>
 
                             <Button Content="Retirer zone de texte"
 							        Style="{StaticResource SmallBlackButtonStyle}"

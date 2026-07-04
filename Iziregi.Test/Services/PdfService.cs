@@ -408,6 +408,16 @@ public static class PdfService
 
         var separatorBlack = Colors.Grey.Darken4;
 
+        // ---- Couleurs des cartes (alignées avec le look couleur du serveur)
+        var demandeBg = "#FFF7ED";
+        var demandeBorder = "#FDBA74";
+
+        var devisBg = "#EAF2FF";
+        var devisBorder = "#1D4ED8";
+
+        var validationBg = "#E9FBEA";
+        var validationBorder = "#15803D";
+
         // ---- Devis: calculs (rabais après HT brut, avant TVA/TTC)
         lines = lines.Where(l => l != null).ToList();
 
@@ -589,12 +599,17 @@ public static class PdfService
                 // =========================
                 page.Content().PaddingTop(10).Column(col =>
                 {
-                    col.Spacing(10);
+                    col.Spacing(12);
 
                     // -------------------------
                     // DEMANDE
                     // -------------------------
-                    col.Item().ShowEntire().Column(section =>
+                    col.Item().ShowEntire()
+                        .CornerRadius(6)
+                        .Background(demandeBg)
+                        .Border(1).BorderColor(demandeBorder)
+                        .Padding(10)
+                        .Column(section =>
                     {
                         section.Item().Text("Demande")
                             .SemiBold()
@@ -664,7 +679,12 @@ public static class PdfService
                     // -------------------------
                     // DEVIS (Nom centré)
                     // -------------------------
-                    col.Item().ShowEntire().Column(section =>
+                    col.Item().ShowEntire()
+                        .CornerRadius(6)
+                        .Background(devisBg)
+                        .Border(1).BorderColor(devisBorder)
+                        .Padding(10)
+                        .Column(section =>
                     {
                         var d = wo.QuoteDate == default ? "" : FormatDateShort(wo.QuoteDate);
                         var quoteName = string.IsNullOrWhiteSpace(wo.QuoteName) ? "—" : wo.QuoteName;
@@ -791,7 +811,7 @@ public static class PdfService
 
                                 AddTotalsRow4Cols(t, "Total HT", "", "", htNet.ToString("0.00", culture), isStrong: true);
                                 AddTotalsRow4Cols(t, $"TVA ({tvaRate:0.00}%)", "", "", tvaAmount.ToString("0.00", culture), isStrong: false);
-                                AddTotalsRow4Cols(t, "Total TTC", "", "", ttcTotal.ToString("0.00", culture), isStrong: true);
+                                AddTotalsRow4Cols(t, "Total TTC", "", "", ttcTotal.ToString("0.00", culture), isStrong: true, isGrandTotal: true);
                             });
                         });
 
@@ -801,7 +821,12 @@ public static class PdfService
                     // -------------------------
                     // VALIDATION (✅ box signature remontée ; libellé "Signature" aligné sur Nom/Date ; bas box aligné bas Date)
                     // -------------------------
-                    col.Item().ShowEntire().Column(section =>
+                    col.Item().ShowEntire()
+                        .CornerRadius(6)
+                        .Background(validationBg)
+                        .Border(1).BorderColor(validationBorder)
+                        .Padding(10)
+                        .Column(section =>
                     {
                         // Constantes d'alignement (cohérentes avec la mise en page des tables à gauche)
                         const float titleHeight = 18f;         // hauteur visuelle du titre "Validation"
@@ -866,7 +891,9 @@ public static class PdfService
                                         .Height(signatureBoxHeight);
 
                                     if (hasSignature)
-                                        box.Image(signatureBytes!).FitArea();
+                                        // ✅ Centre l'image de signature dans la box (horizontal + vertical)
+                                        // au lieu de la laisser collée en haut/bas selon son ratio.
+                                        box.AlignCenter().AlignMiddle().Image(signatureBytes!).FitArea();
                                     else
                                         box.AlignCenter().Text("—").FontColor(textMuted);
                                 });
@@ -884,18 +911,27 @@ public static class PdfService
     private static IContainer CellHeader(IContainer c)
     {
         return c
-            .Background(Colors.Grey.Lighten4)
-            .Border(1).BorderColor(Colors.Grey.Lighten2)
-            .PaddingVertical(3).PaddingHorizontal(6)
-            .DefaultTextStyle(x => x.SemiBold().FontSize(9));
+            .Background("#DBEAFE")
+            .Border(1).BorderColor("#1D4ED8")
+            .PaddingVertical(5).PaddingHorizontal(7)
+            .DefaultTextStyle(x => x.SemiBold().FontSize(9).FontColor("#1E3A8A"));
     }
 
     private static IContainer CellBody(IContainer c)
     {
         return c
             .Border(1).BorderColor(Colors.Grey.Lighten3)
-            .PaddingVertical(3).PaddingHorizontal(6)
+            .PaddingVertical(5).PaddingHorizontal(7)
             .DefaultTextStyle(x => x.FontSize(9));
+    }
+
+    private static IContainer CellBodyTotal(IContainer c)
+    {
+        return c
+            .Background("#DBEAFE")
+            .Border(1).BorderColor("#1D4ED8")
+            .PaddingVertical(6).PaddingHorizontal(7)
+            .DefaultTextStyle(x => x.FontSize(9).FontColor("#1E3A8A"));
     }
 
     private static string FormatQty(double v, CultureInfo culture)
@@ -910,21 +946,26 @@ public static class PdfService
         string qtyText,
         string unitPriceText,
         string totalText,
-        bool isStrong)
+        bool isStrong,
+        bool isGrandTotal = false)
     {
-        var labelStyle = TextStyle.Default.FontFamily("Arial").FontSize(10);
-        var valueStyle = TextStyle.Default.FontFamily("Arial").FontSize(10);
+        var fontSize = isGrandTotal ? 12 : 10;
 
-        if (isStrong)
+        var labelStyle = TextStyle.Default.FontFamily("Arial").FontSize(fontSize);
+        var valueStyle = TextStyle.Default.FontFamily("Arial").FontSize(fontSize);
+
+        if (isStrong || isGrandTotal)
         {
             labelStyle = labelStyle.SemiBold();
             valueStyle = valueStyle.SemiBold();
         }
 
-        t.Cell().Element(CellBody).Text(label).Style(labelStyle);
-        t.Cell().Element(CellBody).AlignRight().Text(qtyText ?? "");
-        t.Cell().Element(CellBody).AlignRight().Text(unitPriceText ?? "");
-        t.Cell().Element(CellBody).AlignRight().Text(totalText ?? "").Style(valueStyle);
+        Func<IContainer, IContainer> cellElement = isGrandTotal ? CellBodyTotal : CellBody;
+
+        t.Cell().Element(cellElement).Text(label).Style(labelStyle);
+        t.Cell().Element(cellElement).AlignRight().Text(qtyText ?? "");
+        t.Cell().Element(cellElement).AlignRight().Text(unitPriceText ?? "");
+        t.Cell().Element(cellElement).AlignRight().Text(totalText ?? "").Style(valueStyle);
     }
 
     // =========================

@@ -37,13 +37,29 @@ public partial class WorkOrderWindow : Window
     // =========================
     // ✅ Liens magiques (serveur)
     // =========================
-    private const string ServerBaseUrl = "https://iziregi.com";
-    private const string ServerApiKey = "iziregi_internal_key_2026_ChangeMeToSomethingLong_123456789";
+    private static string ServerBaseUrl => IziregiConfigService.Current.ServerBaseUrl;
+    private static string ServerApiKey  => IziregiConfigService.Current.ServerApiKey;
 
-    private static readonly HttpClient Http = new HttpClient
+    private static readonly HttpClient Http = CreateHttpClient();
+
+    // ✅ Ajout d'un User-Agent : certains serveurs/WAF bloquent les requêtes sans en-tête User-Agent,
+    // ce que HttpClient n'envoie pas par défaut, contrairement à un navigateur ou PowerShell.
+    private static HttpClient CreateHttpClient()
     {
-        Timeout = TimeSpan.FromSeconds(20)
-    };
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.Add("User-Agent", "IziregiClient/1.0");
+        return client;
+    }
+
+    // ✅ Sécurité : envoie la clé API via l'en-tête HTTP "X-Api-Key" plutôt que dans
+    // l'URL (voir MainWindow.xaml.cs pour l'explication complète).
+    private static async Task<HttpResponseMessage> PostWithApiKeyAsync(HttpClient client, string url, HttpContent? content)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+        if (!string.IsNullOrWhiteSpace(ServerApiKey))
+            req.Headers.Add("X-Api-Key", ServerApiKey);
+        return await client.SendAsync(req);
+    }
 
     private readonly ObservableCollection<WorkOrderLine> _lines = new();
     private readonly List<long> _deletedLineIds = new();
@@ -63,9 +79,6 @@ public partial class WorkOrderWindow : Window
 
     private const int QuoteMaxLines = 15;
     private const int QuoteHardMaxItems = QuoteMaxLines;
-
-    private bool _simulationCompanyDevisEnabled = false;
-    private bool _simulationSignerEnabled = false;
 
     private bool _pdfAvailableForExternal = false;
 
@@ -546,6 +559,7 @@ public partial class WorkOrderWindow : Window
 
             try { SignatureInkCanvas?.Strokes.Clear(); } catch { }
             try { if (SignatureInkCanvas != null) SignatureInkCanvas.Background = MediaBrushes.White; } catch { }
+            try { SignaturePreviewImage.Source = null; } catch { }
 
             _existingSignaturePng = null;
             _signatureCleared = true;
@@ -598,33 +612,103 @@ public partial class WorkOrderWindow : Window
     {
     }
 
+    // ✅ Permet à MainWindow de retrouver une fenêtre déjà ouverte pour un bon donné
+    // (utilisé pour rafraîchir l'affichage après une synchronisation serveur en tâche de fond).
+    public long? CurrentWorkOrderId => _workOrder?.Id > 0 ? _workOrder.Id : (long?)null;
+
+    // ✅ Recharge les données du bon depuis la base locale (appelé après une synchro serveur
+    // qui a mis à jour ce bon alors que la fenêtre était déjà ouverte) : sans cela, les lignes
+    // de devis, le PDF forfait, etc. reçus de l'entreprise n'apparaissaient pas tant que la
+    // fenêtre n'était pas fermée puis réouverte.
+    public void ReloadAfterServerSync()
+    {
+        try
+        {
+            if (_workOrder == null) return;
+
+            void DoReload()
+            {
+                try
+                {
+                    LoadWorkOrder();
+                    ApplyMode();
+                    RecomputeTotals();
+                    UpdatePdfButtonVisibility();
+                    UpdateCompanyPdfButtons();
+                }
+                catch { }
+            }
+
+            if (Dispatcher.CheckAccess())
+                DoReload();
+            else
+                Dispatcher.Invoke(DoReload);
+        }
+        catch { }
+    }
+
     private WorkOrderWindow(WorkOrder? workOrder, WorkOrderEditMode mode, bool createMode)
     {
-        InitializeComponent();
+        try
+        {
+            InitializeComponent();
 
-        Db.Init();
+            // ✅ Côté Architecte : ouvrir le bon en plein écran par défaut.
+            // Note : WindowStartupLocation="CenterOwner" (défini en XAML) combiné à un
+            // WindowState=Maximized assigné ici, dans le constructeur, est un piège classique
+            // de WPF — la fenêtre garde son état "Normal" à l'affichage malgré cette ligne,
+            // car WPF recalcule encore la position/taille de démarrage après le constructeur.
+            // En le faisant dans Loaded (une fois la fenêtre prête à s'afficher), ça fonctionne.
+            if (mode == WorkOrderEditMode.Architecte)
+                this.Loaded += (s, e) => { WindowState = WindowState.Maximized; };
 
-        _workOrder = workOrder;
-        _mode = mode;
-        _isCreateMode = createMode || workOrder == null;
+            Db.Init();
 
-        LinesGrid.ItemsSource = _lines;
+            _workOrder = workOrder;
+            _mode = mode;
+            _isCreateMode = createMode || workOrder == null;
 
-        HookReserveMaxLength();
-        HookNumericInputsNoSelectAll();
-        HookMainScrollFix();
-        HookQuoteNotesLimit();
-        HookDescriptionLimit();
+            LinesGrid.ItemsSource = _lines;
 
-        LoadStaticHeader();
-        LoadLists();
-        ApplyDemandLabels();
-        LoadWorkOrder();
+            HookReserveMaxLength();
+            HookNumericInputsNoSelectAll();
+            HookMainScrollFix();
+            HookQuoteNotesLimit();
+            HookDescriptionLimit();
 
-        _pdfAvailableForExternal = (_mode == WorkOrderEditMode.Signataire);
+            LoadStaticHeader();
+            LoadLists();
+            ApplyDemandLabels();
+            LoadWorkOrder();
 
-        ApplyMode();
-        RecomputeTotals();
+            _pdfAvailableForExternal = (_mode == WorkOrderEditMode.Signataire);
+
+            ApplyMode();
+            RecomputeTotals();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    $"Erreur lors de l'ouverture du bon de régie :\n\n{ex.Message}",
+                    "Bon de régie",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            catch { }
+
+            // Fallback: initialise un bon par défaut pour permettre l'affichage
+            try
+            {
+                _workOrder = CreateDefaultWorkOrder();
+                _isCreateMode = true;
+                ApplyMode();
+                RecomputeTotals();
+            }
+            catch { }
+        }
     }
 
     private void HookMainScrollFix()
@@ -1054,8 +1138,19 @@ public partial class WorkOrderWindow : Window
             }
             else
             {
-                _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
-                Title = $"Bon de régie — N° {_workOrder.BdrDisplay}";
+                try
+                {
+                    _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+                    Title = $"Bon de régie — N° {_workOrder.BdrDisplay}";
+                }
+                catch (Exception ex)
+                {
+                    // si lecture bdd plante, afficher message et basculer en création
+                    try { System.Windows.MessageBox.Show(this, $"Impossible de charger le bon depuis la base :\n\n{ex.Message}", "Bon de régie", MessageBoxButton.OK, MessageBoxImage.Warning); } catch { }
+                    _workOrder = CreateDefaultWorkOrder();
+                    _isCreateMode = true;
+                    Title = "Nouveau bon de régie";
+                }
             }
 
             BdrNumberTextBox.Text = _workOrder.BdrNumber.ToString(CultureInfo.InvariantCulture);
@@ -1093,7 +1188,7 @@ public partial class WorkOrderWindow : Window
             QuoteNotesTextBox.Text = EnforceQuoteNotesRules(_workOrder.QuoteNotes ?? "");
 
             SignatureNameTextBox.Text = _workOrder.SignatureName ?? "";
-            SignatureDatePicker.SelectedDate = null;
+            SignatureDatePicker.SelectedDate = _workOrder.SignatureDate;
 
             _existingSignaturePng = _workOrder.SignaturePng;
             _signatureCleared = false;
@@ -1398,6 +1493,7 @@ public partial class WorkOrderWindow : Window
     {
         SignatureInkCanvas.Strokes.Clear();
         SignatureInkCanvas.Background = MediaBrushes.White;
+        try { SignaturePreviewImage.Source = null; } catch { }
 
         _existingSignaturePng = null;
         _signatureCleared = true;
@@ -1434,6 +1530,7 @@ public partial class WorkOrderWindow : Window
     {
         SignatureInkCanvas.Strokes.Clear();
         SignatureInkCanvas.Background = MediaBrushes.White;
+        try { SignaturePreviewImage.Source = null; } catch { }
 
         if (png == null || png.Length == 0) return;
 
@@ -1447,16 +1544,20 @@ public partial class WorkOrderWindow : Window
             bmp.EndInit();
             bmp.Freeze();
 
-            SignatureInkCanvas.Background = new ImageBrush(bmp)
-            {
-                Stretch = Stretch.Uniform,
-                AlignmentX = AlignmentX.Center,
-                AlignmentY = AlignmentY.Center
-            };
+            // ✅ On affiche l'image dans SignaturePreviewImage (Stretch=Uniform,
+            // StretchDirection=DownOnly dans le XAML) plutôt que comme
+            // ImageBrush en fond du InkCanvas : un ImageBrush agrandit TOUJOURS
+            // l'image pour remplir le cadre, ce qui "zoomait" une signature
+            // recadrée serrée (cropToContent côté web). DownOnly réduit l'image
+            // si elle est trop grande, mais ne l'agrandit jamais au-delà de sa
+            // taille réelle : elle garde ainsi son échelle d'origine, centrée.
+            SignatureInkCanvas.Background = MediaBrushes.Transparent;
+            SignaturePreviewImage.Source = bmp;
         }
         catch
         {
             SignatureInkCanvas.Background = MediaBrushes.White;
+            try { SignaturePreviewImage.Source = null; } catch { }
         }
     }
 
@@ -1464,6 +1565,12 @@ public partial class WorkOrderWindow : Window
     {
         if (SignatureInkCanvas.Strokes.Count == 0)
             return _signatureCleared ? null : _existingSignaturePng;
+
+        // ✅ L'architecte/signataire a tracé de nouveaux traits : on capture sur un
+        // fond blanc opaque (et non transparent, qui peut rester actif après
+        // l'affichage d'un aperçu via SignaturePreviewImage) pour garder un PNG
+        // cohérent avec celui généré côté web.
+        SignatureInkCanvas.Background = MediaBrushes.White;
 
         var width = Math.Max(1, (int)SignatureInkCanvas.ActualWidth);
         var height = Math.Max(1, (int)SignatureInkCanvas.ActualHeight);
@@ -1793,12 +1900,71 @@ public partial class WorkOrderWindow : Window
         };
 
         var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
-        var url = $"{baseUrl}/internal/workorders/upsert?apiKey={Uri.EscapeDataString(ServerApiKey)}";
+        var url = $"{baseUrl}/internal/workorders/upsert";
 
         var json = JsonSerializer.Serialize(dto, ReplyJsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        using var resp = await Http.PostAsync(url, content);
+        using var resp = await PostWithApiKeyAsync(Http, url, content);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Publication serveur impossible : HTTP {(int)resp.StatusCode}.");
+    }
+
+    private async Task PublishWorkOrderToServerAsync(WorkOrder wo)
+    {
+        var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+        var url = $"{baseUrl}/internal/workorders/upsert";
+
+        // Récupère le projet pour nom + adresse
+        string projectName = "";
+        string projectAddressLine = "";
+        string projectZipCity = "";
+
+        if (wo.ProjectId.HasValue && wo.ProjectId.Value > 0)
+        {
+            try
+            {
+                var proj = Db.GetProjectById(wo.ProjectId.Value);
+                if (proj != null)
+                {
+                    projectName = proj.Name ?? "";
+                    var raw = (proj.Address ?? "").Trim();
+                    var comma = raw.LastIndexOf(',');
+                    if (comma >= 0 && comma < raw.Length - 1)
+                    {
+                        projectAddressLine = raw.Substring(0, comma).Trim();
+                        projectZipCity     = raw.Substring(comma + 1).Trim();
+                    }
+                    else
+                    {
+                        projectAddressLine = raw;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        var payload = new
+        {
+            workOrderRef     = wo.BdrDisplay,
+            projectName,
+            projectAddressLine,
+            projectZipCity,
+            place            = wo.Place ?? "",
+            etage            = wo.Etage ?? "",
+            requestedBy      = wo.RequestedBy ?? "",
+            performedBy      = wo.PerformedBy ?? "",
+            requestDate      = wo.RequestDate.ToString("yyyy-MM-dd"),
+            deadlineDate     = wo.DeadlineDate.ToString("yyyy-MM-dd"),
+            description      = wo.Description ?? "",
+            // ✅ Champ "Concerne" (Reserve) : doit être publié pour apparaître côté entreprise/serveur
+            reserve          = wo.Reserve ?? ""
+        };
+
+        var json    = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var resp    = await PostWithApiKeyAsync(Http, url, content);
+
         if (!resp.IsSuccessStatusCode)
             throw new InvalidOperationException($"Publication serveur impossible : HTTP {(int)resp.StatusCode}.");
     }
@@ -1815,9 +1981,9 @@ public partial class WorkOrderWindow : Window
 
         // ✅ même endpoint que celui utilisé sur le VPS (admin)
         var url =
-            $"{baseUrl}/internal/create-link?apiKey={Uri.EscapeDataString(ServerApiKey)}&role={Uri.EscapeDataString(role)}&workOrderRef={Uri.EscapeDataString(workOrderRef)}";
+            $"{baseUrl}/internal/create-link?role={Uri.EscapeDataString(role)}&workOrderRef={Uri.EscapeDataString(workOrderRef)}";
 
-        using var resp = await Http.GetAsync(url);
+        using var resp = await PostWithApiKeyAsync(Http, url, null);
         if (!resp.IsSuccessStatusCode)
             throw new InvalidOperationException($"Serveur : HTTP {(int)resp.StatusCode}.");
 
@@ -1852,6 +2018,9 @@ public partial class WorkOrderWindow : Window
                 throw new InvalidOperationException("Le bon doit être enregistré avant génération du lien.");
 
             var workOrderRef = (_workOrder.BdrDisplay ?? "").Trim(); // ex: "24-P1"
+
+            // ✅ Publie d'abord les données du bon sur le serveur
+            await PublishWorkOrderToServerAsync(_workOrder);
 
             var link = await CreateMagicLinkAsync(role: "company", workOrderRef: workOrderRef);
 
@@ -1907,6 +2076,10 @@ public partial class WorkOrderWindow : Window
                 throw new InvalidOperationException("Le bon doit être enregistré avant génération du lien.");
 
             var workOrderRef = (_workOrder.BdrDisplay ?? "").Trim(); // ex: "24-P1"
+
+            // ✅ Publie d'abord les données du bon sur le serveur (sinon le bon
+            // peut être absent côté serveur si le lien "devis" n'a jamais été généré)
+            await PublishWorkOrderToServerAsync(_workOrder);
 
             var link = await CreateMagicLinkAsync(role: "signer", workOrderRef: workOrderRef);
 

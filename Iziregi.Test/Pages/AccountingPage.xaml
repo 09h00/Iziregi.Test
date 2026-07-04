@@ -9,7 +9,7 @@
     <DockPanel>
 
         <!-- =========================
-             EN-TÊTE + BOUTONS (VISIBLE SUR LA PAGE)
+             EN-TÊTE + BOUTONS (VISIBLE SUR LA PAGE, FIXE EN HAUT)
              ========================= -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
 
@@ -39,6 +39,21 @@
                         Margin="8,0,0,0"
                         Click="ExportPdf_Click"/>
             </StackPanel>
+
+        </StackPanel>
+
+        <!-- =========================
+             ✅ Le reste de la page (filtres + tableaux) est maintenant dans un
+             ScrollViewer : auparavant tout était empilé dans un StackPanel
+             Dock="Top" sans aucun défilement, donc tout ce qui dépassait la
+             hauteur de la fenêtre était simplement coupé (notamment le tableau
+             "Détail" qui peut contenir beaucoup de lignes). Le rendu PDF
+             (RenderElementToPng sur AccountingPrintArea) n'est pas affecté par
+             ce ScrollViewer car il remesure/arrange l'élément en taille infinie
+             avant de le capturer.
+             ========================= -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
 
             <!-- =========================
                  ZONE IMPRIMABLE (PDF) : FILTRES + CONTENU
@@ -450,10 +465,7 @@
                 </StackPanel>
             </Border>
 
-        </StackPanel>
-
-        <!-- Body -->
-        <Grid />
+        </ScrollViewer>
 
     </DockPanel>
 </UserControl>

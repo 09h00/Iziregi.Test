@@ -16,6 +16,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using System.Xml;
@@ -75,6 +76,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private DateTime _startDay = DateTime.Today;
     private bool _isSyncingDates = false;
+    private bool _isWeekAnimating = false;
 
     // Drag paint done
     private bool _isPaintingDone = false;
@@ -111,6 +113,52 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         public int Version { get; set; } = 1;
         public List<StickerState> Stickers { get; set; } = new();
+    }
+
+    // Force refresh des couleurs et listes même si la page n'est pas active
+    public void RefreshCompanyColors()
+    {
+        try
+        {
+            var prev = _isPageActive;
+            _isPageActive = true;
+            LoadLists();
+            OnPropertyChanged(nameof(CompanyColorMap));
+            // Mise à jour UI
+            try { this.Dispatcher?.Invoke(() => { this.UpdateLayout(); }); } catch { }
+            _isPageActive = prev;
+        }
+        catch
+        {
+            // non bloquant
+        }
+    }
+
+    // Force re-création des ItemsSource des DataGrids pour reconstruire les cellules
+    public void RecreateDataGridItemsSources()
+    {
+        try
+        {
+            // detach and reattach to force regeneration
+            var tasks = _taskRows.ToList();
+            var planning = _planningRows.ToList();
+
+            TasksDataGrid.ItemsSource = null;
+            PlanningDataGrid.ItemsSource = null;
+
+            // petite pause d'UI pour s'assurer que WPF détruit les containers
+            try { System.Threading.Thread.Sleep(10); } catch { }
+
+            TasksDataGrid.ItemsSource = _taskRows;
+            PlanningDataGrid.ItemsSource = _planningRows;
+
+            TasksDataGrid.Dispatcher?.Invoke(() => { TasksDataGrid.UpdateLayout(); });
+            PlanningDataGrid.Dispatcher?.Invoke(() => { PlanningDataGrid.UpdateLayout(); });
+        }
+        catch
+        {
+            // non bloquant
+        }
     }
 
     private sealed class StickerState
@@ -243,6 +291,175 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         }
     }
 
+    // ============================================================
+    // ✅ Text zones persistence (JSON) — même mécanisme que la banque stickers.
+    // Avant ce correctif, les 4 zones de texte riche n'étaient jamais persistées
+    // nulle part : leur contenu se perdait à chaque changement de page ou
+    // redémarrage de l'appli (PlanningPage est recréée à chaque navigation).
+    // ============================================================
+    private bool _isLoadingTextZones = false;
+
+    // ✅ Diagnostic : les catch { } de cette zone étaient jusqu'ici silencieux, ce qui a
+    // rendu la panne de sauvegarde invisible lors du premier test. On journalise désormais
+    // toute exception rencontrée pendant la sérialisation/sauvegarde/chargement.
+    private static void LogPlanningError(string context, Exception ex) => LogPlanningTrace(context, ex.ToString());
+
+    private static void LogPlanningTrace(string context, string detail)
+    {
+        try
+        {
+            var path = Path.Combine(Path.GetTempPath(), "Iziregi_planning_errors.log");
+            File.AppendAllText(path, $"{DateTime.UtcNow:O}  {context} -> {detail}{Environment.NewLine}");
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private sealed class TextZoneBankState
+    {
+        public int Version { get; set; } = 1;
+        public List<TextZoneState> Zones { get; set; } = new();
+    }
+
+    private sealed class TextZoneState
+    {
+        public bool Visible { get; set; }
+        public string Title { get; set; } = "";
+        public string DocumentXaml { get; set; } = "";
+    }
+
+    private static string GetTextZonesFilePath(long? projectId)
+    {
+        var pid = (projectId.HasValue && projectId.Value > 0)
+            ? projectId.Value.ToString(CultureInfo.InvariantCulture)
+            : "0";
+
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Iziregi",
+            "Planning");
+
+        return Path.Combine(dir, $"planning-textzones-{pid}.json");
+    }
+
+    private void AttachTextZoneAutoSaveHandlers()
+    {
+        foreach (var z in TextZones)
+        {
+            z.PropertyChanged -= TextZoneItem_PropertyChanged_Save;
+            z.PropertyChanged += TextZoneItem_PropertyChanged_Save;
+        }
+    }
+
+    private void TextZoneItem_PropertyChanged_Save(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_isLoadingTextZones) return;
+        if (!_isPageActive) return;
+
+        // Visible, Title ou DocumentXaml (saisie de texte) : on sauvegarde à chaque fois,
+        // comme pour la banque de stickers.
+        SaveTextZonesToDisk();
+    }
+
+    private void EnsureTextZonesLoadedOrInitialized()
+    {
+        _isLoadingTextZones = true;
+        try
+        {
+            var pid = Db.GetCurrentProjectId();
+            var filePath = GetTextZonesFilePath(pid);
+
+            if (File.Exists(filePath))
+            {
+                var json = File.ReadAllText(filePath);
+                var state = JsonSerializer.Deserialize<TextZoneBankState>(json);
+
+                if (state?.Zones != null && state.Zones.Count > 0)
+                {
+                    TextZones.Clear();
+
+                    foreach (var it in state.Zones)
+                    {
+                        TextZones.Add(new TextZoneItem
+                        {
+                            Visible = it?.Visible ?? false,
+                            Title = it?.Title ?? "",
+                            DocumentXaml = it?.DocumentXaml ?? ""
+                        });
+                    }
+
+                    // Sécurité : toujours exactement 4 zones (Rtb0..Rtb3)
+                    while (TextZones.Count < 4)
+                        TextZones.Add(new TextZoneItem { Visible = false });
+
+                    while (TextZones.Count > 4)
+                        TextZones.RemoveAt(TextZones.Count - 1);
+
+                    return;
+                }
+            }
+
+            // Sinon : init par défaut (2 premières zones visibles) + sauvegarde
+            TextZones.Clear();
+            TextZones.Add(new TextZoneItem { Visible = true });
+            TextZones.Add(new TextZoneItem { Visible = true });
+            TextZones.Add(new TextZoneItem { Visible = false });
+            TextZones.Add(new TextZoneItem { Visible = false });
+
+            SaveTextZonesToDisk();
+        }
+        catch (Exception ex)
+        {
+            LogPlanningError("EnsureTextZonesLoadedOrInitialized", ex);
+            // Fallback sans crash
+            if (TextZones.Count == 0)
+            {
+                TextZones.Add(new TextZoneItem { Visible = true });
+                TextZones.Add(new TextZoneItem { Visible = true });
+                TextZones.Add(new TextZoneItem { Visible = false });
+                TextZones.Add(new TextZoneItem { Visible = false });
+            }
+        }
+        finally
+        {
+            _isLoadingTextZones = false;
+            AttachTextZoneAutoSaveHandlers();
+        }
+    }
+
+    private void SaveTextZonesToDisk()
+    {
+        try
+        {
+            var pid = Db.GetCurrentProjectId();
+            var filePath = GetTextZonesFilePath(pid);
+
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            var state = new TextZoneBankState
+            {
+                Version = 1,
+                Zones = TextZones.Select(z => new TextZoneState
+                {
+                    Visible = z?.Visible ?? false,
+                    Title = z?.Title ?? "",
+                    DocumentXaml = z?.DocumentXaml ?? ""
+                }).ToList()
+            };
+
+            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, json);
+        }
+        catch (Exception ex)
+        {
+            LogPlanningError("SaveTextZonesToDisk", ex);
+        }
+    }
+
     // Drag depuis banque stickers
     private bool _bankIsDragging = false;
     private WpfPoint _bankDragStart;
@@ -273,6 +490,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     // ============================================================
     // ✅ Export PDF planning (CAPTURE PNG -> PDF)
     // ============================================================
+
+    // ✅ Permet d'appeler l'export PDF depuis MainWindow (menu "Planning > Export PDF"),
+    // qui n'a pas accès aux contrôles internes de la page. Auparavant ce menu affichait
+    // un message "TODO" alors que cet export fonctionnait déjà depuis le bouton de la page.
+    public void ExportPdf()
+    {
+        ExportPdfButton_Click(this, new RoutedEventArgs());
+    }
+
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -843,7 +1069,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             xw.Flush();
             return sw.ToString();
         }
-        catch { return ""; }
+        catch (Exception ex) { LogPlanningError("SerializeFlowDocumentToXaml", ex); return ""; }
     }
 
     private static FlowDocument? DeserializeFlowDocumentFromXaml(string? xaml)
@@ -857,7 +1083,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             using var xr = XmlReader.Create(sr);
             return XamlReader.Load(xr) as FlowDocument;
         }
-        catch { return null; }
+        catch (Exception ex) { LogPlanningError("DeserializeFlowDocumentFromXaml", ex); return null; }
     }
 
     private void SaveRtbToZoneXaml(WpfRichTextBox rtb)
@@ -1387,8 +1613,10 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         for (int i = 0; i < count; i++)
         {
-            var nextRef = (_taskRows.Count == 0) ? 1 : _taskRows.Max(x => x.Ref) + 1;
-            _taskRows.Add(new TaskRow { Ref = nextRef });
+            var nextRef = (_taskRows.Count == 0)
+                ? 1
+                : _taskRows.Select(x => int.TryParse(x.Ref, out var n) ? n : 0).DefaultIfEmpty(0).Max() + 1;
+            _taskRows.Add(new TaskRow { Ref = nextRef.ToString() });
         }
 
         TasksDataGrid.ScrollIntoView(_taskRows.Last());
@@ -1491,6 +1719,317 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         ApplyPlanningHeadersAndSyncDatePickers();
     }
 
+    private async void PrevWeekButton_Click(object sender, RoutedEventArgs e)
+    {
+        await AnimateWeekNavigationAsync(-7);
+    }
+
+    private async void NextWeekButton_Click(object sender, RoutedEventArgs e)
+    {
+        await AnimateWeekNavigationAsync(+7);
+    }
+
+    private async Task AnimateWeekNavigationAsync(int days)
+    {
+        if (_isWeekAnimating) return;
+        if (!_isPageActive) return;
+        _isWeekAnimating = true;
+        PrevWeekButton.IsEnabled = false;
+        NextWeekButton.IsEnabled = false;
+
+        try
+        {
+            // Sauvegarder la semaine courante avant de glisser
+            SaveCurrentWeekState();
+
+            var transform = new TranslateTransform();
+            MainScrollViewer.RenderTransform = transform;
+
+            double width = MainScrollViewer.ActualWidth;
+            double slideOutTo = days > 0 ? -width : width;
+            double slideInFrom = days > 0 ? width : -width;
+
+            // --- Slide OUT ---
+            var tcs1 = new TaskCompletionSource<bool>();
+            var slideOut = new DoubleAnimation(0, slideOutTo, TimeSpan.FromMilliseconds(160))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+            };
+            slideOut.Completed += (_, __) => tcs1.TrySetResult(true);
+            transform.BeginAnimation(TranslateTransform.XProperty, slideOut);
+            await tcs1.Task;
+
+            // --- Mise à jour des données (hors écran, invisible) ---
+            _startDay = _startDay.AddDays(days);
+            LoadWeekState(SnapToStartOfWeek(_startDay, _weekStartDay));
+            ApplyPlanningHeadersAndSyncDatePickers();
+
+            // --- Repositionner de l'autre côté sans animation ---
+            transform.BeginAnimation(TranslateTransform.XProperty, null);
+            transform.X = slideInFrom;
+
+            // --- Slide IN ---
+            var tcs2 = new TaskCompletionSource<bool>();
+            var slideIn = new DoubleAnimation(slideInFrom, 0, TimeSpan.FromMilliseconds(160))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            slideIn.Completed += (_, __) => tcs2.TrySetResult(true);
+            transform.BeginAnimation(TranslateTransform.XProperty, slideIn);
+            await tcs2.Task;
+
+            MainScrollViewer.RenderTransform = Transform.Identity;
+        }
+        catch
+        {
+            // non bloquant — réinitialisation en cas d'erreur
+            try { MainScrollViewer.RenderTransform = Transform.Identity; } catch { }
+        }
+        finally
+        {
+            _isWeekAnimating = false;
+            PrevWeekButton.IsEnabled = true;
+            NextWeekButton.IsEnabled = true;
+        }
+    }
+
+    // ============================================================
+    // ✅ Persistance par semaine (sauvegarde / chargement / duplication)
+    // ============================================================
+
+    private string GetWeekKey(DateTime weekStart)
+    {
+        var pid = Db.GetCurrentProjectId() ?? 0;
+        return $"{pid}-{weekStart:yyyy}-W{ISOWeek.GetWeekOfYear(weekStart):D2}";
+    }
+
+    private static string GetWeekFilePath(string weekKey)
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Iziregi", "Planning");
+        return Path.Combine(dir, $"planning-week-{weekKey}.json");
+    }
+
+    private WeekStateFile BuildCurrentWeekStateForKey(string weekKey)
+    {
+        return new WeekStateFile
+        {
+            WeekKey = weekKey,
+            TaskRows = _taskRows.Select(r => new TaskRowState
+            {
+                Ref = r.Ref,
+                Company = r.Company,
+                Building = r.Building,
+                Floor = r.Floor,
+                Todo = r.Todo,
+                Category = r.Category,
+                Reserve = r.Reserve,
+                Done = r.Done
+            }).ToList(),
+            PlanningRows = _planningRows.Select(r => new PlanningRowState
+            {
+                Company = r.Company,
+                D1 = r.D1,
+                D2 = r.D2,
+                D3 = r.D3,
+                D4 = r.D4,
+                D5 = r.D5,
+                D6 = r.D6,
+                Sat = r.Sat
+            }).ToList(),
+            PlacedStickerStates = PlacedStickers.Select(s => new PlacedStickerState
+            {
+                Label = s.Label,
+                ColorHex = s.ColorHex,
+                X = s.X,
+                Y = s.Y,
+                Size = s.Size
+            }).ToList(),
+            PlacedImageStates = PlacedPlanImages.Select(i => new PlacedImageState
+            {
+                FilePath = i.FilePath,
+                X = i.X,
+                Y = i.Y,
+                Width = i.Width,
+                Height = i.Height
+            }).ToList()
+        };
+    }
+
+    // ✅ Point d'entrée public : MainWindow appelle ceci JUSTE AVANT de remplacer
+    // MainContent.Content par une autre page (Dashboard, etc.). On ne peut pas se fier
+    // uniquement à l'événement Unloaded de cette page pour déclencher la sauvegarde : son
+    // déclenchement n'est pas garanti assez tôt/de façon fiable dans ce contexte précis
+    // (constaté après tests : les grilles, images et stickers restaient perdus même avec
+    // la sauvegarde câblée sur Unloaded, alors que ça fonctionnait pour les zones de texte
+    // qui, elles, sauvegardent à chaque frappe et ne dépendent d'aucun événement de
+    // fermeture de page). Cet appel explicite et synchrone, déclenché par l'action de
+    // navigation elle-même plutôt que par un événement WPF, est fiable dans tous les cas.
+    public void FlushPendingChanges()
+    {
+        SaveCurrentWeekState();
+    }
+
+    private void SaveCurrentWeekState()
+    {
+        try
+        {
+            // ✅ BUG (grilles perdues) : une cellule de DataGrid en cours d'édition ne transfère
+            // sa valeur vers l'objet lié (TaskRow/PlanningRow) qu'à la sortie de cellule (Tab,
+            // clic ailleurs, Entrée) — jamais à chaque frappe comme les zones de texte. Si on
+            // sauvegarde pendant qu'une cellule est encore en édition (ex: changement d'onglet
+            // juste après avoir tapé), la valeur en cours de saisie n'est pas encore dans
+            // _taskRows/_planningRows et est donc silencieusement perdue. On force ici la
+            // validation de toute édition en cours avant de construire l'état à sauvegarder.
+            try { TasksDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); TasksDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+            try { PlanningDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); PlanningDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+
+            var weekStart = SnapToStartOfWeek(_startDay, _weekStartDay);
+            var weekKey = GetWeekKey(weekStart);
+            var filePath = GetWeekFilePath(weekKey);
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            var state = BuildCurrentWeekStateForKey(weekKey);
+            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, json);
+        }
+        catch { }
+    }
+
+    private void LoadWeekState(DateTime weekStart)
+    {
+        var weekKey = GetWeekKey(weekStart);
+        var filePath = GetWeekFilePath(weekKey);
+
+        _taskRows.Clear();
+        _planningRows.Clear();
+        PlacedStickers.Clear();
+        PlacedPlanImages.Clear();
+
+        if (File.Exists(filePath))
+        {
+            try
+            {
+                var json = File.ReadAllText(filePath);
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var state = JsonSerializer.Deserialize<WeekStateFile>(json, opts);
+
+                if (state != null)
+                {
+                    foreach (var r in state.TaskRows)
+                        _taskRows.Add(new TaskRow
+                        {
+                            Ref = r.Ref,
+                            Company = r.Company,
+                            Building = r.Building,
+                            Floor = r.Floor,
+                            Todo = r.Todo,
+                            Category = r.Category,
+                            Reserve = r.Reserve,
+                            Done = r.Done
+                        });
+
+                    foreach (var r in state.PlanningRows)
+                        _planningRows.Add(new PlanningRow
+                        {
+                            Company = r.Company,
+                            D1 = r.D1,
+                            D2 = r.D2,
+                            D3 = r.D3,
+                            D4 = r.D4,
+                            D5 = r.D5,
+                            D6 = r.D6,
+                            Sat = r.Sat
+                        });
+
+                    foreach (var s in state.PlacedStickerStates)
+                        PlacedStickers.Add(new PlacedStickerItem
+                        {
+                            Label = s.Label,
+                            ColorHex = s.ColorHex,
+                            X = s.X,
+                            Y = s.Y,
+                            Size = s.Size
+                        });
+
+                    foreach (var i in state.PlacedImageStates)
+                    {
+                        var path = (i.FilePath ?? "").Trim();
+                        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
+                        try
+                        {
+                            var bmp = new BitmapImage();
+                            bmp.BeginInit();
+                            bmp.CacheOption = BitmapCacheOption.OnLoad;
+                            bmp.UriSource = new Uri(path, UriKind.Absolute);
+                            bmp.EndInit();
+                            bmp.Freeze();
+                            PlacedPlanImages.Add(new PlacedPlanImageItem
+                            {
+                                FilePath = path,
+                                ImageSource = bmp,
+                                X = i.X,
+                                Y = i.Y,
+                                Width = i.Width,
+                                Height = i.Height
+                            });
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        EnsureDefaultRows();
+    }
+
+    private void DuplicateCurrentWeekTo_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button btn) return;
+        int days = btn.Tag?.ToString() == "prev" ? -7 : +7;
+
+        var targetWeekStart = SnapToStartOfWeek(_startDay.AddDays(days), _weekStartDay);
+        var weekKey = GetWeekKey(targetWeekStart);
+        var filePath = GetWeekFilePath(weekKey);
+
+        var semaineNum = ISOWeek.GetWeekOfYear(targetWeekStart);
+        var label = $"semaine {semaineNum} ({targetWeekStart:dd.MM.yyyy})";
+
+        if (File.Exists(filePath))
+        {
+            var result = System.Windows.MessageBox.Show(
+                $"La {label} contient déjà des données.\nLes remplacer par celles de la semaine courante ?",
+                "Confirmer la duplication",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) return;
+        }
+
+        try
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            var state = BuildCurrentWeekStateForKey(weekKey);
+            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, json);
+
+            System.Windows.MessageBox.Show(
+                $"Planning copié vers la {label}.",
+                "Duplication réussie", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                "Erreur lors de la duplication : " + ex.Message,
+                "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     // ✅ FIX: samedi après vendredi (recalage des index de colonnes)
     private void ApplyPlanningHeadersAndSyncDatePickers()
     {
@@ -1581,7 +2120,13 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         LoadLists();
         EnsureStickerBankLoadedOrInitialized();
-        EnsureDefaultRows();
+
+        // Charger l'état de la semaine depuis le fichier (première ouverture ou retour sur la page)
+        if (_taskRows.Count == 0 && _planningRows.Count == 0
+            && PlacedStickers.Count == 0 && PlacedPlanImages.Count == 0)
+            LoadWeekState(_startDay);
+        else
+            EnsureDefaultRows();
 
         _isSaturdayVisible = false;
         SaturdayColumn.Visibility = Visibility.Collapsed;
@@ -1604,6 +2149,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         CompanyColorMap = p > 0
             ? Db.GetCompanyColorMap(p)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Diagnostic temporaire supprimé.
+
 
         OnPropertyChanged(nameof(Companies));
         OnPropertyChanged(nameof(Buildings));
@@ -1611,13 +2158,16 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         OnPropertyChanged(nameof(PlanningTextZones));
         OnPropertyChanged(nameof(Reserves));
         OnPropertyChanged(nameof(CompanyColorMap));
+
+        // Forcer la recréation des ItemsSource pour éviter le partage de brushes
+        try { RecreateDataGridItemsSources(); } catch { }
     }
 
     private void EnsureDefaultRows()
     {
         if (_taskRows.Count == 0)
             for (int i = 0; i < DEFAULT_TASK_ROWS; i++)
-                _taskRows.Add(new TaskRow { Ref = i + 1 });
+                _taskRows.Add(new TaskRow { Ref = (i + 1).ToString() });
 
         if (_planningRows.Count == 0)
             for (int i = 0; i < DEFAULT_PLANNING_ROWS; i++)
@@ -1949,12 +2499,25 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         Unloaded += (_, __) =>
         {
+            // ✅ BUG (grilles planning/tâches perdues au changement de page) : ShowPlanning()
+            // recrée une TOUTE NOUVELLE instance de PlanningPage à chaque navigation, ce qui
+            // détruit l'ancienne (Unloaded se déclenche). Seule la navigation semaine
+            // précédente/suivante appelait SaveCurrentWeekState() — changer d'onglet (Dashboard,
+            // etc.) sans changer de semaine perdait donc silencieusement toute saisie récente
+            // dans la grille des tâches et le planning hebdomadaire. On sauvegarde donc aussi ici.
+            SaveCurrentWeekState();
             _isPageActive = false;
             _activeRtb = null;
         };
 
         TasksDataGrid.ItemsSource = _taskRows;
         PlanningDataGrid.ItemsSource = _planningRows;
+        // Forcer récréation des brushes lors du changement de projet :
+        // on s'assure que les converters reçoivent une nouvelle instance du dictionnaire
+        this.DataContextChanged += (_, __) =>
+        {
+            try { OnPropertyChanged(nameof(CompanyColorMap)); } catch { }
+        };
 
         TasksDataGrid.PreviewMouseLeftButtonDown += DataGrid_PreviewMouseLeftButtonDown_FocusCell;
         PlanningDataGrid.PreviewMouseLeftButtonDown += DataGrid_PreviewMouseLeftButtonDown_FocusCell;
@@ -1983,14 +2546,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // ✅ charge / init la banque stickers persistée (JSON)
         EnsureStickerBankLoadedOrInitialized();
 
-        if (TextZones.Count == 0)
-        {
-            // ✅ Par défaut : seulement les 2 premières zones visibles
-            TextZones.Add(new TextZoneItem { Visible = true });
-            TextZones.Add(new TextZoneItem { Visible = true });
-            TextZones.Add(new TextZoneItem { Visible = false });
-            TextZones.Add(new TextZoneItem { Visible = false });
-        }
+        // ✅ charge / init les zones de texte persistées (JSON) — avant ce correctif,
+        // elles étaient réinitialisées vides à chaque navigation vers cette page.
+        EnsureTextZonesLoadedOrInitialized();
 
         SelectedTextZoneIndex = FindFirstVisibleTextZoneIndex();
 
@@ -2179,7 +2737,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private sealed class TaskRow : INotifyPropertyChanged
     {
-        private int _ref;
+        private string _ref = "";
         private string _company = "";
         private string _building = "";
         private string _floor = "";
@@ -2188,7 +2746,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         private string _reserve = "";
         private bool _done;
 
-        public int Ref { get => _ref; set => SetField(ref _ref, value); }
+        public string Ref { get => _ref; set => SetField(ref _ref, value); }
         public string Company { get => _company; set => SetField(ref _company, value); }
         public string Building { get => _building; set => SetField(ref _building, value); }
         public string Floor { get => _floor; set => SetField(ref _floor, value); }
@@ -2243,6 +2801,61 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             OnPropertyChanged(propertyName);
             return true;
         }
+    }
+
+    // ============================================================
+    // ✅ DTOs — persistance par semaine (JSON)
+    // ============================================================
+
+    private sealed class WeekStateFile
+    {
+        public string WeekKey { get; set; } = "";
+        public List<TaskRowState> TaskRows { get; set; } = new();
+        public List<PlanningRowState> PlanningRows { get; set; } = new();
+        public List<PlacedStickerState> PlacedStickerStates { get; set; } = new();
+        public List<PlacedImageState> PlacedImageStates { get; set; } = new();
+    }
+
+    private sealed class TaskRowState
+    {
+        public string Ref { get; set; } = "";
+        public string Company { get; set; } = "";
+        public string Building { get; set; } = "";
+        public string Floor { get; set; } = "";
+        public string Todo { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string Reserve { get; set; } = "";
+        public bool Done { get; set; }
+    }
+
+    private sealed class PlanningRowState
+    {
+        public string Company { get; set; } = "";
+        public string D1 { get; set; } = "";
+        public string D2 { get; set; } = "";
+        public string D3 { get; set; } = "";
+        public string D4 { get; set; } = "";
+        public string D5 { get; set; } = "";
+        public string D6 { get; set; } = "";
+        public string Sat { get; set; } = "";
+    }
+
+    private sealed class PlacedStickerState
+    {
+        public string Label { get; set; } = "";
+        public string ColorHex { get; set; } = "#F59E0B";
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Size { get; set; } = 24;
+    }
+
+    private sealed class PlacedImageState
+    {
+        public string FilePath { get; set; } = "";
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; } = 360;
+        public double Height { get; set; } = 240;
     }
 }
 

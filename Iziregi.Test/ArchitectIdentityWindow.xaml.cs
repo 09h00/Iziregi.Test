@@ -1,6 +1,11 @@
 ﻿// File: ArchitectIdentityWindow.xaml.cs
 using System;
 using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using Iziregi.Test.Data;
@@ -10,10 +15,14 @@ namespace Iziregi.Test;
 public partial class ArchitectIdentityWindow : Window
 {
     private string _logoPath = "";
+    private readonly string _serverBaseUrl;
+    private readonly string _serverApiKey;
 
-    public ArchitectIdentityWindow()
+    public ArchitectIdentityWindow(string serverBaseUrl = "", string serverApiKey = "")
     {
         InitializeComponent();
+        _serverBaseUrl = serverBaseUrl.TrimEnd('/');
+        _serverApiKey  = serverApiKey;
         Db.Init();
         LoadFromDb();
     }
@@ -21,7 +30,13 @@ public partial class ArchitectIdentityWindow : Window
     private void LoadFromDb()
     {
         ArchitectNameTextBox.Text = Db.GetArchitectName();
-        ArchitectAddressTextBox.Text = Db.GetArchitectAddress();
+
+        var fullAddress = (Db.GetArchitectAddress() ?? "").Replace("\r\n", "\n");
+        var parts = fullAddress.Split('\n');
+        ArchitectAddressTextBox.Text = parts.Length > 0 ? parts[0].Trim() : "";
+        ArchitectZipCityTextBox.Text = parts.Length > 1
+            ? string.Join(", ", parts.Skip(1).Select(p => p.Trim()).Where(p => p.Length > 0))
+            : "";
 
         _logoPath = Db.GetArchitectLogoPath() ?? "";
         LogoPathTextBox.Text = _logoPath;
@@ -84,15 +99,27 @@ public partial class ArchitectIdentityWindow : Window
         StatusTextBlock.Text = "Logo retiré (pense à Enregistrer).";
     }
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            Db.SetArchitectName((ArchitectNameTextBox.Text ?? "").Trim());
-            Db.SetArchitectAddress((ArchitectAddressTextBox.Text ?? "").Trim());
-            Db.SetArchitectLogoPath((_logoPath ?? "").Trim());
+            var name        = (ArchitectNameTextBox.Text    ?? "").Trim();
+            var addressLine = (ArchitectAddressTextBox.Text ?? "").Trim();
+            var zipCity     = (ArchitectZipCityTextBox.Text ?? "").Trim();
+            var logo        = (_logoPath ?? "").Trim();
 
-            StatusTextBlock.Text = "Identité architecte enregistrée.";
+            var address = string.Join("\n", new[] { addressLine, zipCity }.Where(p => p.Length > 0));
+
+            Db.SetArchitectName(name);
+            Db.SetArchitectAddress(address);
+            Db.SetArchitectLogoPath(logo);
+
+            StatusTextBlock.Text = "Enregistré localement…";
+
+            if (!string.IsNullOrWhiteSpace(_serverBaseUrl) && !string.IsNullOrWhiteSpace(_serverApiKey))
+                await SyncToServerAsync(name, address, logo);
+            else
+                StatusTextBlock.Text = "Identité architecte enregistrée (serveur non configuré).";
         }
         catch (Exception ex)
         {
@@ -101,6 +128,52 @@ public partial class ArchitectIdentityWindow : Window
                 "Identité architecte",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+        }
+    }
+
+    private async System.Threading.Tasks.Task SyncToServerAsync(string name, string address, string logoPath)
+    {
+        try
+        {
+            byte[]? logoBytes = null;
+            string? contentType = null;
+
+            if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath))
+            {
+                logoBytes = File.ReadAllBytes(logoPath);
+                var ext = Path.GetExtension(logoPath).ToLowerInvariant();
+                contentType = ext is ".jpg" or ".jpeg" ? "image/jpeg" : "image/png";
+            }
+
+            var payload = new
+            {
+                name,
+                address,
+                logoBase64      = logoBytes != null ? Convert.ToBase64String(logoBytes) : (string?)null,
+                logoContentType = contentType
+            };
+
+            var options = new JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+            var json = JsonSerializer.Serialize(payload, options);
+
+            using var client  = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            client.DefaultRequestHeaders.Add("User-Agent", "IziregiClient/1.0"); // ✅ voir MainWindow/WorkOrderWindow
+            // ✅ Sécurité : clé API envoyée via l'en-tête HTTP plutôt que dans l'URL.
+            if (!string.IsNullOrWhiteSpace(_serverApiKey))
+                client.DefaultRequestHeaders.Add("X-Api-Key", _serverApiKey);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var url  = $"{_serverBaseUrl}/internal/architect-identity/upsert";
+            var resp = await client.PostAsync(url, content);
+            resp.EnsureSuccessStatusCode();
+
+            StatusTextBlock.Text = "✓ Identité architecte enregistrée et synchronisée avec le serveur.";
+        }
+        catch (Exception ex)
+        {
+            StatusTextBlock.Text = $"Enregistré localement — sync serveur échoué : {ex.Message}";
         }
     }
 

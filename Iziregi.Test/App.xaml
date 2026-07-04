@@ -57,6 +57,32 @@
             </Setter>
         </Style>
 
+        <!-- ✅ Style global : Button avec chevron à droite -->
+        <Style x:Key="ButtonWithChevronStyle" TargetType="Button">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <ContentPresenter VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"/>
+                                <TextBlock Text="▾"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Center"
+                                           Margin="6,0,6,0"
+                                           Foreground="{TemplateBinding Foreground}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Styles globaux -->
         <Style x:Key="IziregiGrid" TargetType="{x:Type DataGrid}">
             <Setter Property="RowHeight" Value="28"/>

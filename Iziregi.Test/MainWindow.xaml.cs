@@ -1,13 +1,17 @@
 ﻿// File: MainWindow.xaml.cs
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Media;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
@@ -20,6 +24,10 @@ using MediaBrushConverter = System.Windows.Media.BrushConverter;
 using MediaBrushes = System.Windows.Media.Brushes;
 using MediaColor = System.Windows.Media.Color;
 using MediaSolidColorBrush = System.Windows.Media.SolidColorBrush;
+using Iziregi.Test.Services;
+// ✅ Fix ambiguïté MessageBox / Clipboard (WPF vs WinForms)
+using WpfMessageBox = System.Windows.MessageBox;
+using WpfClipboard = System.Windows.Clipboard;
 
 namespace Iziregi.Test;
 
@@ -54,16 +62,42 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _serverSyncTimer = new();
     private bool _isServerSyncRunning = false;
 
-    private static readonly HttpClient Http = new HttpClient
+    // ✅ Anti-doublon : soumissions déjà traitées dans cette session
+    private readonly HashSet<string> _processedSubmissionKeys = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HttpClient Http = CreateHttpClient();
+
+    // ✅ Client HTTP dédié au téléchargement de l'installateur de mise à jour : un
+    // installateur autonome peut peser plusieurs dizaines de Mo, largement au-delà du
+    // délai de 20s utilisé pour les appels API classiques ci-dessus.
+    private static readonly HttpClient DownloadHttp = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+
+    // ✅ Ajout d'un User-Agent : certains serveurs/WAF bloquent les requêtes sans en-tête User-Agent,
+    // ce que HttpClient n'envoie pas par défaut, contrairement à un navigateur ou PowerShell.
+    private static HttpClient CreateHttpClient()
     {
-        Timeout = TimeSpan.FromSeconds(20)
-    };
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.Add("User-Agent", "IziregiClient/1.0");
+        return client;
+    }
+
+    // ✅ Sécurité : envoie la clé API via l'en-tête HTTP "X-Api-Key" plutôt que dans
+    // l'URL (évite qu'elle apparaisse en clair dans les journaux d'accès du serveur).
+    // La valeur est relue à chaque appel (pas mise en cache dans un en-tête par défaut
+    // du HttpClient) car elle peut changer après la configuration initiale.
+    private static async Task<HttpResponseMessage> GetWithApiKeyAsync(HttpClient client, string url)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        if (!string.IsNullOrWhiteSpace(ServerApiKey))
+            req.Headers.Add("X-Api-Key", ServerApiKey);
+        return await client.SendAsync(req);
+    }
 
     // =========================
     // ✅ Server sync config (MVP)
     // =========================
-    private const string ServerBaseUrl = "https://iziregi.com";
-    private const string ServerApiKey = "iziregi_internal_key_2026_ChangeMeToSomethingLong_123456789";
+    internal static string ServerBaseUrl => IziregiConfigService.Current.ServerBaseUrl;
+    internal static string ServerApiKey => IziregiConfigService.Current.ServerApiKey;
 
     // Anti-spam popups "not found"
     private readonly HashSet<string> _warnedNotFoundLocal = new(StringComparer.OrdinalIgnoreCase);
@@ -81,6 +115,57 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // ✅ Affiche la version installée dans la barre de titre : pratique pour vérifier
+        // visuellement, à tout moment, quelle version tourne réellement (utile notamment
+        // pour confirmer qu'une mise à jour automatique a bien été appliquée).
+        try
+        {
+            var installedVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            if (installedVersion != null)
+                this.Title = $"{this.Title} — v{installedVersion.ToString(3)}";
+        }
+        catch { }
+
+        // Afficher la fenêtre de config si la clé API est absente
+        if (string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
+        {
+            var setup = new ConfigSetupWindow();
+            setup.ShowDialog();
+        }
+
+        // ✅ Abonnement par machine (Option A, 3 paliers) : vérification au démarrage.
+        // Refus net UNIQUEMENT si le serveur répond explicitement "limite atteinte" ;
+        // en cas de serveur injoignable/réseau coupé, on ne bloque jamais (fail-open).
+        if (!string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
+        {
+            var licenseInfo = Task.Run(CheckMachineLicenseAllowedAsync).GetAwaiter().GetResult();
+            if (!licenseInfo.Allowed)
+            {
+                WpfMessageBox.Show(
+                    "Le nombre maximum d'ordinateurs autorisés pour votre abonnement Iziregi est atteint.\n\n" +
+                    "Contactez votre administrateur ou l'éditeur Iziregi pour augmenter votre palier.",
+                    "Licence Iziregi",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Stop);
+                Environment.Exit(0);
+                return;
+            }
+
+            // ✅ Mise à jour automatique : si le serveur annonce une version plus récente
+            // que celle installée, on propose de la télécharger et de l'installer
+            // maintenant. Ne bloque jamais le démarrage (serveur muet, refus utilisateur,
+            // téléchargement impossible -> l'appli continue avec la version actuelle).
+            PromptForUpdateIfNewer(licenseInfo.LatestVersion, licenseInfo.DownloadUrl);
+        }
+
+        // ✅ Le tableau de bord (dashboard) doit s'ouvrir en plein écran par défaut.
+        // Même piège WPF que pour WorkOrderWindow : WindowStartupLocation="CenterScreen"
+        // (défini en XAML) combiné à un WindowState=Maximized assigné ici, dans le
+        // constructeur, ne fonctionne pas de façon fiable — WPF recalcule encore la
+        // position/taille de démarrage après le constructeur. En le faisant dans Loaded
+        // (une fois la fenêtre prête à s'afficher), ça fonctionne.
+        this.Loaded += (s, e) => { WindowState = WindowState.Maximized; };
 
         // DB init
         Db.Init();
@@ -103,8 +188,99 @@ public partial class MainWindow : Window
         // Page par défaut
         ShowDashboard();
 
+        // Init project selector
+        InitProjectSelector();
+
         // ✅ Auto sync serveur (toutes les 60s)
         StartServerSyncTimer();
+    }
+
+    private void ProjectSelectorButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // Affiche un menu contextuel avec la liste des projets
+            var projects = Db.GetProjects(true).OrderBy(p => p.Name).ToList();
+            var menu = new System.Windows.Controls.ContextMenu();
+
+            foreach (var p in projects)
+            {
+                var proj = p; // capture local copy for closure
+                var mi = new System.Windows.Controls.MenuItem { Header = proj.Name, Tag = proj };
+                mi.Click += (_, __) => { SetSelectedProjectRecreatePlanning(proj); try { RefreshProjectSelector(); } catch { } };
+                menu.Items.Add(mi);
+            }
+
+            menu.PlacementTarget = sender as UIElement;
+            menu.IsOpen = true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("ProjectSelectorButton_Click exception: " + ex);
+        }
+    }
+
+    private void InitProjectSelector()
+    {
+        try
+        {
+            var btn = this.FindName("ProjectSelectorButton") as System.Windows.Controls.Button;
+            if (btn == null) return;
+
+            // contenu et couleur selon projet courant
+            var p = _selectedProject ?? Db.GetCurrentProject();
+            btn.Content = p != null ? (p.Name ?? "Projet") : "Projet";
+
+            var bg = p != null ? BrushFromHexOrNull(p.ColorHex) : BrushFromHexOrNull("#111827");
+            if (bg == null || bg == MediaBrushes.Transparent)
+                bg = BrushFromHexOrNull("#111827");
+
+            try { btn.Background = bg; } catch { }
+            try { btn.Foreground = GetTextBrushForBackground(bg); } catch { }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("InitProjectSelector exception: " + ex);
+        }
+    }
+
+    private void ProjectSelectorComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        try
+        {
+            var cb = this.FindName("ProjectSelectorComboBox") as System.Windows.Controls.ComboBox;
+            if (cb?.SelectedItem is Iziregi.Test.Models.Project p)
+            {
+                // utilise la méthode existante pour appliquer le changement et recharger
+                SetSelectedProjectRecreatePlanning(p);
+                // mettre à jour l'apparence du sélecteur pour refléter la couleur du projet choisi
+                try { RefreshProjectSelector(); } catch { }
+                try { System.Diagnostics.Debug.WriteLine($"SetSelectedProject: id={_selectedProject?.Id} name={_selectedProject?.Name}"); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("ProjectSelectorComboBox_SelectionChanged exception: " + ex);
+        }
+    }
+
+    private void ManageProjectsButton_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        ChooseProject();
+    }
+
+    // Méthode publique pour rafraîchir la page Planning depuis d'autres pages
+    public void RefreshPlanning()
+    {
+        try
+        {
+            _planningPage?.Reload();
+            _planningPage?.RefreshCompanyColors();
+        }
+        catch
+        {
+            // non bloquant
+        }
     }
 
     // =========================
@@ -121,6 +297,226 @@ public partial class MainWindow : Window
         {
             await ServerSyncTickAsync();
         }));
+    }
+
+    // ✅ Journalise une erreur de synchro par soumission, sans jamais faire planter quoi
+    // que ce soit (le logging lui-même est protégé). Permet de diagnostiquer un futur blocage
+    // au lieu de le découvrir uniquement en creusant le code en direct.
+    private static void LogSyncError(string message)
+    {
+        try
+        {
+            var path = Path.Combine(Path.GetTempPath(), "Iziregi_sync_errors.log");
+            File.AppendAllText(path, $"{DateTime.UtcNow:O}  {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    // =========================
+    // ✅ Abonnement par machine (Option A) : identité machine + vérification ping
+    // =========================
+
+    // ✅ Sécurité (03.07.2026) : l'identifiant machine est maintenant dérivé du MachineGuid
+    // Windows (registre), propre à CETTE installation Windows, plutôt que d'un simple
+    // fichier dans Documents. Avant cette correction, machine-id.txt pouvait être copié
+    // tel quel sur plusieurs ordinateurs pour tous se présenter comme "la même machine
+    // déjà connue" au serveur, contournant complètement le plafond de licences par
+    // machine qu'on vient de mettre en place. Le MachineGuid n'est pas copiable de cette
+    // façon : il appartient à l'installation Windows elle-même, pas à un fichier utilisateur.
+    private static string GetOrCreateMachineId()
+    {
+        try
+        {
+            var hwId = GetWindowsMachineGuid();
+            if (!string.IsNullOrWhiteSpace(hwId))
+                return hwId;
+        }
+        catch
+        {
+            // ignore, on retombe sur le fallback fichier ci-dessous
+        }
+
+        // Fallback (registre inaccessible pour une raison quelconque) : ancien mécanisme
+        // par fichier — moins robuste contre la copie, mais ne bloque jamais le démarrage.
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Iziregi");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "machine-id.txt");
+
+            if (File.Exists(path))
+            {
+                var existing = File.ReadAllText(path).Trim();
+                if (!string.IsNullOrWhiteSpace(existing)) return existing;
+            }
+
+            var id = Guid.NewGuid().ToString("N");
+            File.WriteAllText(path, id);
+            return id;
+        }
+        catch
+        {
+            return Guid.NewGuid().ToString("N");
+        }
+    }
+
+    // Lit le MachineGuid Windows (HKLM\SOFTWARE\Microsoft\Cryptography), un identifiant
+    // stable généré par Windows lui-même à l'installation, unique par machine, en lecture
+    // seule pour un utilisateur standard (aucun droit administrateur requis).
+    private static string? GetWindowsMachineGuid()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
+            var value = key?.GetValue("MachineGuid") as string;
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Interroge /internal/ping avec le machineId. Retourne false UNIQUEMENT si le serveur
+    // répond explicitement que la limite de machines est atteinte (403). Toute autre
+    // situation (serveur OK, ou serveur injoignable) retourne true — fail-open.
+    private static async Task<(bool Allowed, string? LatestVersion, string? DownloadUrl)> CheckMachineLicenseAllowedAsync()
+    {
+        try
+        {
+            var machineId = GetOrCreateMachineId();
+            var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+            var url = $"{baseUrl}/internal/ping?machineId={Uri.EscapeDataString(machineId)}";
+
+            using var resp = await GetWithApiKeyAsync(Http, url);
+            if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                return (false, null, null);
+
+            string? latestVersion = null;
+            string? downloadUrl = null;
+            try
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("latestVersion", out var lv) && lv.ValueKind == JsonValueKind.String)
+                    latestVersion = lv.GetString();
+                if (doc.RootElement.TryGetProperty("downloadUrl", out var du) && du.ValueKind == JsonValueKind.String)
+                    downloadUrl = du.GetString();
+            }
+            catch
+            {
+                // Réponse non-JSON ou champs absents (anciens serveurs) : pas de mise à jour proposée.
+            }
+
+            return (true, latestVersion, downloadUrl);
+        }
+        catch
+        {
+            // Serveur injoignable / réseau coupé : fail-open, l'appli continue de fonctionner.
+            return (true, null, null);
+        }
+    }
+
+    // Compare la version annoncée par le serveur à la version installée localement (celle
+    // définie par <Version> dans Iziregi.Test.csproj). Si le serveur en propose une plus
+    // récente, demande à l'utilisateur s'il veut l'installer maintenant.
+    private void PromptForUpdateIfNewer(string? latestVersion, string? downloadUrl)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(latestVersion) || string.IsNullOrWhiteSpace(downloadUrl))
+                return;
+
+            if (!Version.TryParse(latestVersion.Trim(), out var serverVersion))
+                return;
+
+            var currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
+
+            if (serverVersion <= currentVersion)
+                return;
+
+            var result = WpfMessageBox.Show(
+                $"Une nouvelle version d'Iziregi est disponible ({latestVersion}).\n\nVoulez-vous la télécharger et l'installer maintenant ?",
+                "Mise à jour disponible",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            // ✅ Fenêtre de progression : avant cet ajout, l'application ne montrait rien
+            // pendant les 10-15 secondes de téléchargement (elle semblait figée). La
+            // fenêtre s'affiche via ShowDialog() (boucle de messages imbriquée gérée par
+            // WPF), pendant que le téléchargement se déroule de façon asynchrone dans son
+            // gestionnaire Loaded — la fenêtre reste donc réactive et sa barre de
+            // progression se met à jour en direct.
+            var progressWindow = new UpdateProgressWindow();
+            progressWindow.Loaded += async (_, _) =>
+            {
+                await DownloadAndLaunchUpdateAsync(downloadUrl!, progressWindow);
+                // N'est atteint que si le téléchargement/lancement a échoué : en cas de
+                // succès, DownloadAndLaunchUpdateAsync ferme déjà l'application avant
+                // d'arriver ici.
+                progressWindow.Close();
+            };
+            progressWindow.ShowDialog();
+        }
+        catch
+        {
+            // Ne jamais empêcher le démarrage normal de l'application à cause de la mise à jour.
+        }
+    }
+
+    // Télécharge l'installateur depuis le serveur vers un fichier temporaire (en
+    // rapportant la progression à la fenêtre fournie), le lance, puis ferme l'application
+    // pour libérer les fichiers que l'installateur doit remplacer.
+    private static async Task DownloadAndLaunchUpdateAsync(string downloadUrl, UpdateProgressWindow? progressWindow = null)
+    {
+        try
+        {
+            var tempPath = Path.Combine(Path.GetTempPath(), "IziregiSetup.exe");
+
+            using (var resp = await DownloadHttp.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+            {
+                resp.EnsureSuccessStatusCode();
+                var totalBytes = resp.Content.Headers.ContentLength;
+
+                await using var httpStream = await resp.Content.ReadAsStreamAsync();
+                await using var fs = File.Create(tempPath);
+
+                var buffer = new byte[81920];
+                long totalRead = 0;
+                int read;
+                while ((read = await httpStream.ReadAsync(buffer)) > 0)
+                {
+                    await fs.WriteAsync(buffer.AsMemory(0, read));
+                    totalRead += read;
+                    progressWindow?.ReportProgress(totalRead, totalBytes);
+                }
+            }
+
+            progressWindow?.SetInstalling();
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = tempPath,
+                UseShellExecute = true
+            });
+
+            await Task.Delay(500);
+            Environment.Exit(0);
+        }
+        catch (Exception ex)
+        {
+            WpfMessageBox.Show(
+                "Le téléchargement de la mise à jour a échoué : " + ex.Message + "\n\nL'application va continuer avec la version actuelle.",
+                "Mise à jour",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private static string NormalizeServerBaseUrl(string? baseUrl)
@@ -148,20 +544,13 @@ public partial class MainWindow : Window
         return true;
     }
 
+    // ✅ Utilise la vraie date de dernière sync (première fois : tout depuis 2000)
     private static string GetSinceUtcForQuery()
     {
-        // ✅ IMPORTANT : ta Db.cs stocke bien LastServerSyncUtc dans Settings.
-        // Si invalide -> on repart loin dans le passé
-        var raw = Db.GetLastServerSyncUtc();
-
-        if (!TryParseUtc(raw, out var lastUtc))
-            return "2000-01-01T00:00:00Z";
-
-        // protection si la valeur est "dans le futur"
-        if (lastUtc > DateTime.UtcNow.AddMinutes(5))
-            return "2000-01-01T00:00:00Z";
-
-        return lastUtc.ToString("o");
+        var stored = Db.GetLastServerSyncUtc();
+        if (!string.IsNullOrWhiteSpace(stored))
+            return stored;
+        return "2000-01-01T00:00:00Z";
     }
 
     private async Task ServerSyncTickAsync()
@@ -177,38 +566,86 @@ public partial class MainWindow : Window
             var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
             var sinceUtc = GetSinceUtcForQuery();
 
-            var url =
-                $"{baseUrl}/internal/submissions/since?apiKey={Uri.EscapeDataString(ServerApiKey)}&sinceUtc={Uri.EscapeDataString(sinceUtc)}";
+            var url = $"{baseUrl}/internal/submissions/since?sinceUtc={Uri.EscapeDataString(sinceUtc)}";
 
-            // ✅ IMPORTANT : GetAsync nève PAS d’exception sur 404/401.
-            using var resp = await Http.GetAsync(url);
-
-            if (!resp.IsSuccessStatusCode)
+            HttpResponseMessage? resp = null;
+            try
             {
-                // On ne bloque pas l’app en cas d’erreur serveur / route manquante.
-                // On réessaiera au prochain tick.
+                resp = await GetWithApiKeyAsync(Http, url);
+            }
+            catch
+            {
                 return;
             }
 
-            var json = await resp.Content.ReadAsStringAsync();
-
-            var items = JsonSerializer.Deserialize<List<ServerSubmission>>(json, JsonOptions) ?? new List<ServerSubmission>();
-
-            if (items.Count == 0)
+            using (resp)
             {
+                if (!resp.IsSuccessStatusCode)
+                    return;
+
+                var json = await resp.Content.ReadAsStringAsync();
+                json = (json ?? "").Trim();
+
+                if (json.Length == 0)
+                    return;
+
+                // ✅ Le serveur peut renvoyer soit:
+                // - un ARRAY directement: [ {..}, {..} ]
+                // - ou un objet enveloppe: { "ok": true, "items": [ ... ] }
+                List<ServerSubmission> items;
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        items = JsonSerializer.Deserialize<List<ServerSubmission>>(json, JsonOptions) ?? new List<ServerSubmission>();
+                    }
+                    else if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                             doc.RootElement.TryGetProperty("items", out var itemsEl) &&
+                             itemsEl.ValueKind == JsonValueKind.Array)
+                    {
+                        items = JsonSerializer.Deserialize<List<ServerSubmission>>(itemsEl.GetRawText(), JsonOptions) ?? new List<ServerSubmission>();
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                catch
+                {
+                    return;
+                }
+
+                if (items.Count == 0)
+                {
+                    Db.SetLastServerSyncUtc(DateTime.UtcNow.ToString("o"));
+                    return;
+                }
+
+                foreach (var it in items)
+                {
+                    // ✅ Isolation par soumission : si UNE soumission plante pendant son
+                    // traitement, elle ne doit plus jamais bloquer tout le lot ni empêcher
+                    // le curseur de synchro (LastServerSyncUtc) d'avancer. Sans ça, l'appli
+                    // pouvait rester bloquée indéfiniment sur le même lot à chaque tick de
+                    // 60s, sans aucune erreur visible (ni popup, ni log), même après un
+                    // redémarrage — puisque le curseur est persisté en base locale.
+                    try
+                    {
+                        await ApplySubmissionToLocalDbAsync(baseUrl, ServerApiKey, it);
+                    }
+                    catch (Exception itemEx)
+                    {
+                        LogSyncError($"{it.Role}:{it.WorkOrderRef}:{it.SubmittedAtUtc:O} -> {itemEx}");
+                    }
+                }
+
                 Db.SetLastServerSyncUtc(DateTime.UtcNow.ToString("o"));
-                return;
+
+                if (MainContent.Content is IReloadablePage p)
+                    p.Reload();
             }
-
-            foreach (var it in items)
-            {
-                await ApplySubmissionToLocalDbAsync(baseUrl, ServerApiKey, it);
-            }
-
-            Db.SetLastServerSyncUtc(DateTime.UtcNow.ToString("o"));
-
-            if (MainContent.Content is IReloadablePage p)
-                p.Reload();
         }
         catch
         {
@@ -224,9 +661,11 @@ public partial class MainWindow : Window
     {
         public string Role { get; set; } = "";              // "company" | "signer"
         public string WorkOrderRef { get; set; } = "";       // ex: "19-P1"
-        public string SubmittedAtUtc { get; set; } = "";     // ISO
+        public DateTime SubmittedAtUtc { get; set; }          // UTC
         public string Summary { get; set; } = "";
-        public Dictionary<string, string> Data { get; set; } = new();
+
+        // ✅ "data" peut contenir des valeurs string OU des objets JSON (ex: payload)
+        public JsonElement Data { get; set; }
     }
 
     private static bool TryParseWorkOrderRef(string workOrderRef, out int bdrNumber, out long projectIdFromRef)
@@ -247,15 +686,11 @@ public partial class MainWindow : Window
         return long.TryParse(p, out projectIdFromRef);
     }
 
-    // ✅ Définitif : utilise la Db.cs que tu m’as donnée
-    // - Db.GetWorkOrders(projectId) existe (overload)
-    // - fallback : tous les bons si jamais le mapping Pn->projectId ne correspond pas
     private static WorkOrder? FindLocalWorkOrderRobust(string workOrderRef)
     {
         if (!TryParseWorkOrderRef(workOrderRef, out var bdr, out var projectIdFromRef))
             return null;
 
-        // 1) strict : bons du projet "Pn"
         try
         {
             var strictList = Db.GetWorkOrders(projectIdFromRef);
@@ -267,7 +702,6 @@ public partial class MainWindow : Window
             // ignore => fallback
         }
 
-        // 2) fallback : cherche bdr dans tous les projets
         try
         {
             var all = Db.GetWorkOrders();
@@ -276,13 +710,72 @@ public partial class MainWindow : Window
             if (matches.Count == 1)
                 return matches[0];
 
-            // 0 match ou plusieurs => on ne peut pas décider sans risque
             return null;
         }
         catch
         {
             return null;
         }
+    }
+
+    private sealed class CompanyQuoteLinePayload
+    {
+        public string Label { get; set; } = "";
+        public double Qty { get; set; }
+        public double UnitPrice { get; set; }
+    }
+
+    private sealed class CompanyQuotePayload
+    {
+        public string QuoteName { get; set; } = "";
+        public string QuoteDateIso { get; set; } = "";
+        public string Note { get; set; } = "";
+
+        public List<CompanyQuoteLinePayload> Lines { get; set; } = new();
+
+        public double LaborHours { get; set; }
+        public double LaborRate { get; set; }
+        public double TravelQty { get; set; }
+        public double TravelRate { get; set; }
+
+        public double ForfaitHt { get; set; }
+
+        public double DiscountRate { get; set; }
+        public double TvaRate { get; set; }
+
+        public double TotalHtNet { get; set; }
+        public double TotalTtc { get; set; }
+    }
+
+    // ✅ Retrouve une fenêtre WorkOrderWindow déjà ouverte pour un bon donné (utilisé pour
+    // rafraîchir l'affichage après une synchronisation serveur en tâche de fond).
+    private WorkOrderWindow? FindOpenWorkOrderWindow(long workOrderId)
+    {
+        foreach (Window w in System.Windows.Application.Current.Windows)
+        {
+            if (w is WorkOrderWindow wow && wow.CurrentWorkOrderId == workOrderId)
+                return wow;
+        }
+        return null;
+    }
+
+    // ✅ Détermine la fenêtre à utiliser comme propriétaire pour le pop-up "Réponse
+    // entreprise/signataire reçue" : si le bon concerné est déjà ouvert dans une
+    // WorkOrderWindow (modale via ShowDialog), on affiche le pop-up par-dessus CETTE
+    // fenêtre (et on l'active pour qu'elle soit au premier plan). Sinon on retombe sur
+    // MainWindow. Sans ça, le pop-up pouvait s'ouvrir caché derrière la WorkOrderWindow
+    // déjà ouverte (propriétaire = MainWindow, désactivée par la modale en cours),
+    // bloquant silencieusement la suite (changement de statut) tant qu'on ne le trouvait
+    // pas par hasard.
+    private Window ShowSubmissionPopupOwner(long workOrderId)
+    {
+        var openWin = FindOpenWorkOrderWindow(workOrderId);
+        if (openWin != null)
+        {
+            try { openWin.Activate(); } catch { }
+            return openWin;
+        }
+        return this;
     }
 
     private async Task ApplySubmissionToLocalDbAsync(string baseUrl, string apiKey, ServerSubmission it)
@@ -292,76 +785,254 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(role) || string.IsNullOrWhiteSpace(wor))
             return;
 
-        // ✅ Définitif : ignore tout ce qui n’est pas au format "NN-PN"
         if (!TryParseWorkOrderRef(wor, out _, out _))
+            return;
+
+        // ✅ Anti-doublon : skip si déjà traité dans cette session
+        var submissionKey = $"{role}:{wor}:{it.SubmittedAtUtc:O}";
+        if (!_processedSubmissionKeys.Add(submissionKey))
             return;
 
         var wo = FindLocalWorkOrderRobust(wor);
         if (wo == null)
         {
-            // avertit 1x max par workOrderRef pour éviter le spam
             if (_warnedNotFoundLocal.Add(wor))
             {
-                System.Windows.MessageBox.Show(
+                WpfMessageBox.Show(
                     this,
                     $"Sync : bon introuvable en local pour {wor}.",
                     "Iziregi",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
             return;
         }
 
-        // NOTE: ne pas filtrer ici — on veut voir la pop-up même si le statut est déjà atteint.
-
         if (role == "company")
         {
-            if (it.Data.TryGetValue("quoteName", out var quoteName))
-                wo.QuoteName = (quoteName ?? "").Trim();
+            // ✅ data = JSON object
+            string? payloadJson = null;
+            string? quoteName2 = null;
+            string? note2 = null;
+            string? forfaitPdfBase64_2 = null;
+            string? forfaitPdfName_2 = null;
 
-            if (it.Data.TryGetValue("note", out var note))
-                wo.QuoteNotes = note ?? "";
+            try
+            {
+                if (it.Data.ValueKind == JsonValueKind.Object)
+                {
+                    if (it.Data.TryGetProperty("payload", out var payloadEl))
+                    {
+                        // payload peut être soit une string JSON, soit directement un objet JSON
+                        if (payloadEl.ValueKind == JsonValueKind.String)
+                            payloadJson = payloadEl.GetString();
+                        else if (payloadEl.ValueKind == JsonValueKind.Object || payloadEl.ValueKind == JsonValueKind.Array)
+                            payloadJson = payloadEl.GetRawText();
+                    }
 
-            Db.UpdateWorkOrderQuote(wo);
-            Db.SetStageQuoteReceived(wo.Id);
+                    if (it.Data.TryGetProperty("quoteName", out var quoteNameEl) && quoteNameEl.ValueKind == JsonValueKind.String)
+                        quoteName2 = quoteNameEl.GetString();
 
-            System.Windows.MessageBox.Show(
-                this,
+                    if (it.Data.TryGetProperty("note", out var noteEl) && noteEl.ValueKind == JsonValueKind.String)
+                        note2 = noteEl.GetString();
+
+                    // ✅ PDF forfait annexé par l'entreprise
+                    if (it.Data.TryGetProperty("forfaitPdfBase64", out var fpdfEl) && fpdfEl.ValueKind == JsonValueKind.String)
+                        forfaitPdfBase64_2 = fpdfEl.GetString();
+
+                    if (it.Data.TryGetProperty("forfaitPdfName", out var fnameEl) && fnameEl.ValueKind == JsonValueKind.String)
+                        forfaitPdfName_2 = fnameEl.GetString();
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            // ✅ Nouveau : applique le devis complet depuis payload JSON (si présent)
+            if (!string.IsNullOrWhiteSpace(payloadJson))
+            {
+                try
+                {
+                    var payload = JsonSerializer.Deserialize<CompanyQuotePayload>(payloadJson, JsonOptions);
+                    if (payload != null)
+                    {
+                        wo.QuoteName = (payload.QuoteName ?? "").Trim();
+                        wo.QuoteNotes = payload.Note ?? "";
+
+                        // ✅ Date du devis envoyée par l'entreprise (QuoteDateIso) : auparavant jamais
+                        // appliquée à wo.QuoteDate, donc "la date n'est pas mentionnée" côté Architecte.
+                        if (!string.IsNullOrWhiteSpace(payload.QuoteDateIso) &&
+                            DateTime.TryParse(payload.QuoteDateIso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var quoteDateParsed))
+                        {
+                            wo.QuoteDate = quoteDateParsed.Date;
+                        }
+
+                        wo.LaborHours = payload.LaborHours;
+                        wo.LaborRate = payload.LaborRate;
+                        wo.TravelQty = payload.TravelQty;
+                        wo.TravelRate = payload.TravelRate;
+
+                        // forfait HT : qty=1, unitPrice=ForfaitHt
+                        wo.ForfaitQty = payload.ForfaitHt != 0 ? 1 : 0;
+                        wo.ForfaitUnitPrice = payload.ForfaitHt;
+
+                        wo.DiscountRate = payload.DiscountRate;
+                        wo.TvaRate = payload.TvaRate;
+
+                        Db.UpdateWorkOrderQuote(wo);
+
+                        // lignes matériel
+                        var existing = Db.GetWorkOrderLines(wo.Id);
+                        foreach (var l in existing)
+                            Db.DeleteWorkOrderLine(l.Id);
+
+                        if (payload.Lines != null)
+                        {
+                            foreach (var l in payload.Lines)
+                                Db.InsertWorkOrderLine(wo.Id, l.Label ?? "", l.Qty, l.UnitPrice);
+                        }
+                    }
+                }
+                catch
+                {
+                    // fallback minimal (si payload invalide)
+                    if (!string.IsNullOrWhiteSpace(quoteName2))
+                        wo.QuoteName = quoteName2.Trim();
+
+                    wo.QuoteNotes = note2 ?? "";
+
+                    Db.UpdateWorkOrderQuote(wo);
+                }
+            }
+            else
+            {
+                // fallback minimal
+                if (!string.IsNullOrWhiteSpace(quoteName2))
+                    wo.QuoteName = quoteName2.Trim();
+
+                wo.QuoteNotes = note2 ?? "";
+
+                Db.UpdateWorkOrderQuote(wo);
+            }
+
+            // ✅ PDF forfait annexé par l'entreprise : enregistrement local
+            if (!string.IsNullOrWhiteSpace(forfaitPdfBase64_2))
+            {
+                try
+                {
+                    var b64 = forfaitPdfBase64_2;
+                    var commaIdx = b64.IndexOf(',');
+                    if (commaIdx >= 0) b64 = b64[(commaIdx + 1)..];
+                    var pdfBytes = Convert.FromBase64String(b64);
+                    var pdfName = string.IsNullOrWhiteSpace(forfaitPdfName_2) ? "forfait.pdf" : forfaitPdfName_2.Trim();
+
+                    wo.ForfaitPdfFileName = pdfName;
+                    wo.ForfaitPdfFileBytes = pdfBytes;
+                    Db.UpdateWorkOrderForfaitPdf(wo.Id, pdfName, pdfBytes);
+                }
+                catch
+                {
+                    // on continue sans bloquer la réception du devis
+                }
+            }
+
+            // ✅ Le statut "Devis reçu" ne doit être appliqué qu'après le clic sur "Ok" du pop-up
+            // (WpfMessageBox.Show est bloquant : le code qui suit ne s'exécute qu'après le clic).
+            //
+            // ⚠️ Si le bon est déjà ouvert dans une fenêtre WorkOrderWindow (modale, ShowDialog),
+            // afficher ce MessageBox avec "this" (MainWindow, désactivée par la modale) comme
+            // propriétaire peut le faire apparaître DERRIÈRE la fenêtre déjà ouverte : invisible,
+            // il bloque alors silencieusement la suite du code (changement de statut + reload)
+            // jusqu'à ce que l'utilisateur la découvre par hasard. On utilise donc la fenêtre
+            // déjà ouverte pour ce bon comme propriétaire quand elle existe, et on l'active pour
+            // garantir que le pop-up apparaisse bien au premier plan, visible et cliquable.
+            NotifyNewSubmission();
+            var quoteOwnerWin = ShowSubmissionPopupOwner(wo.Id);
+            WpfMessageBox.Show(
+                quoteOwnerWin,
                 $"Réponse entreprise reçue pour {wor}",
                 "Iziregi",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            Db.SetStageQuoteReceived(wo.Id);
+
+            // ✅ Si le bon est déjà ouvert dans une fenêtre (WorkOrderWindow), on la rafraîchit
+            // pour que les lignes de devis / PDF forfait reçus apparaissent sans devoir
+            // fermer puis rouvrir la fenêtre. Sinon, on ouvre le bon d'office (comme pour la
+            // validation signataire) pour garantir que le Dashboard affiche bien "Devis reçu"
+            // immédiatement après le clic sur "Ok", sans devoir l'ouvrir manuellement.
+            var openQuoteWin = FindOpenWorkOrderWindow(wo.Id);
+            if (openQuoteWin != null)
+                openQuoteWin.ReloadAfterServerSync();
+            else
+                OpenWorkOrder(wo.Id, WorkOrderEditMode.Architecte);
 
             return;
         }
 
         if (role == "signer")
         {
-            if (it.Data.TryGetValue("decision", out var decision))
-                Db.UpdateWorkOrderValidationDecision(wo.Id, decision);
+            string? decision = null;
+            string? name = null;
+            string? dateStr = null;
 
-            if (it.Data.TryGetValue("name", out var name))
-                wo.SignatureName = (name ?? "").Trim();
+            try
+            {
+                if (it.Data.ValueKind == JsonValueKind.Object)
+                {
+                    if (it.Data.TryGetProperty("decision", out var dEl) && dEl.ValueKind == JsonValueKind.String)
+                        decision = dEl.GetString();
 
-            if (it.Data.TryGetValue("date", out var dateStr))
+                    if (it.Data.TryGetProperty("name", out var nEl) && nEl.ValueKind == JsonValueKind.String)
+                        name = nEl.GetString();
+
+                    if (it.Data.TryGetProperty("date", out var dateEl) && dateEl.ValueKind == JsonValueKind.String)
+                        dateStr = dateEl.GetString();
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            if (!string.IsNullOrWhiteSpace(decision))
+            {
+                // ✅ Traduit les valeurs anglaises du serveur en français (attendu par le WPF)
+                var frDecision = decision.ToLowerInvariant() switch
+                {
+                    "validated" => "Validé",
+                    "refused" => "Refusé",
+                    "cancelled" => "Annulé",
+                    _ => decision
+                };
+                Db.UpdateWorkOrderValidationDecision(wo.Id, frDecision);
+                wo.ValidationDecision = frDecision;
+            }
+
+            if (!string.IsNullOrWhiteSpace(name))
+                wo.SignatureName = name.Trim();
+
+            if (!string.IsNullOrWhiteSpace(dateStr))
             {
                 if (DateTime.TryParse(dateStr, out var dt))
                     wo.SignatureDate = dt.Date;
             }
 
-            // Télécharge signature PNG (si endpoint disponible)
+            // ✅ Lit la signature directement depuis le JSON de la soumission (plus fiable)
             try
             {
-                var normalized = NormalizeServerBaseUrl(baseUrl);
-                var sigUrl =
-                    $"{normalized}/internal/signatures/get?apiKey={Uri.EscapeDataString(apiKey)}&workOrderRef={Uri.EscapeDataString(wor)}";
-
-                using var sigResp = await Http.GetAsync(sigUrl);
-                if (sigResp.IsSuccessStatusCode)
+                if (it.Data.TryGetProperty("signatureBase64", out var sigB64El) &&
+                    sigB64El.ValueKind == JsonValueKind.String)
                 {
-                    var bytes = await sigResp.Content.ReadAsByteArrayAsync();
-                    if (bytes != null && bytes.Length > 0)
-                        wo.SignaturePng = bytes;
+                    var b64 = sigB64El.GetString() ?? "";
+                    var commaIdx = b64.IndexOf(',');
+                    if (commaIdx >= 0) b64 = b64[(commaIdx + 1)..];
+                    if (!string.IsNullOrWhiteSpace(b64) && b64.Length > 100)
+                    {
+                        try { wo.SignaturePng = Convert.FromBase64String(b64); } catch { }
+                    }
                 }
             }
             catch
@@ -370,17 +1041,60 @@ public partial class MainWindow : Window
             }
 
             Db.UpdateWorkOrderSignatureRaw(wo);
-            Db.SetStageValidated(wo.Id);
 
-            System.Windows.MessageBox.Show(
-                this,
+            // ✅ Le statut "Validé" ne doit être appliqué qu'après le clic sur "Ok" du pop-up
+            // (WpfMessageBox.Show est bloquant : le code qui suit ne s'exécute qu'après le clic).
+            //
+            // ⚠️ Même remarque que côté "company" : si le bon est déjà ouvert dans une
+            // WorkOrderWindow modale, ce pop-up doit être affiché par-dessus CETTE fenêtre
+            // (et pas par-dessus MainWindow, désactivée/masquée par la modale), sinon il
+            // apparaît caché derrière et bloque silencieusement le changement de statut tant
+            // qu'on ne l'a pas découvert et fermé. C'est ce qui causait "je clique sur le pop
+            // up et le statut ne change pas directement" : le VRAI pop-up bloquant était
+            // invisible, donc le code qui suit (SetStageValidated + reload) ne s'exécutait pas.
+            NotifyNewSubmission();
+            var signerOwnerWin = ShowSubmissionPopupOwner(wo.Id);
+            WpfMessageBox.Show(
+                signerOwnerWin,
                 $"Réponse signataire reçue pour {wor}",
                 "Iziregi",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            Db.SetStageValidated(wo.Id);
+
+            // ✅ Dès que l'architecte clique sur "Ok" du pop-up, le Bdr concerné s'ouvre
+            // d'office (au lieu d'obliger l'architecte à aller le consulter manuellement
+            // pour que le statut "Validé" apparaisse). S'il est déjà ouvert, on se contente
+            // de le rafraîchir pour que la signature reçue apparaisse.
+            var openWin = FindOpenWorkOrderWindow(wo.Id);
+            if (openWin != null)
+                openWin.ReloadAfterServerSync();
+            else
+                OpenWorkOrder(wo.Id, WorkOrderEditMode.Architecte);
 
             return;
         }
+    }
+
+    // =========================
+    // Notifications soumission : son + flash barre des tâches
+    // =========================
+    [DllImport("user32.dll")]
+    private static extern bool FlashWindow(IntPtr hWnd, bool bInvert);
+
+    private void NotifyNewSubmission()
+    {
+        // Son système discret
+        try { SystemSounds.Asterisk.Play(); } catch { }
+
+        // Flash de l'icône dans la barre des tâches (si fenêtre minimisée ou en arrière-plan)
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero) FlashWindow(hwnd, true);
+        }
+        catch { }
     }
 
     // =========================
@@ -436,33 +1150,83 @@ public partial class MainWindow : Window
 
     private void UpdateProjectBadge(bool show)
     {
-        if (ProjectBadgeContainer != null)
-            ProjectBadgeContainer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        var panel = this.FindName("ProjectSelectorPanel") as System.Windows.Controls.Panel;
+        if (panel != null)
+            panel.Visibility = Visibility.Visible;
 
-        if (!show)
-            return;
+        var manageBtn = this.FindName("ManageProjectsButton") as System.Windows.Controls.Button;
+        if (manageBtn != null)
+        {
+            manageBtn.Visibility = (MainContent.Content is DashboardPage) ? Visibility.Visible : Visibility.Collapsed;
+        }
 
         var p = Db.GetCurrentProject();
 
-        if (ProjectBadgeTextBlock != null)
+        var cb = this.FindName("ProjectSelectorComboBox") as System.Windows.Controls.ComboBox;
+        if (cb != null)
         {
-            ProjectBadgeTextBlock.Text = p != null
-                ? $"Projet : {p.Name}"
-                : "Projet : (aucun)";
-        }
+            if (p != null)
+                cb.SelectedValue = p.Id;
 
-        if (ProjectBadgeContainer != null)
-        {
             var bg = p != null ? BrushFromHexOrNull(p.ColorHex) : MediaBrushes.Transparent;
-
             if (bg == null || bg == MediaBrushes.Transparent)
                 bg = BrushFromHexOrNull("#111827");
 
-            ProjectBadgeContainer.Background = bg;
-
-            if (ProjectBadgeTextBlock != null)
-                ProjectBadgeTextBlock.Foreground = GetTextBrushForBackground(bg);
+            try
+            {
+                cb.Background = bg;
+                cb.Foreground = GetTextBrushForBackground(bg);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("RefreshProjectSelector exception: " + ex);
+            }
         }
+    }
+
+    public void RefreshProjectSelector()
+    {
+        try
+        {
+            var projects = Db.GetProjects();
+            var cb = this.FindName("ProjectSelectorComboBox") as System.Windows.Controls.ComboBox;
+            var border = this.FindName("ProjectSelectorBorder") as System.Windows.Controls.Border;
+
+            if (cb != null)
+            {
+                cb.ItemsSource = null;
+                cb.ItemsSource = projects;
+
+                var p = Db.GetCurrentProject();
+                if (p != null)
+                    cb.SelectedValue = p.Id;
+
+                cb.UpdateLayout();
+                try { cb.ApplyTemplate(); } catch { }
+            }
+
+            try
+            {
+                var p2 = Db.GetCurrentProject();
+                var bg = p2 != null ? BrushFromHexOrNull(p2.ColorHex) : MediaBrushes.Transparent;
+                if (bg == null || bg == MediaBrushes.Transparent)
+                    bg = BrushFromHexOrNull("#111827");
+
+                var btn = this.FindName("ProjectSelectorButton") as System.Windows.Controls.Button;
+                if (btn != null)
+                {
+                    try { btn.Background = bg; } catch { }
+                    try { btn.Foreground = GetTextBrushForBackground(bg); } catch { }
+                    try { btn.Content = p2 != null ? (p2.Name ?? "Projet") : "Projet"; } catch { }
+                    try { btn.UpdateLayout(); } catch { }
+                }
+            }
+            catch { }
+
+            UpdateProjectBadge(show: true);
+            try { System.Diagnostics.Debug.WriteLine($"RefreshProjectSelector: currentDbId={Db.GetCurrentProjectId()} currentSelected={_selectedProject?.Id}/{_selectedProject?.Name}"); } catch { }
+        }
+        catch { }
     }
 
     // =========================
@@ -474,18 +1238,41 @@ public partial class MainWindow : Window
     private void NavTrash_Click(object sender, RoutedEventArgs e) => ShowTrash();
     private void NavLists_Click(object sender, RoutedEventArgs e) => ShowLists();
     private void NavPlanning_Click(object sender, RoutedEventArgs e) => ShowPlanning();
+    private void NavArchitectIdentity_Click(object sender, RoutedEventArgs e)
+    {
+        var win = new ArchitectIdentityWindow(ServerBaseUrl, ServerApiKey) { Owner = this };
+        win.ShowDialog();
+    }
+
+    private void NavSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var setup = new ConfigSetupWindow();
+        setup.ShowDialog();
+    }
+
+    // ✅ BUG (grilles/images/stickers du Planning perdus au changement de page) : on ne
+    // peut pas se fier uniquement à l'événement Unloaded de PlanningPage pour sauvegarder
+    // avant de quitter — pas assez fiable dans ce contexte. On force donc une sauvegarde
+    // explicite et synchrone AVANT chaque changement de page, tant que la page actuellement
+    // affichée est bien le Planning (no-op sinon).
+    private void FlushPlanningIfActive()
+    {
+        try { (MainContent.Content as PlanningPage)?.FlushPendingChanges(); } catch { }
+    }
 
     private void ShowDashboard()
     {
+        FlushPlanningIfActive();
         _dashboardPage ??= new DashboardPage(this);
         MainContent.Content = _dashboardPage;
         _dashboardPage.Reload();
 
-        UpdateProjectBadge(show: false);
+        UpdateProjectBadge(show: true);
     }
 
-    private void ShowAccounting()
+    internal void ShowAccounting()
     {
+        FlushPlanningIfActive();
         _accountingPage ??= new AccountingPage(this);
         MainContent.Content = _accountingPage;
         _accountingPage.Reload();
@@ -495,6 +1282,7 @@ public partial class MainWindow : Window
 
     private void ShowArchives()
     {
+        FlushPlanningIfActive();
         _archivesPage ??= new ArchivesPage(this);
         MainContent.Content = _archivesPage;
         _archivesPage.Reload();
@@ -504,6 +1292,7 @@ public partial class MainWindow : Window
 
     private void ShowTrash()
     {
+        FlushPlanningIfActive();
         _trashPage ??= new TrashPage(this);
         MainContent.Content = _trashPage;
         _trashPage.Reload();
@@ -513,6 +1302,7 @@ public partial class MainWindow : Window
 
     private void ShowLists()
     {
+        FlushPlanningIfActive();
         _listsPage ??= new ListsPage(this);
         MainContent.Content = _listsPage;
         _listsPage.Reload();
@@ -522,24 +1312,31 @@ public partial class MainWindow : Window
 
     private void ShowPlanning()
     {
-        _planningPage ??= new PlanningPage(this);
+        FlushPlanningIfActive();
+        _planningPage = new PlanningPage(this);
         MainContent.Content = _planningPage;
         _planningPage.Reload();
 
         UpdateProjectBadge(show: true);
     }
 
-    // =========================
-    // ✅ Handler manquant (MainWindow.xaml -> Click="PlanningPdf_Click")
-    // =========================
     private void PlanningPdf_Click(object sender, RoutedEventArgs e)
     {
-        System.Windows.MessageBox.Show(
-            this,
-            "Export PDF planning : TODO",
-            "Planning",
-            System.Windows.MessageBoxButton.OK,
-            System.Windows.MessageBoxImage.Information);
+        // ✅ Auparavant un simple message "TODO" : branché désormais sur l'export PDF
+        // déjà fonctionnel de PlanningPage (bouton "Export PDF" de la page elle-même).
+        if (_planningPage != null)
+        {
+            _planningPage.ExportPdf();
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "Ouvrez d'abord la page Planning avant d'exporter le PDF.",
+                "Planning",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
     }
 
     // =========================
@@ -552,8 +1349,117 @@ public partial class MainWindow : Window
         _selectedProject = p;
         Db.SetCurrentProjectId(_selectedProject?.Id);
 
-        var show = ProjectBadgeContainer != null && ProjectBadgeContainer.Visibility == Visibility.Visible;
+        var panelForShow = this.FindName("ProjectSelectorPanel") as System.Windows.Controls.Panel;
+        var show = panelForShow != null && panelForShow.Visibility == Visibility.Visible;
         UpdateProjectBadge(show: show);
+        try { RecreatePagesForProject(); } catch { }
+        try { RefreshProjectSelector(); } catch { }
+    }
+
+    private void RecreatePagesForProject()
+    {
+        FlushPlanningIfActive();
+        var current = MainContent.Content;
+
+        var wasDashboard = current is DashboardPage;
+        var wasAccounting = current is AccountingPage;
+        var wasArchives = current is ArchivesPage;
+        var wasTrash = current is TrashPage;
+        var wasLists = current is ListsPage;
+        var wasPlanning = current is PlanningPage;
+
+        _dashboardPage = null;
+        _accountingPage = null;
+        _archivesPage = null;
+        _trashPage = null;
+        _listsPage = null;
+        _planningPage = null;
+
+        try
+        {
+            if (wasDashboard)
+            {
+                _dashboardPage = new DashboardPage(this);
+                MainContent.Content = _dashboardPage;
+                _dashboardPage.Reload();
+                return;
+            }
+
+            if (wasAccounting)
+            {
+                _accountingPage = new AccountingPage(this);
+                MainContent.Content = _accountingPage;
+                _accountingPage.Reload();
+                return;
+            }
+
+            if (wasArchives)
+            {
+                _archivesPage = new ArchivesPage(this);
+                MainContent.Content = _archivesPage;
+                _archivesPage.Reload();
+                return;
+            }
+
+            if (wasTrash)
+            {
+                _trashPage = new TrashPage(this);
+                MainContent.Content = _trashPage;
+                _trashPage.Reload();
+                return;
+            }
+
+            if (wasLists)
+            {
+                _listsPage = new ListsPage(this);
+                MainContent.Content = _listsPage;
+                _listsPage.Reload();
+                return;
+            }
+
+            if (wasPlanning)
+            {
+                _planningPage = new PlanningPage(this);
+                MainContent.Content = _planningPage;
+                _planningPage.Reload();
+                return;
+            }
+        }
+        catch
+        {
+            // non bloquant
+        }
+    }
+
+    public void SetSelectedProjectRecreatePlanning(Project? p)
+    {
+        var wasPlanningActive = MainContent.Content is PlanningPage;
+
+        SetSelectedProject(p);
+
+        try
+        {
+            _planningPage = new PlanningPage(this);
+
+            if (wasPlanningActive)
+            {
+                MainContent.Content = _planningPage;
+                _planningPage.Reload();
+            }
+        }
+        catch
+        {
+            // non bloquant
+        }
+        try { RefreshProjectSelector(); } catch { }
+    }
+
+    public void SetSelectedProjectAndReload(Project? p)
+    {
+        SetSelectedProject(p);
+
+        try { _listsPage?.Reload(); } catch { }
+        try { _planningPage?.Reload(); _planningPage?.RefreshCompanyColors(); } catch { }
     }
 
     public List<WorkOrder> GetAllWorkOrders() => Db.GetWorkOrders();
@@ -561,10 +1467,22 @@ public partial class MainWindow : Window
     public void OpenWorkOrder(long workOrderId, WorkOrderEditMode mode)
     {
         var w = new WorkOrderWindow(workOrderId, mode) { Owner = this };
-        w.ShowDialog();
+        try
+        {
+            w.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("Exception while opening WorkOrderWindow: " + ex);
+                var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
+                System.IO.File.WriteAllText(path, ex.ToString());
+            }
+            catch { }
+        }
 
-        if (MainContent.Content is IReloadablePage p)
-            p.Reload();
+        try { if (MainContent.Content is IReloadablePage p) p.Reload(); } catch { }
     }
 
     public void ChooseProject()
@@ -577,7 +1495,8 @@ public partial class MainWindow : Window
             Db.SetCurrentProjectId(_selectedProject.Id);
         }
 
-        var show = ProjectBadgeContainer != null && ProjectBadgeContainer.Visibility == Visibility.Visible;
+        var panelForShow = this.FindName("ProjectSelectorPanel") as System.Windows.Controls.Panel;
+        var show = panelForShow != null && panelForShow.Visibility == Visibility.Visible;
         UpdateProjectBadge(show: show);
 
         if (MainContent.Content is IReloadablePage p)

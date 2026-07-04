@@ -83,14 +83,14 @@ FontFamily="Arial">
         <Style x:Key="RightAlignedCellTextStyle" TargetType="TextBlock">
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Padding" Value="0,0,6,0"/>
             <Setter Property="Margin" Value="0"/>
         </Style>
 
         <Style x:Key="CenterAlignedCellTextStyle" TargetType="TextBlock">
-            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Padding" Value="0,0,6,0"/>
             <Setter Property="Margin" Value="0"/>
         </Style>
 
@@ -494,8 +494,7 @@ AcceptsReturn="True"
 TextWrapping="Wrap"
 VerticalScrollBarVisibility="Auto"
 BorderBrush="#D1D5DB"
-BorderThickness="1"
-FontSize="10"/>
+BorderThickness="1"/>
                                 </StackPanel>
                             </Grid>
 
@@ -689,7 +688,6 @@ HorizontalScrollBarVisibility="Disabled"
 BorderBrush="#D1D5DB"
 BorderThickness="1"
 Padding="10"
-FontSize="10"
 VerticalAlignment="Stretch"
 MinHeight="0"/>
                                     </StackPanel>
@@ -699,9 +697,9 @@ MinHeight="0"/>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="40"/>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="54"/>
+                                            <ColumnDefinition Width="78"/>
+                                            <ColumnDefinition Width="82"/>
                                         </Grid.ColumnDefinitions>
 
                                         <Border Grid.Column="0"
@@ -714,9 +712,9 @@ Padding="8,8">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="40"/>
-                                                    <ColumnDefinition Width="70"/>
-                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="54"/>
+                                                    <ColumnDefinition Width="78"/>
+                                                    <ColumnDefinition Width="82"/>
                                                 </Grid.ColumnDefinitions>
 
                                                 <TextBlock Grid.Column="0"
@@ -749,9 +747,9 @@ Margin="0,10,0,0">
 
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="40"/>
-                                                <ColumnDefinition Width="70"/>
-                                                <ColumnDefinition Width="70"/>
+                                                <ColumnDefinition Width="54"/>
+                                                <ColumnDefinition Width="78"/>
+                                                <ColumnDefinition Width="82"/>
                                             </Grid.ColumnDefinitions>
 
                                             <Border Grid.Row="0" Grid.Column="0"
@@ -987,16 +985,14 @@ Foreground="#111827"/>
 BorderBrush="#1D4ED8"
 BorderThickness="1"
 CornerRadius="10"
-Padding="7"
+Padding="0,7,0,7"
 Margin="0,10,0,0">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="56"/>
-                                                <ColumnDefinition Width="8"/>
-                                                <ColumnDefinition Width="60"/>
-                                                <ColumnDefinition Width="40"/>
-                                                <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="54"/>
+                                                <ColumnDefinition Width="78"/>
+                                                <ColumnDefinition Width="82"/>
                                             </Grid.ColumnDefinitions>
 
                                             <Grid.RowDefinitions>
@@ -1008,40 +1004,41 @@ Margin="0,10,0,0">
                                             <TextBlock Grid.Row="0" Grid.Column="0"
 Text="TVA (%)"
 Foreground="#111827"
+Margin="7,0,0,6"
 Style="{StaticResource TotalsLabelStyle}"/>
                                             <TextBox x:Name="TvaRateTextBox"
 Grid.Row="0"
-Grid.Column="3"
+Grid.Column="1"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
 VerticalAlignment="Center"
 Margin="0,0,0,6"/>
-                                            <TextBlock Grid.Row="0" Grid.Column="5"
+                                            <TextBlock Grid.Row="0" Grid.Column="3"
 x:Name="TvaAmountTextBlock"
 Text="0.00"
 FontWeight="SemiBold"
 Style="{StaticResource TotalsAmountStyle}"
-Margin="0,0,0,6"/>
+Margin="0,0,7,6"/>
 
                                             <TextBlock Grid.Row="1" Grid.Column="0"
 Text="Total TTC"
 FontWeight="Bold"
 FontSize="15"
 Foreground="#111827"
-Margin="0,0,18,2"
+Margin="7,0,18,2"
 VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="5"
+                                            <TextBlock Grid.Row="1" Grid.Column="3"
 x:Name="TotalTtcTextBlock"
 Text="0.00"
 FontWeight="Bold"
 FontSize="15"
 Foreground="#111827"
 Style="{StaticResource TotalsAmountStyle}"
-Margin="0,0,0,2"/>
+Margin="0,0,7,2"/>
 
                                             <Border Grid.Row="2"
-Grid.ColumnSpan="6"
+Grid.ColumnSpan="4"
 BorderBrush="#111827"
 BorderThickness="0,2,0,0"
 Margin="0,6,0,0"/>
@@ -1133,7 +1130,21 @@ BorderThickness="1"
 CornerRadius="10"
 Background="White"
 Height="140">
-                                        <InkCanvas x:Name="SignatureInkCanvas" Background="White"/>
+                                        <Grid>
+                                            <!-- ✅ Aperçu d'une signature déjà reçue/importée : affichée à sa
+                                                 taille naturelle (jamais agrandie au-delà), centrée, grâce à
+                                                 StretchDirection="DownOnly". Avant ce correctif, le fond de
+                                                 SignatureInkCanvas utilisait un ImageBrush Stretch=Uniform qui
+                                                 AGRANDISSAIT toujours l'image pour remplir le cadre 140px de
+                                                 haut : une signature recadrée serré (cropToContent côté web)
+                                                 apparaissait alors fortement zoomée / déformée.-->
+                                            <Image x:Name="SignaturePreviewImage"
+                                                   Stretch="Uniform"
+                                                   StretchDirection="DownOnly"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                            <InkCanvas x:Name="SignatureInkCanvas" Background="White"/>
+                                        </Grid>
                                     </Border>
 
                                     <StackPanel Grid.Row="2">

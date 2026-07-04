@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
 	<UseWindowsForms>true</UseWindowsForms>
+    <Version>1.0.9</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,6 +28,13 @@
 
   <ItemGroup>
     <Folder Include="obj\" />
+  </ItemGroup>
+
+  <!-- ✅ Écran de chargement affiché dès le lancement de l'app (visible pendant
+       que WPF/l'app démarrent), pour rassurer l'utilisateur pendant le délai
+       après une installation/mise à jour. -->
+  <ItemGroup>
+    <SplashScreen Include="Assets\Splash.png" />
   </ItemGroup>
 
 </Project>

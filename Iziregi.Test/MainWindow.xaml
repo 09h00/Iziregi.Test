@@ -9,47 +9,95 @@
         MinWidth="820"
         WindowStartupLocation="CenterScreen">
 
-	<DockPanel>
+    <Window.Resources>
+        <Style x:Key="ProjectComboStyle" TargetType="ComboBox">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0" Padding="4">
+                                <Grid>
+                                    <TextBlock x:Name="ContentSite"
+											   VerticalAlignment="Center"
+											   Margin="6,0,22,0"
+											   Text="{Binding SelectedItem.Name, RelativeSource={RelativeSource TemplatedParent}}"
+											   Foreground="{TemplateBinding Foreground}"/>
 
-		<!-- ✅ Bandeau haut : Menu + pastille alignée au Menu -->
-		<Grid DockPanel.Dock="Top" Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}">
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="*"/>
-				<ColumnDefinition Width="Auto"/>
-			</Grid.ColumnDefinitions>
+                                    <ToggleButton x:Name="DropDownToggle" Grid.Column="2" Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" HorizontalAlignment="Right" Width="20" Background="Transparent" BorderThickness="0">
+                                        <TextBlock Text="▾" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                                    </ToggleButton>
+                                </Grid>
+                            </Border>
 
-			<!-- MENU NAVIGATION -->
-			<Menu Grid.Column="0">
-				<MenuItem Header="Tableau de bord" Click="NavDashboard_Click"/>
-				<MenuItem Header="Comptabilité" Click="NavAccounting_Click"/>
-				<MenuItem Header="Archives" Click="NavArchives_Click"/>
-				<MenuItem Header="Corbeille" Click="NavTrash_Click"/>
-				<MenuItem Header="Listes" Click="NavLists_Click"/>
-				<MenuItem Header="Planning" Click="NavPlanning_Click"/>
-			</Menu>
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                                <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6">
+                                    <ScrollViewer>
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-			<!-- Pastille projet (dans le même bandeau que le Menu) -->
-			<Border Grid.Column="1"
-			        x:Name="ProjectBadgeContainer"
-			        VerticalAlignment="Center"
-			        Background="#111827"
-			        CornerRadius="10"
-			        Padding="8,5"
-			        Margin="8,0,12,0">
-				<TextBlock x:Name="ProjectBadgeTextBlock"
-				           Text="Projet :"
-				           Foreground="White"
-				           FontSize="11"
-				           FontWeight="SemiBold"/>
-			</Border>
-		</Grid>
+        <!-- Button style with chevron on the right -->
+        <Style x:Key="ButtonWithChevronStyle" TargetType="Button">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                <TextBlock Text="▾" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,6,0" Foreground="{TemplateBinding Foreground}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
-		<!-- CONTENU (PAGE) -->
-		<Border Background="White" Padding="12">
-			<Grid>
-				<ContentControl x:Name="MainContent" Margin="0,0,0,0"/>
-			</Grid>
-		</Border>
+    <DockPanel>
 
-	</DockPanel>
+        <!-- ✅ Bandeau haut : Menu + pastille alignée au Menu -->
+        <Grid DockPanel.Dock="Top" Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- MENU NAVIGATION -->
+            <Menu Grid.Column="0">
+                <MenuItem Header="Tableau de bord" Click="NavDashboard_Click"/>
+                <MenuItem Header="Comptabilité" Click="NavAccounting_Click"/>
+                <MenuItem Header="Archives" Click="NavArchives_Click"/>
+                <MenuItem Header="Corbeille" Click="NavTrash_Click"/>
+                <MenuItem Header="Listes" Click="NavLists_Click"/>
+                <MenuItem Header="Planning" Click="NavPlanning_Click"/>
+                <MenuItem Header="Identité architecte" Click="NavArchitectIdentity_Click"/>
+                <MenuItem Header="Paramètres" Click="NavSettings_Click"/>
+            </Menu>
+
+            <!-- Pastille projet (dans le même bandeau que le Menu) -->
+            <!-- Project selector visible sur toutes les pages -->
+            <StackPanel x:Name="ProjectSelectorPanel" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,12,0">
+                <Button x:Name="ProjectSelectorButton" Width="200" Height="30" Click="ProjectSelectorButton_Click" Padding="10,2" HorizontalAlignment="Center" Style="{StaticResource ButtonWithChevronStyle}"/>
+            </StackPanel>
+
+
+
+        </Grid>
+
+        <!-- CONTENU (PAGE) -->
+        <Border Background="White" Padding="12">
+            <Grid>
+                <ContentControl x:Name="MainContent" Margin="0,0,0,0"/>
+            </Grid>
+        </Border>
+
+    </DockPanel>
 </Window>

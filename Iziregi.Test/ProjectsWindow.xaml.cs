@@ -8,6 +8,7 @@ using System.Windows.Input;
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
 using Microsoft.VisualBasic;
+using System.Runtime.InteropServices;
 
 // ✅ Color picker Windows (WinForms)
 using WinFormsColorDialog = System.Windows.Forms.ColorDialog;
@@ -175,8 +176,8 @@ public partial class ProjectsWindow : Window
                 return;
             }
 
-            var brush = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(hex);
-            ProjectColorPreviewBorder.Background = brush;
+            var brush = new System.Windows.Media.BrushConverter().ConvertFromString(hex) as System.Windows.Media.Brush;
+            ProjectColorPreviewBorder.Background = brush ?? System.Windows.Media.Brushes.Transparent;
         }
         catch
         {
@@ -194,6 +195,16 @@ public partial class ProjectsWindow : Window
     {
         try
         {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                WpfMessageBox.Show(
+                    "Le sélecteur de couleur n'est disponible que sous Windows.",
+                    "Couleur",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
             var dlg = new WinFormsColorDialog
             {
                 FullOpen = true
@@ -432,6 +443,22 @@ public partial class ProjectsWindow : Window
 
             LoadProjects();
             SelectProjectByName(name);
+
+            // Rafraîchir le combobox global si la fenêtre a un Owner MainWindow
+            try
+            {
+                if (this.Owner is Iziregi.Test.MainWindow mw)
+                {
+                    mw.RefreshProjectSelector();
+                }
+            }
+            catch { }
+
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"ProjectsWindow.SaveProject_Click saved id={idToUpdateColor} color={colorHex}");
+            }
+            catch { }
         }
         catch (Exception ex)
         {

@@ -143,16 +143,24 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
     private void SetDefaultDateRangeFromCurrentData()
     {
         DateTime from;
+        DateTime to;
 
         if (_allAccountingWorkOrders != null && _allAccountingWorkOrders.Count > 0)
+        {
+            // ✅ Important : la plage par défaut doit couvrir TOUS les bons comptabilisés
+            // (du plus ancien au plus récent), sinon un bon nouvellement validé dont la
+            // date de demande tombe après le mois du tout premier bon comptabilisé se
+            // retrouvait hors de la plage "Du / Au" par défaut et semblait "ne pas
+            // apparaître" dans la Comptabilité, même si la donnée était correcte.
             from = _allAccountingWorkOrders.Min(w => w.RequestDate.Date);
+            to = _allAccountingWorkOrders.Max(w => w.RequestDate.Date);
+        }
         else
         {
             var today = DateTime.Today;
             from = new DateTime(today.Year, today.Month, 1);
+            to = new DateTime(today.Year, today.Month, 1).AddMonths(1).AddDays(-1);
         }
-
-        var to = new DateTime(from.Year, from.Month, 1).AddMonths(1).AddDays(-1);
 
         FromDatePicker.SelectedDate = from;
         ToDatePicker.SelectedDate = to;
@@ -268,7 +276,16 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         var labor = Math.Round(wo.LaborHours * wo.LaborRate, 2);
         var travel = Math.Round(wo.TravelQty * wo.TravelRate, 2);
 
-        var htBrut = Math.Round(material + labor + travel, 2);
+        // ✅ BUG RÉEL : le PDF du devis (PdfService.cs) inclut le Forfait (ForfaitQty ×
+        // ForfaitUnitPrice) dans le HT brut quand le devis a été fait en mode "Forfait selon
+        // doc annexé", mais ce calcul ne le faisait pas ici. Résultat : un bon devisé en
+        // Forfait (sans lignes de matériel ni heures de main d'œuvre saisies) ressortait à
+        // 0.00 partout dans le détail Comptabilité, alors qu'il a un vrai montant facturé.
+        // On reprend exactement la même logique que PdfService pour rester cohérent.
+        var forfait = Math.Round(wo.ForfaitQty * wo.ForfaitUnitPrice, 2);
+        var hasForfait = Math.Abs(forfait) > 0.0000000001;
+
+        var htBrut = Math.Round(material + labor + travel + (hasForfait ? forfait : 0), 2);
 
         var discountRate = wo.DiscountRate;
         if (double.IsNaN(discountRate) || double.IsInfinity(discountRate)) discountRate = 0;
@@ -292,7 +309,10 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             RequestedBy = wo.RequestedBy ?? "",
             Company = company,
 
-            Material = material,
+            // ✅ On ajoute le forfait au Matériel pour l'affichage/export (pas de colonne
+            // dédiée "Forfait" dans la grille/CSV) afin que Matériel+Main d'œuvre+
+            // Déplacements reste cohérent avec le HT total.
+            Material = Math.Round(material + (hasForfait ? forfait : 0), 2),
             Labor = labor,
             Travel = travel,
 
@@ -610,7 +630,29 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             {
                 Owner = Window.GetWindow(this)
             };
-            win.ShowDialog();
+            try
+            {
+                win.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine("Exception opening WorkOrderWindow from AccountingPage: " + ex);
+                    var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
+                    System.IO.File.WriteAllText(path, ex.ToString());
+                    // Silent fallback: no MessageBox shown
+                }
+                catch { }
+            }
+
+            // ✅ BUG (Comptabilité non mise à jour automatiquement) : ouvrir un bon depuis le
+            // détail Comptabilité créait sa propre WorkOrderWindow directement (sans passer par
+            // MainWindow.OpenWorkOrder, qui rafraîchit MainContent après fermeture). Si l'architecte
+            // validait/modifiait le bon depuis cette fenêtre puis la fermait, la page Comptabilité
+            // (totaux par entreprise + détail) restait figée sur les anciennes valeurs tant qu'on ne
+            // cliquait pas manuellement sur "Rafraîchir". On recharge donc explicitement ici.
+            Reload();
         }
         catch (Exception ex)
         {
