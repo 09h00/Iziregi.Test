@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+publish-installer/
+installer/Output/
+bin/
+obj/
