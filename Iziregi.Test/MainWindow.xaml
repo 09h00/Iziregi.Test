@@ -92,6 +92,31 @@
 
         </Grid>
 
+        <!-- ✅ Bandeau de notification de mise à jour : non bloquant, remplace l'ancienne
+             boîte de dialogue Oui/Non qui se refermait seule (résultat "No") sans
+             intervention de l'utilisateur, quel que soit le moment où elle était
+             affichée. Reste caché (Collapsed) tant qu'aucune mise à jour n'est
+             disponible. L'utilisateur choisit lui-même quand installer, ou "Plus tard"
+             pour continuer avec la version actuelle (la notification réapparaîtra au
+             prochain démarrage tant que la mise à jour n'est pas installée). -->
+        <Border x:Name="UpdateBanner" DockPanel.Dock="Top" Background="#FFF3CD" BorderBrush="#FFECB5" BorderThickness="0,0,0,1" Padding="12,8" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <TextBlock x:Name="UpdateBannerText" VerticalAlignment="Center" FontWeight="SemiBold" Text="Une nouvelle version d'Iziregi est disponible."/>
+                <Button x:Name="UpdateBannerInstallButton" Content="Mettre à jour maintenant" Margin="16,0,8,0" Padding="10,4" Click="UpdateBannerInstall_Click"/>
+                <Button x:Name="UpdateBannerDismissButton" Content="Plus tard" Padding="10,4" Click="UpdateBannerDismiss_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ✅ Bandeau de confirmation affiché une seule fois, juste après une mise à jour
+             réussie (l'installateur relance l'app avec un paramètre de ligne de commande
+             dédié, voir Iziregi.iss). -->
+        <Border x:Name="UpdateSuccessBanner" DockPanel.Dock="Top" Background="#D1E7DD" BorderBrush="#A3CFBB" BorderThickness="0,0,0,1" Padding="12,8" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <TextBlock x:Name="UpdateSuccessBannerText" VerticalAlignment="Center" FontWeight="SemiBold" Text="Iziregi a été mis à jour avec succès."/>
+                <Button x:Name="UpdateSuccessBannerOkButton" Content="OK" Margin="16,0,0,0" Padding="10,4" Click="UpdateSuccessBannerOk_Click"/>
+            </StackPanel>
+        </Border>
+
         <!-- CONTENU (PAGE) -->
         <Border Background="White" Padding="12">
             <Grid>

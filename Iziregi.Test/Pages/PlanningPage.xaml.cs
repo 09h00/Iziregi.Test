@@ -99,6 +99,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     public ObservableCollection<PlacedPlanImageItem> PlacedPlanImages { get; } = new();
 
     private const double StickerDropDefaultSize = 26;
+    // ✅ Stickers rectangulaires (au lieu de ronds) pour accueillir jusqu'à 4 chiffres
+    // (numérotation de tâche annuelle, voir LoadProjectTasks/SaveProjectTasks).
+    private const double StickerDropDefaultWidth = 42;
     private const double PlanImageMinSize = 60;
 
     // ✅ sticker sélectionné dans la banque (pour appliquer couleur entreprise)
@@ -1244,7 +1247,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             Label = source.Label,
             ColorHex = source.ColorHex,
             Size = StickerDropDefaultSize,
-            X = Math.Max(0, x - StickerDropDefaultSize / 2),
+            Width = StickerDropDefaultWidth,
+            X = Math.Max(0, x - StickerDropDefaultWidth / 2),
             Y = Math.Max(0, y - StickerDropDefaultSize / 2),
         });
     }
@@ -1620,6 +1624,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         }
 
         TasksDataGrid.ScrollIntoView(_taskRows.Last());
+
+        // ✅ Persisté immédiatement (pas seulement au changement de semaine/page) : ces
+        // tâches sont désormais communes à toute l'année, on ne veut pas dépendre d'une
+        // navigation ultérieure pour les enregistrer.
+        SaveProjectTasks();
     }
 
     private void RemoveTaskRowButton_Click(object sender, RoutedEventArgs e)
@@ -1631,6 +1640,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         foreach (var r in toRemove)
             _taskRows.Remove(r);
+
+        SaveProjectTasks();
     }
 
     private void AddPlanningRowButton_Click(object sender, RoutedEventArgs e)
@@ -1816,17 +1827,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         return new WeekStateFile
         {
             WeekKey = weekKey,
-            TaskRows = _taskRows.Select(r => new TaskRowState
-            {
-                Ref = r.Ref,
-                Company = r.Company,
-                Building = r.Building,
-                Floor = r.Floor,
-                Todo = r.Todo,
-                Category = r.Category,
-                Reserve = r.Reserve,
-                Done = r.Done
-            }).ToList(),
+            // ✅ Les tâches ne sont plus persistées par semaine (voir LoadProjectTasks /
+            // SaveProjectTasks) : elles sont désormais communes à tout le projet, pour
+            // qu'une tâche non terminée reste visible d'une semaine à l'autre au lieu
+            // d'être remise à zéro. Ce champ est laissé vide pour ne pas dupliquer une
+            // donnée qui n'est plus lue depuis ce fichier.
+            TaskRows = new(),
             PlanningRows = _planningRows.Select(r => new PlanningRowState
             {
                 Company = r.Company,
@@ -1844,7 +1850,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 ColorHex = s.ColorHex,
                 X = s.X,
                 Y = s.Y,
-                Size = s.Size
+                Size = s.Size,
+                Width = s.Width
             }).ToList(),
             PlacedImageStates = PlacedPlanImages.Select(i => new PlacedImageState
             {
@@ -1895,6 +1902,136 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             var state = BuildCurrentWeekStateForKey(weekKey);
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, json);
+
+            // ✅ Les tâches sont sauvegardées séparément, par projet (pas par semaine).
+            SaveProjectTasks();
+        }
+        catch { }
+    }
+
+    // ============================================================
+    // ✅ Tâches — persistance par PROJET (pas par semaine)
+    // ============================================================
+    // Avant ce changement, les tâches étaient stockées dans le fichier de la semaine
+    // affichée : naviguer d'une semaine à l'autre vidait donc le tableau des tâches et
+    // la numérotation automatique repartait de 1 à chaque semaine. Les tâches sont
+    // maintenant communes à tout le projet (fichier séparé, indépendant de la semaine) :
+    // le tableau reste affiché tel quel en changeant de semaine (une tâche non terminée
+    // "se répercute" naturellement d'une semaine sur l'autre), et la numérotation
+    // automatique (voir AddTaskRowButton_Click, max des Ref existants + 1) devient
+    // continue sur toute l'année plutôt que de se réinitialiser.
+    private static string GetProjectTasksFilePath(long? projectId)
+    {
+        var pid = (projectId.HasValue && projectId.Value > 0)
+            ? projectId.Value.ToString(CultureInfo.InvariantCulture)
+            : "0";
+
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Iziregi", "Planning");
+        return Path.Combine(dir, $"planning-tasks-{pid}.json");
+    }
+
+    private void LoadProjectTasks()
+    {
+        _taskRows.Clear();
+
+        var pid = Db.GetCurrentProjectId();
+        var filePath = GetProjectTasksFilePath(pid);
+
+        if (File.Exists(filePath))
+        {
+            try
+            {
+                var json = File.ReadAllText(filePath);
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var rows = JsonSerializer.Deserialize<List<TaskRowState>>(json, opts) ?? new();
+
+                foreach (var r in rows)
+                    _taskRows.Add(new TaskRow
+                    {
+                        Ref = r.Ref,
+                        Company = r.Company,
+                        Building = r.Building,
+                        Floor = r.Floor,
+                        Todo = r.Todo,
+                        Category = r.Category,
+                        Reserve = r.Reserve,
+                        Done = r.Done
+                    });
+
+                return;
+            }
+            catch { }
+        }
+
+        // ✅ Migration ponctuelle (une seule fois) : avant ce changement, les tâches
+        // vivaient dans le fichier de la semaine courante. Si le fichier par-projet
+        // n'existe pas encore, on reprend les tâches déjà visibles dans la semaine
+        // actuellement affichée, pour ne rien perdre au premier lancement après la mise
+        // à jour.
+        try
+        {
+            var weekKey = GetWeekKey(SnapToStartOfWeek(_startDay, _weekStartDay));
+            var weekFilePath = GetWeekFilePath(weekKey);
+
+            if (File.Exists(weekFilePath))
+            {
+                var json = File.ReadAllText(weekFilePath);
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var state = JsonSerializer.Deserialize<WeekStateFile>(json, opts);
+
+                if (state?.TaskRows != null)
+                {
+                    foreach (var r in state.TaskRows)
+                        _taskRows.Add(new TaskRow
+                        {
+                            Ref = r.Ref,
+                            Company = r.Company,
+                            Building = r.Building,
+                            Floor = r.Floor,
+                            Todo = r.Todo,
+                            Category = r.Category,
+                            Reserve = r.Reserve,
+                            Done = r.Done
+                        });
+                }
+            }
+        }
+        catch { }
+
+        if (_taskRows.Count > 0)
+            SaveProjectTasks();
+    }
+
+    private void SaveProjectTasks()
+    {
+        try
+        {
+            // Force la validation de toute cellule en cours d'édition avant de sauvegarder
+            // (même raison que dans SaveCurrentWeekState).
+            try { TasksDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); TasksDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+
+            var pid = Db.GetCurrentProjectId();
+            var filePath = GetProjectTasksFilePath(pid);
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            var rows = _taskRows.Select(r => new TaskRowState
+            {
+                Ref = r.Ref,
+                Company = r.Company,
+                Building = r.Building,
+                Floor = r.Floor,
+                Todo = r.Todo,
+                Category = r.Category,
+                Reserve = r.Reserve,
+                Done = r.Done
+            }).ToList();
+
+            var json = JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, json);
         }
         catch { }
     }
@@ -1904,7 +2041,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var weekKey = GetWeekKey(weekStart);
         var filePath = GetWeekFilePath(weekKey);
 
-        _taskRows.Clear();
+        // ✅ _taskRows n'est plus vidé/rechargé ici : les tâches sont désormais chargées une
+        // seule fois par projet (LoadProjectTasks), indépendamment de la semaine affichée.
         _planningRows.Clear();
         PlacedStickers.Clear();
         PlacedPlanImages.Clear();
@@ -1919,18 +2057,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
                 if (state != null)
                 {
-                    foreach (var r in state.TaskRows)
-                        _taskRows.Add(new TaskRow
-                        {
-                            Ref = r.Ref,
-                            Company = r.Company,
-                            Building = r.Building,
-                            Floor = r.Floor,
-                            Todo = r.Todo,
-                            Category = r.Category,
-                            Reserve = r.Reserve,
-                            Done = r.Done
-                        });
+                    // ✅ state.TaskRows n'est plus utilisé (voir LoadProjectTasks) — laissé
+                    // dans le fichier/la classe uniquement pour compatibilité de lecture des
+                    // anciens fichiers, sans effet ici.
 
                     foreach (var r in state.PlanningRows)
                         _planningRows.Add(new PlanningRow
@@ -1952,7 +2081,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                             ColorHex = s.ColorHex,
                             X = s.X,
                             Y = s.Y,
-                            Size = s.Size
+                            Size = s.Size,
+                            Width = s.Width
                         });
 
                     foreach (var i in state.PlacedImageStates)
@@ -2121,8 +2251,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         LoadLists();
         EnsureStickerBankLoadedOrInitialized();
 
-        // Charger l'état de la semaine depuis le fichier (première ouverture ou retour sur la page)
-        if (_taskRows.Count == 0 && _planningRows.Count == 0
+        // ✅ Tâches : indépendantes de la semaine, chargées une seule fois par instance de
+        // page (voir LoadProjectTasks) — jamais réinitialisées lors de la navigation entre
+        // semaines.
+        if (_taskRows.Count == 0)
+            LoadProjectTasks();
+
+        // Charger l'état de la semaine (planning, stickers, images) depuis le fichier
+        // (première ouverture ou retour sur la page)
+        if (_planningRows.Count == 0
             && PlacedStickers.Count == 0 && PlacedPlanImages.Count == 0)
             LoadWeekState(_startDay);
         else
@@ -2637,6 +2774,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         private double _x;
         private double _y;
         private double _size = StickerDropDefaultSize;
+        private double _width = StickerDropDefaultWidth;
 
         // ✅ NEW: mode édition (double-clic)
         private bool _isEditing;
@@ -2656,6 +2794,10 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public double X { get => _x; set => SetField(ref _x, value); }
         public double Y { get => _y; set => SetField(ref _y, value); }
         public double Size { get => _size; set => SetField(ref _size, value); }
+
+        // ✅ Largeur indépendante de la hauteur (Size) : sticker rectangulaire, assez
+        // large pour afficher un numéro de tâche à 4 chiffres.
+        public double Width { get => _width; set => SetField(ref _width, value); }
 
         public bool IsEditing { get => _isEditing; set => SetField(ref _isEditing, value); }
 
@@ -2847,6 +2989,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public double X { get; set; }
         public double Y { get; set; }
         public double Size { get; set; } = 24;
+        // ✅ Absent des anciens fichiers (avant les stickers rectangulaires) : la valeur
+        // par défaut ci-dessous s'applique alors automatiquement à la désérialisation.
+        public double Width { get; set; } = StickerDropDefaultWidth;
     }
 
     private sealed class PlacedImageState

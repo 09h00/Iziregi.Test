@@ -653,14 +653,13 @@ public partial class WorkOrderWindow : Window
         {
             InitializeComponent();
 
-            // ✅ Côté Architecte : ouvrir le bon en plein écran par défaut.
-            // Note : WindowStartupLocation="CenterOwner" (défini en XAML) combiné à un
-            // WindowState=Maximized assigné ici, dans le constructeur, est un piège classique
-            // de WPF — la fenêtre garde son état "Normal" à l'affichage malgré cette ligne,
-            // car WPF recalcule encore la position/taille de démarrage après le constructeur.
-            // En le faisant dans Loaded (une fois la fenêtre prête à s'afficher), ça fonctionne.
+            // ✅ Côté Architecte : ouvrir le bon en plein écran par défaut, sans flash de
+            // la fenêtre en taille normale avant la bascule (même correctif que
+            // MainWindow, voir MainWindow.xaml.cs pour le détail du piège WPF).
+            // SourceInitialized se déclenche avant que la fenêtre ne soit peinte à
+            // l'écran, contrairement à Loaded qui arrive après un premier rendu visible.
             if (mode == WorkOrderEditMode.Architecte)
-                this.Loaded += (s, e) => { WindowState = WindowState.Maximized; };
+                this.SourceInitialized += (s, e) => { WindowState = WindowState.Maximized; };
 
             Db.Init();
 

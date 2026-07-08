@@ -127,6 +127,23 @@ public partial class MainWindow : Window
         }
         catch { }
 
+        // ✅ Si l'application vient d'être relancée automatiquement juste après une mise
+        // à jour silencieuse (voir Iziregi.iss, section [Run], paramètre "--updated"),
+        // affiche un bandeau de confirmation au démarrage.
+        try
+        {
+            var args = Environment.GetCommandLineArgs();
+            if (args.Contains("--updated", StringComparer.OrdinalIgnoreCase))
+            {
+                var installedVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                UpdateSuccessBannerText.Text = installedVersion != null
+                    ? $"Iziregi a été mis à jour avec succès vers la version {installedVersion.ToString(3)}."
+                    : "Iziregi a été mis à jour avec succès.";
+                UpdateSuccessBanner.Visibility = Visibility.Visible;
+            }
+        }
+        catch { }
+
         // Afficher la fenêtre de config si la clé API est absente
         if (string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
         {
@@ -134,38 +151,60 @@ public partial class MainWindow : Window
             setup.ShowDialog();
         }
 
-        // ✅ Abonnement par machine (Option A, 3 paliers) : vérification au démarrage.
-        // Refus net UNIQUEMENT si le serveur répond explicitement "limite atteinte" ;
-        // en cas de serveur injoignable/réseau coupé, on ne bloque jamais (fail-open).
-        if (!string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
+        // ✅ Abonnement par machine (Option A, 3 paliers) + mise à jour automatique :
+        // reportés à APRÈS que la fenêtre principale soit chargée et active (événement
+        // Loaded) au lieu d'être exécutés ici, dans le constructeur, avant que la
+        // fenêtre ne soit visible. Le journal de diagnostic (iziregi-update-error.log)
+        // a montré que la boîte de dialogue "Oui/Non" de mise à jour se fermait
+        // instantanément avec le résultat "No", sans aucune action de l'utilisateur,
+        // quand elle était affichée depuis le constructeur : à ce moment, aucune
+        // fenêtre de l'application n'a encore le focus, et Windows semble alors
+        // rejeter automatiquement la boîte. Une fois la fenêtre principale visible et
+        // active (Loaded), la boîte se comporte normalement et attend un vrai clic.
+        this.Loaded += async (s, e) =>
         {
-            var licenseInfo = Task.Run(CheckMachineLicenseAllowedAsync).GetAwaiter().GetResult();
-            if (!licenseInfo.Allowed)
+            // Refus net UNIQUEMENT si le serveur répond explicitement "limite atteinte" ;
+            // en cas de serveur injoignable/réseau coupé, on ne bloque jamais (fail-open).
+            if (!string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
             {
-                WpfMessageBox.Show(
-                    "Le nombre maximum d'ordinateurs autorisés pour votre abonnement Iziregi est atteint.\n\n" +
-                    "Contactez votre administrateur ou l'éditeur Iziregi pour augmenter votre palier.",
-                    "Licence Iziregi",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Stop);
-                Environment.Exit(0);
-                return;
+                var licenseInfo = await Task.Run(CheckMachineLicenseAllowedAsync);
+                if (!licenseInfo.Allowed)
+                {
+                    WpfMessageBox.Show(
+                        "Le nombre maximum d'ordinateurs autorisés pour votre abonnement Iziregi est atteint.\n\n" +
+                        "Contactez votre administrateur ou l'éditeur Iziregi pour augmenter votre palier.",
+                        "Licence Iziregi",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Stop);
+                    Environment.Exit(0);
+                    return;
+                }
+
+                // ✅ Mise à jour automatique : si le serveur annonce une version plus récente
+                // que celle installée, on propose de la télécharger et de l'installer
+                // maintenant. Ne bloque jamais le démarrage (serveur muet, refus utilisateur,
+                // téléchargement impossible -> l'appli continue avec la version actuelle).
+                PromptForUpdateIfNewer(licenseInfo.LatestVersion, licenseInfo.DownloadUrl);
             }
+        };
 
-            // ✅ Mise à jour automatique : si le serveur annonce une version plus récente
-            // que celle installée, on propose de la télécharger et de l'installer
-            // maintenant. Ne bloque jamais le démarrage (serveur muet, refus utilisateur,
-            // téléchargement impossible -> l'appli continue avec la version actuelle).
-            PromptForUpdateIfNewer(licenseInfo.LatestVersion, licenseInfo.DownloadUrl);
-        }
-
-        // ✅ Le tableau de bord (dashboard) doit s'ouvrir en plein écran par défaut.
-        // Même piège WPF que pour WorkOrderWindow : WindowStartupLocation="CenterScreen"
-        // (défini en XAML) combiné à un WindowState=Maximized assigné ici, dans le
-        // constructeur, ne fonctionne pas de façon fiable — WPF recalcule encore la
-        // position/taille de démarrage après le constructeur. En le faisant dans Loaded
-        // (une fois la fenêtre prête à s'afficher), ça fonctionne.
-        this.Loaded += (s, e) => { WindowState = WindowState.Maximized; };
+        // ✅ Le tableau de bord (dashboard) doit s'ouvrir en plein écran par défaut,
+        // SANS montrer d'abord la fenêtre en taille normale centrée à l'écran (ce qui
+        // créait un flash très visible et dérangeant au lancement, en plus du splash
+        // natif désormais désactivé — voir Iziregi.Test.csproj).
+        //
+        // Piège WPF : assigner WindowState=Maximized dans le constructeur ne suffit
+        // pas (WPF recalcule encore la position/taille après le constructeur), et
+        // l'assigner dans Loaded (comme avant, le 06.07.2026 encore) arrive TROP TARD
+        // : à ce stade, la fenêtre a déjà été peinte à l'écran en taille normale
+        // pendant une fraction de seconde avant de sauter en plein écran, d'où le
+        // flash. La fenêtre doit être déjà maximisée AVANT le tout premier rendu.
+        //
+        // Solution : utiliser SourceInitialized, qui se déclenche juste après la
+        // création du handle de fenêtre (HWND) mais AVANT que Windows ne l'affiche
+        // et ne la peigne à l'écran. La fenêtre apparaît donc directement en plein
+        // écran, sans étape intermédiaire visible.
+        this.SourceInitialized += (s, e) => { WindowState = WindowState.Maximized; };
 
         // DB init
         Db.Init();
@@ -390,8 +429,10 @@ public partial class MainWindow : Window
             var machineId = GetOrCreateMachineId();
             var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
             var url = $"{baseUrl}/internal/ping?machineId={Uri.EscapeDataString(machineId)}";
+            LogUpdateStep($"Ping : appel de {url}");
 
             using var resp = await GetWithApiKeyAsync(Http, url);
+            LogUpdateStep($"Ping : reponse HTTP {(int)resp.StatusCode} ({resp.StatusCode})");
             if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 return (false, null, null);
 
@@ -400,22 +441,26 @@ public partial class MainWindow : Window
             try
             {
                 var body = await resp.Content.ReadAsStringAsync();
+                LogUpdateStep($"Ping : corps de la reponse = {body}");
                 using var doc = JsonDocument.Parse(body);
                 if (doc.RootElement.TryGetProperty("latestVersion", out var lv) && lv.ValueKind == JsonValueKind.String)
                     latestVersion = lv.GetString();
                 if (doc.RootElement.TryGetProperty("downloadUrl", out var du) && du.ValueKind == JsonValueKind.String)
                     downloadUrl = du.GetString();
+                LogUpdateStep($"Ping : latestVersion={latestVersion ?? "(null)"} downloadUrl={downloadUrl ?? "(null)"}");
             }
-            catch
+            catch (Exception exParse)
             {
                 // Réponse non-JSON ou champs absents (anciens serveurs) : pas de mise à jour proposée.
+                LogUpdateStep($"Ping : ECHEC parsing JSON : {exParse.GetType().FullName}: {exParse.Message}");
             }
 
             return (true, latestVersion, downloadUrl);
         }
-        catch
+        catch (Exception ex)
         {
             // Serveur injoignable / réseau coupé : fail-open, l'appli continue de fonctionner.
+            LogUpdateStep($"Ping : ECHEC (exception) : {ex.GetType().FullName}: {ex.Message}\n{ex}");
             return (true, null, null);
         }
     }
@@ -427,62 +472,141 @@ public partial class MainWindow : Window
     {
         try
         {
+            LogUpdateStep($"PromptForUpdateIfNewer : latestVersion={latestVersion ?? "(null)"} downloadUrl={downloadUrl ?? "(null)"}");
+
             if (string.IsNullOrWhiteSpace(latestVersion) || string.IsNullOrWhiteSpace(downloadUrl))
+            {
+                LogUpdateStep("PromptForUpdateIfNewer : sortie anticipee (latestVersion ou downloadUrl vide)");
                 return;
+            }
 
             if (!Version.TryParse(latestVersion.Trim(), out var serverVersion))
+            {
+                LogUpdateStep($"PromptForUpdateIfNewer : sortie anticipee (Version.TryParse a echoue pour \"{latestVersion}\")");
                 return;
+            }
 
             var currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
+            LogUpdateStep($"PromptForUpdateIfNewer : serverVersion={serverVersion} currentVersion={currentVersion}");
 
             if (serverVersion <= currentVersion)
-                return;
-
-            var result = WpfMessageBox.Show(
-                $"Une nouvelle version d'Iziregi est disponible ({latestVersion}).\n\nVoulez-vous la télécharger et l'installer maintenant ?",
-                "Mise à jour disponible",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
-
-            if (result != MessageBoxResult.Yes)
-                return;
-
-            // ✅ Fenêtre de progression : avant cet ajout, l'application ne montrait rien
-            // pendant les 10-15 secondes de téléchargement (elle semblait figée). La
-            // fenêtre s'affiche via ShowDialog() (boucle de messages imbriquée gérée par
-            // WPF), pendant que le téléchargement se déroule de façon asynchrone dans son
-            // gestionnaire Loaded — la fenêtre reste donc réactive et sa barre de
-            // progression se met à jour en direct.
-            var progressWindow = new UpdateProgressWindow();
-            progressWindow.Loaded += async (_, _) =>
             {
-                await DownloadAndLaunchUpdateAsync(downloadUrl!, progressWindow);
-                // N'est atteint que si le téléchargement/lancement a échoué : en cas de
-                // succès, DownloadAndLaunchUpdateAsync ferme déjà l'application avant
-                // d'arriver ici.
-                progressWindow.Close();
-            };
-            progressWindow.ShowDialog();
+                LogUpdateStep("PromptForUpdateIfNewer : sortie anticipee (serverVersion <= currentVersion)");
+                return;
+            }
+
+            // ✅ La confirmation "Oui/Non" (WpfMessageBox modale) qui s'affichait ici a été
+            // retirée. Le journal de diagnostic (iziregi-update-error.log) a montré qu'elle
+            // se refermait systématiquement toute seule avec le résultat "No", en une
+            // fraction de seconde, sans aucune action de l'utilisateur — et ce, que le code
+            // soit exécuté depuis le constructeur ou depuis l'événement Loaded (donc pas un
+            // simple problème de focus au démarrage). La cause exacte n'a pas pu être
+            // identifiée avec certitude, mais le comportement était reproductible à 100 % et
+            // bloquait TOUTE mise à jour automatique depuis la version 1.0.8.
+            //
+            // À la place, on affiche un bandeau non bloquant dans la fenêtre principale
+            // (UpdateBanner, voir MainWindow.xaml) : l'utilisateur garde le choix de mettre
+            // à jour immédiatement ou de continuer à travailler ("Plus tard" — la
+            // notification réapparaîtra au prochain démarrage). Comme ce bandeau fait partie
+            // de la fenêtre déjà affichée et active, il ne dépend d'aucune boîte de dialogue
+            // modale séparée, ce qui évite complètement le problème ci-dessus.
+            _pendingUpdateVersion = latestVersion;
+            _pendingUpdateDownloadUrl = downloadUrl;
+            UpdateBannerText.Text = $"Une nouvelle version d'Iziregi est disponible ({latestVersion}).";
+            UpdateBanner.Visibility = Visibility.Visible;
+            LogUpdateStep($"Bandeau de mise a jour affiche pour la version {latestVersion} (url={downloadUrl})");
         }
-        catch
+        catch (Exception ex)
         {
+            // ✅ Diagnostic : cette exception était avalée silencieusement avant (aucune
+            // trace nulle part) — on la journalise maintenant aussi.
+            LogUpdateStep($"ECHEC (PromptForUpdateIfNewer) : {ex.GetType().FullName}: {ex.Message}\n{ex}");
             // Ne jamais empêcher le démarrage normal de l'application à cause de la mise à jour.
         }
+    }
+
+    // ✅ Mémorise la mise à jour détectée par PromptForUpdateIfNewer, en attendant que
+    // l'utilisateur clique sur "Mettre à jour maintenant" (ou "Plus tard") dans le bandeau.
+    private string? _pendingUpdateVersion;
+    private string? _pendingUpdateDownloadUrl;
+
+    // Bouton "Mettre à jour maintenant" du bandeau : lance le téléchargement + la
+    // préparation de l'installateur, exactement comme avant, mais désormais uniquement
+    // sur une action explicite de l'utilisateur (donc à un moment où la fenêtre a
+    // certainement le focus).
+    private void UpdateBannerInstall_Click(object sender, RoutedEventArgs e)
+    {
+        var downloadUrl = _pendingUpdateDownloadUrl;
+        if (string.IsNullOrWhiteSpace(downloadUrl))
+            return;
+
+        UpdateBanner.Visibility = Visibility.Collapsed;
+        LogUpdateStep($"Utilisateur a clique sur \"Mettre a jour maintenant\" pour la version {_pendingUpdateVersion} (url={downloadUrl})");
+
+        // ✅ Fenêtre de progression : avant cet ajout, l'application ne montrait rien
+        // pendant les 10-15 secondes de téléchargement (elle semblait figée). La fenêtre
+        // s'affiche via ShowDialog() (boucle de messages imbriquée gérée par WPF), pendant
+        // que le téléchargement se déroule de façon asynchrone dans son gestionnaire
+        // Loaded — la fenêtre reste donc réactive et sa barre de progression se met à jour
+        // en direct.
+        var progressWindow = new UpdateProgressWindow();
+        progressWindow.Loaded += async (_, _) =>
+        {
+            await DownloadAndLaunchUpdateAsync(downloadUrl!, progressWindow);
+            // N'est atteint que si le téléchargement/lancement a échoué : en cas de
+            // succès, DownloadAndLaunchUpdateAsync ferme déjà l'application avant
+            // d'arriver ici.
+            progressWindow.Close();
+        };
+        progressWindow.ShowDialog();
+    }
+
+    // Bouton "Plus tard" du bandeau : masque simplement la notification pour cette
+    // session. L'application continue avec la version actuelle ; la notification
+    // réapparaîtra au prochain démarrage tant que la mise à jour n'est pas installée.
+    private void UpdateBannerDismiss_Click(object sender, RoutedEventArgs e)
+    {
+        LogUpdateStep($"Utilisateur a clique sur \"Plus tard\" pour la version {_pendingUpdateVersion}");
+        UpdateBanner.Visibility = Visibility.Collapsed;
+    }
+
+    // Bouton "OK" du bandeau de confirmation de mise à jour réussie : le masque simplement.
+    private void UpdateSuccessBannerOk_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateSuccessBanner.Visibility = Visibility.Collapsed;
     }
 
     // Télécharge l'installateur depuis le serveur vers un fichier temporaire (en
     // rapportant la progression à la fenêtre fournie), le lance, puis ferme l'application
     // pour libérer les fichiers que l'installateur doit remplacer.
+    // ✅ Diagnostic : journal texte (append) écrit à chaque étape importante de la mise à
+    // jour, pas seulement en cas d'erreur. But : si le processus est interrompu (tué de
+    // l'extérieur, par exemple par un antivirus) avant même d'atteindre un bloc catch, la
+    // dernière ligne écrite dans ce fichier montre quand même jusqu'où on est allé.
+    private static readonly string UpdateLogPath = Path.Combine(Path.GetTempPath(), "iziregi-update-error.log");
+
+    private static void LogUpdateStep(string msg)
+    {
+        try
+        {
+            File.AppendAllText(UpdateLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}\n");
+        }
+        catch { /* le journal lui-même ne doit jamais faire planter l'app */ }
+    }
+
     private static async Task DownloadAndLaunchUpdateAsync(string downloadUrl, UpdateProgressWindow? progressWindow = null)
     {
         try
         {
+            LogUpdateStep($"Debut telechargement depuis {downloadUrl}");
             var tempPath = Path.Combine(Path.GetTempPath(), "IziregiSetup.exe");
 
             using (var resp = await DownloadHttp.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
             {
+                LogUpdateStep($"Reponse recue : HTTP {(int)resp.StatusCode} ({resp.StatusCode})");
                 resp.EnsureSuccessStatusCode();
                 var totalBytes = resp.Content.Headers.ContentLength;
+                LogUpdateStep($"Taille annoncee par le serveur : {totalBytes} octets");
 
                 await using var httpStream = await resp.Content.ReadAsStreamAsync();
                 await using var fs = File.Create(tempPath);
@@ -496,23 +620,59 @@ public partial class MainWindow : Window
                     totalRead += read;
                     progressWindow?.ReportProgress(totalRead, totalBytes);
                 }
+                LogUpdateStep($"Telechargement termine : {totalRead} octets ecrits dans {tempPath}");
             }
 
             progressWindow?.SetInstalling();
+            LogUpdateStep("Lancement direct de l'installateur...");
 
+            // ✅ On relance directement l'installateur (comme un double-clic), maintenant
+            // que le téléchargement est déclenché par un clic explicite de l'utilisateur
+            // (bouton "Mettre à jour maintenant" du bandeau) et non plus automatiquement,
+            // en silence, au démarrage de l'app. C'était très probablement ce contexte
+            // "au démarrage, sans interaction" qui posait problème (comme pour la boîte
+            // Oui/Non, voir PromptForUpdateIfNewer) — un lancement déclenché par un vrai
+            // clic utilisateur se comporte normalement. Windows peut encore afficher son
+            // avertissement SmartScreen habituel pour un installateur non signé (normal,
+            // un seul clic "Informations complémentaires" → "Exécuter quand même" suffit,
+            // exactement comme lors d'un téléchargement manuel dans le navigateur) : ce
+            // n'est plus un échec silencieux, l'utilisateur voit ce qui se passe.
+            // ✅ /SILENT (au lieu de /VERYSILENT) /SUPPRESSMSGBOXES /NORESTART : l'assistant
+            // d'installation (Suivant/Suivant/Installer/Terminer) ne s'affiche plus du tout,
+            // mais Inno Setup affiche quand même sa propre fenêtre "Installation en cours..."
+            // avec une barre de progression, sans aucun clic requis — pour éviter que
+            // l'utilisateur se demande ce qui se passe pendant les quelques secondes où rien
+            // n'est visible (/VERYSILENT n'affiche absolument rien). L'installateur n'a pas
+            // besoin des droits administrateur (PrivilegesRequired=lowest dans Iziregi.iss,
+            // installation dans %LOCALAPPDATA%), donc pas d'invite Windows "Contrôle de
+            // compte utilisateur" à valider. L'application se relance automatiquement une
+            // fois l'installation terminée (voir Iziregi.iss, section [Run]).
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = tempPath,
+                Arguments = "/SILENT /SUPPRESSMSGBOXES /NORESTART",
                 UseShellExecute = true
             });
 
-            await Task.Delay(500);
+            // ✅ Message explicite avant la fermeture (voir SetClosingForInstall) : l'app
+            // doit se fermer pour que l'installateur puisse remplacer ses fichiers, ce qui
+            // crée quelques secondes sans aucune fenêtre visible (l'installateur extrait son
+            // contenu avant même d'afficher sa propre barre de progression). On laisse le
+            // temps à l'utilisateur de lire ce message avant que la fenêtre ne disparaisse.
+            progressWindow?.SetClosingForInstall();
+            LogUpdateStep("Installateur lance : fermeture de l'application pour liberer les fichiers.");
+            await Task.Delay(2500);
             Environment.Exit(0);
         }
         catch (Exception ex)
         {
+            // ✅ Diagnostic : en plus du message affiché (qui peut disparaître trop vite
+            // pour être lu pendant un test), on note l'erreur complète dans le journal —
+            // consultable ensuite sans contrainte de temps.
+            LogUpdateStep($"ECHEC : {ex.GetType().FullName}: {ex.Message}\n{ex}");
+
             WpfMessageBox.Show(
-                "Le téléchargement de la mise à jour a échoué : " + ex.Message + "\n\nL'application va continuer avec la version actuelle.",
+                "Le téléchargement de la mise à jour a échoué : " + ex.Message + "\n\nL'application va continuer avec la version actuelle.\n\nDétail écrit dans : %TEMP%\\iziregi-update-error.log",
                 "Mise à jour",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

@@ -38,4 +38,14 @@ public partial class UpdateProgressWindow : Window
         ProgressBar.IsIndeterminate = true;
         StatusText.Text = "Téléchargement terminé — lancement de l'installateur...";
     }
+
+    /// <summary>✅ Affiché juste avant que l'application ne se ferme pour laisser
+    /// l'installateur remplacer ses fichiers. Sans ce message, l'utilisateur voit
+    /// l'application disparaître sans explication pendant les quelques secondes où
+    /// l'installateur travaille en arrière-plan.</summary>
+    public void SetClosingForInstall()
+    {
+        ProgressBar.IsIndeterminate = true;
+        StatusText.Text = "Installation en cours... L'application va se fermer puis se rouvrir automatiquement dans quelques secondes.";
+    }
 }
