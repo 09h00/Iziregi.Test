@@ -145,11 +145,26 @@ public partial class MainWindow : Window
         }
         catch { }
 
-        // Afficher la fenêtre de config si la clé API est absente
+        // ✅ Sécurité (17.07.2026) : configuration désormais OBLIGATOIRE si la clé API est
+        // absente. Avant, fermer cette fenêtre (croix/Alt+F4) sans rien saisir laissait
+        // l'appli démarrer normalement quand même (ShowDialog() sans vérifier le résultat)
+        // -- ce qui rendait le contrôle de licence/essai plus bas entièrement facultatif :
+        // il suffisait de ne jamais configurer de clé pour utiliser Iziregi sans limite.
         if (string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
         {
             var setup = new ConfigSetupWindow();
-            setup.ShowDialog();
+            var setupResult = setup.ShowDialog();
+            if (setupResult != true || string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
+            {
+                WpfMessageBox.Show(
+                    "La configuration du serveur (URL + clé d'accès) est nécessaire pour utiliser Iziregi.\n\n" +
+                    "Relancez l'application pour réessayer.",
+                    "Configuration requise",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Stop);
+                Environment.Exit(0);
+                return;
+            }
         }
 
         // ✅ Abonnement par machine (Option A, 3 paliers) + mise à jour automatique :
@@ -164,16 +179,32 @@ public partial class MainWindow : Window
         // active (Loaded), la boîte se comporte normalement et attend un vrai clic.
         this.Loaded += async (s, e) =>
         {
-            // Refus net UNIQUEMENT si le serveur répond explicitement "limite atteinte" ;
+            // Refus net UNIQUEMENT si le serveur répond explicitement clé invalide (401) ou
+            // un refus de licence (403 : limite de machines ou abonnement/essai expiré) ;
             // en cas de serveur injoignable/réseau coupé, on ne bloque jamais (fail-open).
             if (!string.IsNullOrWhiteSpace(IziregiConfigService.Current.ServerApiKey))
             {
                 var licenseInfo = await Task.Run(CheckMachineLicenseAllowedAsync);
                 if (!licenseInfo.Allowed)
                 {
+                    // ✅ Sécurité (17.07.2026) : "invalid_key" (401, clé absente/inconnue du
+                    // serveur) bloquait auparavant PAS du tout -- seul un 403 explicite
+                    // ("limite atteinte") bloquait. N'importe quelle valeur non vide dans le
+                    // champ "Clé d'accès" suffisait donc à contourner la licence, y compris
+                    // l'expiration d'un essai de 7 jours. Voir CheckMachineLicenseAllowedAsync.
+                    var message = licenseInfo.ErrorCode switch
+                    {
+                        "invalid_key" => "La clé d'accès configurée n'est pas reconnue par le serveur Iziregi.\n\n" +
+                                          "Contactez votre administrateur Iziregi pour obtenir une clé valide, puis reconfigurez-la via Réglages.",
+                        "subscription_expired" => "Votre abonnement (ou période d'essai) Iziregi est arrivé à échéance.\n\n" +
+                                                   "Contactez l'éditeur Iziregi pour le renouveler.",
+                        "machine_limit_reached" => "Le nombre maximum d'ordinateurs autorisés pour votre abonnement Iziregi est atteint.\n\n" +
+                                                    "Contactez votre administrateur ou l'éditeur Iziregi pour augmenter votre palier.",
+                        _ => "Accès refusé par le serveur Iziregi.\n\nContactez votre administrateur ou l'éditeur Iziregi."
+                    };
+
                     WpfMessageBox.Show(
-                        "Le nombre maximum d'ordinateurs autorisés pour votre abonnement Iziregi est atteint.\n\n" +
-                        "Contactez votre administrateur ou l'éditeur Iziregi pour augmenter votre palier.",
+                        message,
                         "Licence Iziregi",
                         MessageBoxButton.OK,
                         MessageBoxImage.Stop);
@@ -420,10 +451,17 @@ public partial class MainWindow : Window
         }
     }
 
-    // Interroge /internal/ping avec le machineId. Retourne false UNIQUEMENT si le serveur
-    // répond explicitement que la limite de machines est atteinte (403). Toute autre
-    // situation (serveur OK, ou serveur injoignable) retourne true — fail-open.
-    private static async Task<(bool Allowed, string? LatestVersion, string? DownloadUrl, string? InstallerSha256)> CheckMachineLicenseAllowedAsync()
+    // Interroge /internal/ping avec le machineId. Retourne false si le serveur répond
+    // explicitement clé invalide (401) ou refus de licence (403 : limite de machines ou
+    // abonnement/essai expiré). Toute autre situation (serveur OK, ou serveur injoignable)
+    // retourne true — fail-open.
+    // ✅ Sécurité (17.07.2026) : avant, seul un 403 bloquait -- un 401 (clé absente/inconnue
+    // du serveur) était traité comme "toute autre situation" et laissait passer (fail-open).
+    // N'importe quelle valeur non vide dans le champ "Clé d'accès" (garbage compris)
+    // suffisait donc à contourner entièrement la licence, y compris l'expiration d'un essai
+    // de 7 jours. ErrorCode distingue maintenant "invalid_key", "subscription_expired",
+    // "machine_limit_reached" (repris du corps JSON du serveur) pour un message clair.
+    private static async Task<(bool Allowed, string? ErrorCode, string? LatestVersion, string? DownloadUrl, string? InstallerSha256)> CheckMachineLicenseAllowedAsync()
     {
         try
         {
@@ -434,8 +472,23 @@ public partial class MainWindow : Window
 
             using var resp = await GetWithApiKeyAsync(Http, url);
             LogUpdateStep($"Ping : reponse HTTP {(int)resp.StatusCode} ({resp.StatusCode})");
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                return (false, "invalid_key", null, null, null);
+
             if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
-                return (false, null, null, null);
+            {
+                var errorCode = "forbidden";
+                try
+                {
+                    var body403 = await resp.Content.ReadAsStringAsync();
+                    using var doc403 = JsonDocument.Parse(body403);
+                    if (doc403.RootElement.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
+                        errorCode = errEl.GetString() ?? errorCode;
+                }
+                catch { /* message générique si le corps n'est pas exploitable */ }
+                return (false, errorCode, null, null, null);
+            }
 
             string? latestVersion = null;
             string? downloadUrl = null;
@@ -462,13 +515,13 @@ public partial class MainWindow : Window
                 LogUpdateStep($"Ping : ECHEC parsing JSON : {exParse.GetType().FullName}: {exParse.Message}");
             }
 
-            return (true, latestVersion, downloadUrl, installerSha256);
+            return (true, null, latestVersion, downloadUrl, installerSha256);
         }
         catch (Exception ex)
         {
             // Serveur injoignable / réseau coupé : fail-open, l'appli continue de fonctionner.
             LogUpdateStep($"Ping : ECHEC (exception) : {ex.GetType().FullName}: {ex.Message}\n{ex}");
-            return (true, null, null, null);
+            return (true, null, null, null, null);
         }
     }
 
