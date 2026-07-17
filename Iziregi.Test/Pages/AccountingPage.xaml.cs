@@ -181,7 +181,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             ApplyFiltersAndRender();
 
             WpfMessageBox.Show(
-                "Aucun projet courant. Sélectionne un projet avant d’afficher la comptabilité.",
+                "Aucun dossier courant. Sélectionne un dossier avant d’afficher la comptabilité.",
                 "Info", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -657,7 +657,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         catch (Exception ex)
         {
             WpfMessageBox.Show(
-                $"Impossible d’ouvrir le bon de régie.\n\n{ex.Message}",
+                $"Impossible d’ouvrir le bon d'intervention.\n\n{ex.Message}",
                 "Ouverture",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

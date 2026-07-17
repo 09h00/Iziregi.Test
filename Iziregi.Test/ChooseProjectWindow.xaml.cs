@@ -56,7 +56,7 @@ public partial class ChooseProjectWindow : Window
         if (ProjectsGrid.SelectedItem is not Project p)
         {
             System.Windows.MessageBox.Show(
-                "Sélectionne un projet dans la liste.",
+                "Sélectionne un dossier dans la liste.",
                 "Info",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -76,13 +76,13 @@ public partial class ChooseProjectWindow : Window
     private void NewProject_Click(object sender, RoutedEventArgs e)
     {
         var name = Microsoft.VisualBasic.Interaction.InputBox(
-            "Nom du chantier :", "Nouveau projet", "");
+            "Nom du chantier :", "Nouveau dossier", "");
 
         if (string.IsNullOrWhiteSpace(name))
             return;
 
         var address = Microsoft.VisualBasic.Interaction.InputBox(
-            "Adresse du chantier :", "Nouveau projet", "");
+            "Adresse du chantier :", "Nouveau dossier", "");
 
         if (string.IsNullOrWhiteSpace(address))
             return;

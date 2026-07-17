@@ -56,7 +56,7 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
             RefreshBatchSelectionUi();
 
             System.Windows.MessageBox.Show(
-                "Aucun projet courant. Sélectionne un projet avant d’afficher les archives.",
+                "Aucun dossier courant. Sélectionne un dossier avant d’afficher les archives.",
                 "Info",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);

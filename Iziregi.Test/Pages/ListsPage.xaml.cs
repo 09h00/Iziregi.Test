@@ -18,6 +18,28 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     private readonly MainWindow _host;
 
     // =========================
+    // ✅ Noms de champs/listes : modifications non enregistrées (déclenche une confirmation
+    // à la sortie de la page — voir ConfirmLeaveListsPageIfDirty dans MainWindow).
+    // =========================
+    private bool _isLoadingLabels = false;
+    private bool _labelsDirty = false;
+
+    public bool HasUnsavedLabelChanges => _labelsDirty;
+
+    private void AnyLabelTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (_isLoadingLabels) return;
+        _labelsDirty = true;
+    }
+
+    // ✅ Cliquer dans un champ de libellé (au-dessus d'une liste) désactive la liste
+    // active — sinon la bordure bleue de la liste restait allumée EN MÊME TEMPS que la
+    // bordure de focus du libellé, donnant l'impression de deux éléments sélectionnés.
+    private void AnyLabelTextBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.None);
+
+    public void SaveLabelsNow() => SaveLabelsCore();
+
+    // =========================
     // Liste active
     // =========================
     private enum ActiveListKind
@@ -29,6 +51,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         Places = 4,
         Etages = 5,
         PlanningTextZones = 6,
+        TaskCategories = 7,
+        TaskUrgencies = 8,
     }
 
     private ActiveListKind _activeList = ActiveListKind.None;
@@ -57,13 +81,15 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         SetBorder(PlacesListBorder, _activeList == ActiveListKind.Places);
         SetBorder(EtagesListBorder, _activeList == ActiveListKind.Etages);
         SetBorder(PlanningTextZonesListBorder, _activeList == ActiveListKind.PlanningTextZones);
+        SetBorder(TaskCategoriesListBorder, _activeList == ActiveListKind.TaskCategories);
+        SetBorder(TaskUrgenciesListBorder, _activeList == ActiveListKind.TaskUrgencies);
     }
 
     private static long RequireCurrentProjectId()
     {
         var pid = Db.GetCurrentProjectId();
         if (!pid.HasValue || pid.Value <= 0)
-            throw new Exception("Aucun projet courant. Sélectionne un projet avant d’utiliser les listes.");
+            throw new Exception("Aucun dossier courant. Sélectionne un dossier avant d’utiliser les listes.");
         return pid.Value;
     }
 
@@ -97,6 +123,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             ActiveListKind.Places => PlacesListBox?.SelectedItem as string,
             ActiveListKind.Etages => EtagesListBox?.SelectedItem as string,
             ActiveListKind.PlanningTextZones => PlanningTextZonesListBox?.SelectedItem as string,
+            ActiveListKind.TaskCategories => TaskCategoriesListBox?.SelectedItem as string,
+            ActiveListKind.TaskUrgencies => TaskUrgenciesListBox?.SelectedItem as string,
             _ => null
         };
     }
@@ -111,6 +139,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             ActiveListKind.Places => (DefaultPlaceComboBox?.Text ?? ""),
             ActiveListKind.Etages => (DefaultEtageComboBox?.Text ?? ""),
             ActiveListKind.PlanningTextZones => (DefaultPlanningTextZoneComboBox?.Text ?? ""),
+            ActiveListKind.TaskCategories => (DefaultTaskCategoryComboBox?.Text ?? ""),
+            ActiveListKind.TaskUrgencies => (DefaultTaskUrgencyComboBox?.Text ?? ""),
             _ => ""
         };
     }
@@ -148,6 +178,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 ActiveListKind.Places => pid > 0 ? Db.GetLabelPlace(pid) : "Bâtiment",
                 ActiveListKind.Etages => pid > 0 ? Db.GetLabelEtage(pid) : "Étage",
                 ActiveListKind.PlanningTextZones => pid > 0 ? Db.GetLabelPlanningTextZone(pid) : "Zone de texte planning",
+                ActiveListKind.TaskCategories => pid > 0 ? Db.GetLabelTaskCategory(pid) : "Cat.",
+                ActiveListKind.TaskUrgencies => pid > 0 ? Db.GetLabelTaskUrgency(pid) : "Urg.",
                 _ => "—",
             };
         }
@@ -189,20 +221,16 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         _host = host;
     }
 
-    private static List<string> WithEmptyOption(List<string> items)
+    public void Reload()
     {
-        items ??= new List<string>();
-        var cleaned = items.Select(s => (s ?? "").Trim())
-                           .Where(s => !string.IsNullOrWhiteSpace(s))
-                           .Distinct(StringComparer.OrdinalIgnoreCase)
-                           .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
-                           .ToList();
+        _isLoadingLabels = true;
+        try { ReloadCore(); }
+        finally { _isLoadingLabels = false; }
 
-        cleaned.Insert(0, ""); // option vide sélectionnable
-        return cleaned;
+        _labelsDirty = false;
     }
 
-    public void Reload()
+    private void ReloadCore()
     {
         var projectIdNullable = Db.GetCurrentProjectId();
         if (!projectIdNullable.HasValue || projectIdNullable.Value <= 0)
@@ -213,6 +241,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             PlacesListBox.ItemsSource = null;
             EtagesListBox.ItemsSource = null;
             PlanningTextZonesListBox.ItemsSource = null;
+            TaskCategoriesListBox.ItemsSource = null;
+            TaskUrgenciesListBox.ItemsSource = null;
 
             DefaultReserveComboBox.ItemsSource = null;
             DefaultRequesterComboBox.ItemsSource = null;
@@ -220,6 +250,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             DefaultPlaceComboBox.ItemsSource = null;
             DefaultEtageComboBox.ItemsSource = null;
             DefaultPlanningTextZoneComboBox.ItemsSource = null;
+            DefaultTaskCategoryComboBox.ItemsSource = null;
+            DefaultTaskUrgencyComboBox.ItemsSource = null;
 
             DefaultReserveComboBox.SelectedItem = null; DefaultReserveComboBox.Text = "";
             DefaultRequesterComboBox.SelectedItem = null; DefaultRequesterComboBox.Text = "";
@@ -227,6 +259,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             DefaultPlaceComboBox.SelectedItem = null; DefaultPlaceComboBox.Text = "";
             DefaultEtageComboBox.SelectedItem = null; DefaultEtageComboBox.Text = "";
             DefaultPlanningTextZoneComboBox.SelectedItem = null; DefaultPlanningTextZoneComboBox.Text = "";
+            DefaultTaskCategoryComboBox.SelectedItem = null; DefaultTaskCategoryComboBox.Text = "";
+            DefaultTaskUrgencyComboBox.SelectedItem = null; DefaultTaskUrgencyComboBox.Text = "";
 
             LabelReserveTextBox.Text = "";
             LabelRequestedByTextBox.Text = "";
@@ -235,13 +269,15 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             LabelEtageTextBox.Text = "";
             LabelDeadlineTextBox.Text = "";
             LabelPlanningTextZoneTextBox.Text = "";
+            LabelTaskCategoryTextBox.Text = "";
+            LabelTaskUrgencyTextBox.Text = "";
 
             SetSelectedCompanyColorPreview(null);
 
             SetActiveList(ActiveListKind.None);
 
             MessageBox.Show(
-                "Aucun projet courant. Sélectionne un projet avant de gérer les listes.",
+                "Aucun dossier courant. Sélectionne un dossier avant de gérer les listes.",
                 "Info",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -257,6 +293,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         var places = Db.GetPlaces(projectId);
         var etages = Db.GetEtages(projectId);
         var planningTextZones = Db.GetPlanningTextZones(projectId);
+        var taskCategories = Db.GetTaskCategories(projectId);
+        var taskUrgencies = Db.GetTaskUrgencies(projectId);
 
         ReservesListBox.ItemsSource = reserves;
         RequestersListBox.ItemsSource = requesters;
@@ -268,13 +306,17 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         PlacesListBox.ItemsSource = places;
         EtagesListBox.ItemsSource = etages;
         PlanningTextZonesListBox.ItemsSource = planningTextZones;
+        TaskCategoriesListBox.ItemsSource = taskCategories;
+        TaskUrgenciesListBox.ItemsSource = taskUrgencies;
 
-        var reserveDefaults = WithEmptyOption(reserves);
-        var requesterDefaults = WithEmptyOption(requesters);
-        var companyDefaults = WithEmptyOption(companies);
-        var placeDefaults = WithEmptyOption(places);
-        var etageDefaults = WithEmptyOption(etages);
-        var planningDefaults = WithEmptyOption(planningTextZones);
+        var reserveDefaults = Db.WithEmptyOption(reserves);
+        var requesterDefaults = Db.WithEmptyOption(requesters);
+        var companyDefaults = Db.WithEmptyOption(companies);
+        var placeDefaults = Db.WithEmptyOption(places);
+        var etageDefaults = Db.WithEmptyOption(etages);
+        var planningDefaults = Db.WithEmptyOption(planningTextZones);
+        var taskCategoryDefaults = Db.WithEmptyOption(taskCategories);
+        var taskUrgencyDefaults = Db.WithEmptyOption(taskUrgencies);
 
         DefaultReserveComboBox.ItemsSource = reserveDefaults;
         DefaultRequesterComboBox.ItemsSource = requesterDefaults;
@@ -282,6 +324,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         DefaultPlaceComboBox.ItemsSource = placeDefaults;
         DefaultEtageComboBox.ItemsSource = etageDefaults;
         DefaultPlanningTextZoneComboBox.ItemsSource = planningDefaults;
+        DefaultTaskCategoryComboBox.ItemsSource = taskCategoryDefaults;
+        DefaultTaskUrgencyComboBox.ItemsSource = taskUrgencyDefaults;
 
         var defReserve = Db.GetDefaultReserve(projectId) ?? "";
         var defRequester = Db.GetDefaultRequester(projectId) ?? "";
@@ -289,6 +333,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         var defPlace = Db.GetDefaultPlace(projectId) ?? "";
         var defEtage = Db.GetDefaultEtage(projectId) ?? "";
         var defPlanning = Db.GetDefaultPlanningTextZone(projectId) ?? "";
+        var defTaskCategory = Db.GetDefaultTaskCategory(projectId) ?? "";
+        var defTaskUrgency = Db.GetDefaultTaskUrgency(projectId) ?? "";
 
         DefaultReserveComboBox.SelectedItem = reserveDefaults.Contains(defReserve) ? defReserve : "";
         DefaultReserveComboBox.Text = defReserve;
@@ -308,6 +354,12 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         DefaultPlanningTextZoneComboBox.SelectedItem = planningDefaults.Contains(defPlanning) ? defPlanning : "";
         DefaultPlanningTextZoneComboBox.Text = defPlanning;
 
+        DefaultTaskCategoryComboBox.SelectedItem = taskCategoryDefaults.Contains(defTaskCategory) ? defTaskCategory : "";
+        DefaultTaskCategoryComboBox.Text = defTaskCategory;
+
+        DefaultTaskUrgencyComboBox.SelectedItem = taskUrgencyDefaults.Contains(defTaskUrgency) ? defTaskUrgency : "";
+        DefaultTaskUrgencyComboBox.Text = defTaskUrgency;
+
         LabelReserveTextBox.Text = Db.GetLabelReserve(projectId);
         LabelRequestedByTextBox.Text = Db.GetLabelRequestedBy(projectId);
         LabelPerformedByTextBox.Text = Db.GetLabelPerformedBy(projectId);
@@ -315,27 +367,13 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         LabelEtageTextBox.Text = Db.GetLabelEtage(projectId);
         LabelDeadlineTextBox.Text = Db.GetLabelDeadline(projectId);
         LabelPlanningTextZoneTextBox.Text = Db.GetLabelPlanningTextZone(projectId);
+        LabelTaskCategoryTextBox.Text = Db.GetLabelTaskCategory(projectId);
+        LabelTaskUrgencyTextBox.Text = Db.GetLabelTaskUrgency(projectId);
 
-        ApplyGroupBoxHeaders(projectId);
         RefreshSelectedCompanyColorPreview();
-
-        if (PlanningTextZonesGroupBox != null)
-            PlanningTextZonesGroupBox.Header = Db.GetLabelPlanningTextZone(projectId);
 
         RefreshCommonButtonsState();
         RefreshActiveListBorders();
-    }
-
-    private void ApplyGroupBoxHeaders(long projectId)
-    {
-        ReservesGroupBox.Header = Db.GetLabelReserve(projectId);
-        RequestersGroupBox.Header = Db.GetLabelRequestedBy(projectId);
-        CompaniesGroupBox.Header = Db.GetLabelPerformedBy(projectId);
-        PlacesGroupBox.Header = Db.GetLabelPlace(projectId);
-        EtagesGroupBox.Header = Db.GetLabelEtage(projectId);
-
-        if (PlanningTextZonesGroupBox != null)
-            PlanningTextZonesGroupBox.Header = Db.GetLabelPlanningTextZone(projectId);
     }
 
     // =========================
@@ -347,6 +385,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     private void PlacesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.Places);
     private void EtagesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.Etages);
     private void PlanningTextZonesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.PlanningTextZones);
+    private void TaskCategoriesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.TaskCategories);
+    private void TaskUrgenciesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.TaskUrgencies);
 
     private void AnyListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -392,6 +432,18 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         PlanningTextZonesListBox.Focus();
     }
 
+    private void TaskCategoriesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        SetActiveList(ActiveListKind.TaskCategories);
+        TaskCategoriesListBox.Focus();
+    }
+
+    private void TaskUrgenciesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        SetActiveList(ActiveListKind.TaskUrgencies);
+        TaskUrgenciesListBox.Focus();
+    }
+
     // =========================
     // Barre commune
     // =========================
@@ -409,6 +461,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 ActiveListKind.Places => $"Ajouter ({Db.GetLabelPlace(projectId)})",
                 ActiveListKind.Etages => $"Ajouter ({Db.GetLabelEtage(projectId)})",
                 ActiveListKind.PlanningTextZones => $"Ajouter ({Db.GetLabelPlanningTextZone(projectId)})",
+                ActiveListKind.TaskCategories => $"Ajouter ({Db.GetLabelTaskCategory(projectId)})",
+                ActiveListKind.TaskUrgencies => $"Ajouter ({Db.GetLabelTaskUrgency(projectId)})",
                 _ => "Ajouter"
             };
 
@@ -424,6 +478,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 case ActiveListKind.Places: Db.InsertPlace(projectId, name); break;
                 case ActiveListKind.Etages: Db.InsertEtage(projectId, name); break;
                 case ActiveListKind.PlanningTextZones: Db.InsertPlanningTextZone(projectId, name); break;
+                case ActiveListKind.TaskCategories: Db.InsertTaskCategory(projectId, name); break;
+                case ActiveListKind.TaskUrgencies: Db.InsertTaskUrgency(projectId, name); break;
                 default: return;
             }
 
@@ -453,6 +509,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 ActiveListKind.Places => $"Renommer ({Db.GetLabelPlace(projectId)})",
                 ActiveListKind.Etages => $"Renommer ({Db.GetLabelEtage(projectId)})",
                 ActiveListKind.PlanningTextZones => $"Renommer ({Db.GetLabelPlanningTextZone(projectId)})",
+                ActiveListKind.TaskCategories => $"Renommer ({Db.GetLabelTaskCategory(projectId)})",
+                ActiveListKind.TaskUrgencies => $"Renommer ({Db.GetLabelTaskUrgency(projectId)})",
                 _ => "Renommer"
             };
 
@@ -468,6 +526,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 case ActiveListKind.Places: Db.RenamePlace(projectId, oldName, newName); break;
                 case ActiveListKind.Etages: Db.RenameEtage(projectId, oldName, newName); break;
                 case ActiveListKind.PlanningTextZones: Db.RenamePlanningTextZone(projectId, oldName, newName); break;
+                case ActiveListKind.TaskCategories: Db.RenameTaskCategory(projectId, oldName, newName); break;
+                case ActiveListKind.TaskUrgencies: Db.RenameTaskUrgency(projectId, oldName, newName); break;
                 default: return;
             }
 
@@ -501,6 +561,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 case ActiveListKind.Places: Db.DeletePlace(projectId, name); break;
                 case ActiveListKind.Etages: Db.DeleteEtage(projectId, name); break;
                 case ActiveListKind.PlanningTextZones: Db.DeletePlanningTextZone(projectId, name); break;
+                case ActiveListKind.TaskCategories: Db.DeleteTaskCategory(projectId, name); break;
+                case ActiveListKind.TaskUrgencies: Db.DeleteTaskUrgency(projectId, name); break;
                 default: return;
             }
 
@@ -529,6 +591,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 case ActiveListKind.Places: Db.SetDefaultPlace(projectId, value); break;
                 case ActiveListKind.Etages: Db.SetDefaultEtage(projectId, value); break;
                 case ActiveListKind.PlanningTextZones: Db.SetDefaultPlanningTextZone(projectId, value); break;
+                case ActiveListKind.TaskCategories: Db.SetDefaultTaskCategory(projectId, value); break;
+                case ActiveListKind.TaskUrgencies: Db.SetDefaultTaskUrgency(projectId, value); break;
             }
 
             Reload();
@@ -553,6 +617,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 ActiveListKind.Places => Db.GetPlaces(projectId),
                 ActiveListKind.Etages => Db.GetEtages(projectId),
                 ActiveListKind.PlanningTextZones => Db.GetPlanningTextZones(projectId),
+                ActiveListKind.TaskCategories => Db.GetTaskCategories(projectId),
+                ActiveListKind.TaskUrgencies => Db.GetTaskUrgencies(projectId),
                 _ => new List<string>()
             };
 
@@ -609,6 +675,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 ActiveListKind.Places => Db.GetPlaces(targetProjectId),
                 ActiveListKind.Etages => Db.GetEtages(targetProjectId),
                 ActiveListKind.PlanningTextZones => Db.GetPlanningTextZones(targetProjectId),
+                ActiveListKind.TaskCategories => Db.GetTaskCategories(targetProjectId),
+                ActiveListKind.TaskUrgencies => Db.GetTaskUrgencies(targetProjectId),
                 _ => new List<string>()
             };
 
@@ -649,6 +717,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                     case ActiveListKind.Places: Db.InsertPlace(targetProjectId, name); break;
                     case ActiveListKind.Etages: Db.InsertEtage(targetProjectId, name); break;
                     case ActiveListKind.PlanningTextZones: Db.InsertPlanningTextZone(targetProjectId, name); break;
+                    case ActiveListKind.TaskCategories: Db.InsertTaskCategory(targetProjectId, name); break;
+                    case ActiveListKind.TaskUrgencies: Db.InsertTaskUrgency(targetProjectId, name); break;
                     default: continue;
                 }
 
@@ -669,7 +739,9 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     // =========================
     // Libellés
     // =========================
-    private void SaveLabels_Click(object sender, RoutedEventArgs e)
+    private void SaveLabels_Click(object sender, RoutedEventArgs e) => SaveLabelsCore();
+
+    private void SaveLabelsCore()
     {
         try
         {
@@ -682,8 +754,10 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             Db.SetLabelEtage(projectId, (LabelEtageTextBox.Text ?? "").Trim());
             Db.SetLabelDeadline(projectId, (LabelDeadlineTextBox.Text ?? "").Trim());
             Db.SetLabelPlanningTextZone(projectId, (LabelPlanningTextZoneTextBox.Text ?? "").Trim());
+            Db.SetLabelTaskCategory(projectId, (LabelTaskCategoryTextBox.Text ?? "").Trim());
+            Db.SetLabelTaskUrgency(projectId, (LabelTaskUrgencyTextBox.Text ?? "").Trim());
 
-            ApplyGroupBoxHeaders(projectId);
+            _labelsDirty = false;
 
             MessageBox.Show("Libellés enregistrés.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
 

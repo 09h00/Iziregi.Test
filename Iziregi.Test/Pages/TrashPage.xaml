@@ -69,7 +69,7 @@
 
 			<!-- Bordure extérieure -->
 			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="BorderBrush" Value="#111827"/>
+			<Setter Property="BorderBrush" Value="#D1D5DB"/>
 
 			<Setter Property="Background" Value="White"/>
 			<Setter Property="AlternatingRowBackground" Value="#F9FAFB"/>
@@ -132,7 +132,7 @@
 						<Setter Property="VerticalContentAlignment" Value="Center"/>
 						<Setter Property="HorizontalContentAlignment" Value="Center"/>
 						<Setter Property="Padding" Value="6,0"/>
-						<Setter Property="BorderBrush" Value="#111827"/>
+						<Setter Property="BorderBrush" Value="#D1D5DB"/>
 						<Setter Property="BorderThickness" Value="0,0,1,1"/>
 						<Setter Property="Foreground" Value="#111827"/>
 						<Setter Property="FontWeight" Value="Bold"/>
@@ -154,7 +154,7 @@
 			<Setter Property="VerticalContentAlignment" Value="Center"/>
 			<Setter Property="HorizontalContentAlignment" Value="Center"/>
 			<Setter Property="Padding" Value="6,0"/>
-			<Setter Property="BorderBrush" Value="#111827"/>
+			<Setter Property="BorderBrush" Value="#D1D5DB"/>
 			<Setter Property="BorderThickness" Value="0,0,0,1"/>
 		</Style>
 
@@ -175,7 +175,7 @@
 		<Style x:Key="StatusHeaderWithRightSeparator"
 			   TargetType="DataGridColumnHeader"
 			   BasedOn="{StaticResource StatusHeaderNoVerticalSeparators}">
-			<Setter Property="BorderBrush" Value="#111827"/>
+			<Setter Property="BorderBrush" Value="#D1D5DB"/>
 			<Setter Property="BorderThickness" Value="0,0,1,1"/>
 		</Style>
 
@@ -212,9 +212,10 @@
 				Background="White"
 				BorderBrush="#E5E7EB"
 				BorderThickness="1"
-				CornerRadius="10"
+				CornerRadius="12"
 				Padding="8"
-				Margin="0,0,0,8">
+				Margin="0,0,0,8"
+				Effect="{StaticResource CardShadowEffect}">
 
 			<Grid>
 				<Grid.ColumnDefinitions>
@@ -255,8 +256,9 @@
 				Background="White"
 				BorderBrush="#E5E7EB"
 				BorderThickness="1"
-				CornerRadius="10"
-				Padding="10">
+				CornerRadius="12"
+				Padding="10"
+				Effect="{StaticResource CardShadowEffect}">
 
 			<DataGrid x:Name="TrashedGrid"
 					  Grid.Row="1"

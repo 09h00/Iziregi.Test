@@ -38,7 +38,6 @@ namespace Iziregi.Test;
 public partial class DashboardPage : System.Windows.Controls.UserControl, IReloadablePage
 {
     private bool _isLoadingProjects;
-    private string _logoPath = "";
 
     // =========================
     // ✅ Mode "obliger OK" (dirty strict)
@@ -71,9 +70,10 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         PreviewDragOver += DashboardPage_PreviewDragOver;
         Drop += DashboardPage_Drop;
 
+        Loaded += DashboardPage_Loaded;
+
         HookDirtyTracking();
 
-        LoadIdentity();
         LoadProjects();
         RefreshAll();
 
@@ -88,7 +88,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
     public void Reload()
     {
-        LoadIdentity();
         LoadProjects();
         RefreshAll();
     }
@@ -98,13 +97,8 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     // =========================
     private void HookDirtyTracking()
     {
-        // ✅ Champs Identité architecte désormais en lecture seule sur le Dashboard
-        // (édition exclusivement via la fenêtre "Identité architecte") : plus de
-        // suivi dirty nécessaire ici.
-
-        HookDirty(ProjectNameEditTextBox);
-        HookDirty(ProjectAddressEditTextBox);
-        HookDirty(ProjectZipCityEditTextBox);
+        // ✅ Les infos du dossier sont affichées en texte simple (comme dans les
+        // bons/PDF) sur le Dashboard, pas éditables ici : pas de suivi dirty nécessaire.
 
         // Empêche changement projet si dirty (rollback)
         if (ProjectComboBox != null)
@@ -112,23 +106,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             ProjectComboBox.SelectionChanged -= ProjectComboBox_SelectionChanged_DirtyProxy;
             ProjectComboBox.SelectionChanged += ProjectComboBox_SelectionChanged_DirtyProxy;
         }
-    }
-
-    private void HookDirty(object? control)
-    {
-        if (control == null) return;
-
-        var tb = control as global::System.Windows.Controls.TextBox;
-        if (tb == null) return;
-
-        tb.TextChanged -= AnyIdentityField_TextChanged;
-        tb.TextChanged += AnyIdentityField_TextChanged;
-    }
-
-    private void AnyIdentityField_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_suspendDirtyTracking) return;
-        MarkIdentityDirty(true);
     }
 
     private void MarkIdentityDirty(bool dirty)
@@ -201,7 +178,7 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         }
 
         System.Windows.MessageBox.Show(
-            "Modifications non enregistrées.\n\nClique sur OK pour enregistrer avant de changer de projet.",
+            "Modifications non enregistrées.\n\nClique sur OK pour enregistrer avant de changer de dossier.",
             "Modifications non enregistrées",
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
@@ -241,21 +218,47 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         return (s, "");
     }
 
-    private static string JoinAddressTwoLines(string? line1, string? line2)
+    private static string FormatProjectManagerLine(string? name, string? contact)
     {
-        var a = (line1 ?? "").Trim();
-        var b = (line2 ?? "").Trim();
+        var n = (name ?? "").Trim();
+        var c = (contact ?? "").Trim();
 
-        if (string.IsNullOrWhiteSpace(a) && string.IsNullOrWhiteSpace(b))
+        if (string.IsNullOrWhiteSpace(n) && string.IsNullOrWhiteSpace(c))
             return "";
 
-        if (string.IsNullOrWhiteSpace(b))
-            return a;
+        if (string.IsNullOrWhiteSpace(c))
+            return $"Réf : {n}";
 
-        if (string.IsNullOrWhiteSpace(a))
-            return b;
+        if (string.IsNullOrWhiteSpace(n))
+            return c;
 
-        return $"{a}, {b}";
+        return $"Réf : {n}    {c}";
+    }
+
+    // =========================
+    // ✅ Alignement "+ Nouveau bon" sur le bord droit de "Validé"
+    // =========================
+    private void DashboardPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        Dispatcher.BeginInvoke(new Action(AlignNewWorkOrderButtonWidth),
+            System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void AlignNewWorkOrderButtonWidth()
+    {
+        try
+        {
+            if (NewWorkOrderTopButton == null || FilterValidatedButton == null) return;
+
+            var left = NewWorkOrderTopButton.TransformToAncestor(this).Transform(new System.Windows.Point(0, 0));
+            var right = FilterValidatedButton.TransformToAncestor(this)
+                .Transform(new System.Windows.Point(FilterValidatedButton.ActualWidth, 0));
+
+            var width = right.X - left.X;
+            if (width > 0)
+                NewWorkOrderTopButton.Width = width;
+        }
+        catch { /* non bloquant */ }
     }
 
     // =========================
@@ -314,15 +317,8 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
                 new WpfBinding("PerformedBy") { Converter = fgConv }
             ));
 
-            // Sélection = bleu standard
-            var selectedTrigger = new Trigger
-            {
-                Property = DataGridCell.IsSelectedProperty,
-                Value = true
-            };
-            selectedTrigger.Setters.Add(new Setter(DataGridCell.BackgroundProperty, (WpfBrush)new WpfBrushConverter().ConvertFromString("#DBEAFE")!));
-            selectedTrigger.Setters.Add(new Setter(DataGridCell.ForegroundProperty, (WpfBrush)new WpfBrushConverter().ConvertFromString("#111827")!));
-            cellStyle.Triggers.Add(selectedTrigger);
+            // ✅ Pas de trigger IsSelected : la couleur entreprise reste inchangée quand la
+            // ligne est sélectionnée (seule la bordure bleue de la ligne doit apparaître).
 
             performedByCol.CellStyle = cellStyle;
         }
@@ -811,7 +807,7 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
             if (sameNumber != null && sameNumber.IsValidated)
                 throw new InvalidOperationException(
-                    $"Un bon {sameNumber.BdrDisplay} est déjà validé dans ce projet.\n\n" +
+                    $"Un bon {sameNumber.BdrDisplay} est déjà validé dans ce dossier.\n\n" +
                     "Pour le refaire, crée un nouveau bon avec un nouveau numéro."
                 );
         }
@@ -844,151 +840,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             catch { }
         }
         RefreshAll();
-    }
-
-    // =========================
-    // Identité architecte
-    // =========================
-    private void LoadIdentity()
-    {
-        _suspendDirtyTracking = true;
-        try
-        {
-            if (ArchitectNameTextBox != null)
-                ArchitectNameTextBox.Text = Db.GetArchitectName();
-
-            // ✅ L'adresse architecte est saisie comme un seul champ (avec un
-            // retour à la ligne entre la rue et le NPA/Ville). On la découpe ici
-            // pour retrouver le même affichage à 2 lignes (Adresse / NPA-Ville)
-            // que le bloc "Projet" voisin.
-            var fullAddress = (Db.GetArchitectAddress() ?? "").Replace("\r\n", "\n");
-            var addressParts = fullAddress.Split('\n');
-            var addressLine = addressParts.Length > 0 ? addressParts[0].Trim() : "";
-            var addressZipCity = addressParts.Length > 1
-                ? string.Join(", ", addressParts.Skip(1).Select(p => p.Trim()).Where(p => p.Length > 0))
-                : "";
-
-            if (ArchitectAddressTextBox != null)
-                ArchitectAddressTextBox.Text = addressLine;
-
-            if (ArchitectZipCityTextBox != null)
-                ArchitectZipCityTextBox.Text = addressZipCity;
-
-            _logoPath = Db.GetArchitectLogoPath();
-            LoadLogoPreview(_logoPath);
-        }
-        finally
-        {
-            _suspendDirtyTracking = false;
-        }
-    }
-
-    private void LoadLogoPreview(string? path)
-    {
-        if (LogoImage != null)
-            LogoImage.Source = null;
-
-        if (LogoEmptyText != null)
-            LogoEmptyText.Visibility = Visibility.Visible;
-
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-            return;
-
-        try
-        {
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.UriSource = new Uri(path, UriKind.Absolute);
-            bmp.EndInit();
-            bmp.Freeze();
-
-            if (LogoImage != null)
-                LogoImage.Source = bmp;
-
-            if (LogoEmptyText != null)
-                LogoEmptyText.Visibility = Visibility.Collapsed;
-        }
-        catch
-        {
-            if (LogoImage != null)
-                LogoImage.Source = null;
-
-            if (LogoEmptyText != null)
-                LogoEmptyText.Visibility = Visibility.Visible;
-        }
-    }
-
-    private void ImportLogo_Click(object sender, RoutedEventArgs e)
-    {
-        if (!EnsureNotDirtyOrWarn()) return;
-
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Importer un logo",
-            Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp|Tous les fichiers|*.*"
-        };
-
-        if (dlg.ShowDialog() != true)
-            return;
-
-        _logoPath = dlg.FileName;
-        LoadLogoPreview(_logoPath);
-
-        MarkIdentityDirty(true);
-    }
-
-    private void RemoveLogo_Click(object sender, RoutedEventArgs e)
-    {
-        if (!EnsureNotDirtyOrWarn()) return;
-
-        _logoPath = "";
-        LoadLogoPreview("");
-
-        Db.SetArchitectLogoPath("");
-
-        MarkIdentityDirty(true);
-    }
-
-    private async System.Threading.Tasks.Task SyncArchitectToServerAsync(string name, string address, string logoPath)
-    {
-        try
-        {
-            byte[]? logoBytes = null;
-            string? contentType = null;
-
-            if (!string.IsNullOrWhiteSpace(logoPath) && System.IO.File.Exists(logoPath))
-            {
-                logoBytes = System.IO.File.ReadAllBytes(logoPath);
-                var ext = System.IO.Path.GetExtension(logoPath).ToLowerInvariant();
-                contentType = ext is ".jpg" or ".jpeg" ? "image/jpeg" : "image/png";
-            }
-
-            var payload = new
-            {
-                name,
-                address,
-                logoBase64      = logoBytes != null ? Convert.ToBase64String(logoBytes) : (string?)null,
-                logoContentType = contentType
-            };
-
-            var options = new System.Text.Json.JsonSerializerOptions
-            {
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-            };
-            var json    = System.Text.Json.JsonSerializer.Serialize(payload, options);
-
-            using var client  = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            client.DefaultRequestHeaders.Add("User-Agent", "IziregiClient/1.0"); // ✅ voir MainWindow/WorkOrderWindow
-            using var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            var url  = $"{MainWindow.ServerBaseUrl}/internal/architect-identity/upsert?apiKey={Uri.EscapeDataString(MainWindow.ServerApiKey)}";
-            var resp = await client.PostAsync(url, content);
-            resp.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine("SyncArchitectToServerAsync failed: " + ex.Message);
-        }
     }
 
     // =========================
@@ -1058,6 +909,9 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
                 if (ProjectZipCityEditTextBox != null)
                     ProjectZipCityEditTextBox.Text = zipCity;
+
+                if (ProjectManagerLineTextBox != null)
+                    ProjectManagerLineTextBox.Text = FormatProjectManagerLine(project.ManagerName, project.ManagerContact);
             }
             else
             {
@@ -1069,6 +923,9 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
                 if (ProjectZipCityEditTextBox != null)
                     ProjectZipCityEditTextBox.Text = "";
+
+                if (ProjectManagerLineTextBox != null)
+                    ProjectManagerLineTextBox.Text = "";
             }
         }
         finally
@@ -1117,41 +974,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         RefreshAll();
     }
 
-    private void SaveProjectIdentity_Click(object sender, RoutedEventArgs e)
-    {
-        if (!EnsureNotDirtyOrWarn()) return;
-
-        try
-        {
-            if (ProjectComboBox?.SelectedItem is not Project project)
-                throw new InvalidOperationException("Aucun projet sélectionné.");
-
-            project.Name = (ProjectNameEditTextBox?.Text ?? "").Trim();
-
-            var addr = (ProjectAddressEditTextBox?.Text ?? "").Trim();
-            var zipCity = (ProjectZipCityEditTextBox?.Text ?? "").Trim();
-            project.Address = JoinAddressTwoLines(addr, zipCity);
-
-            if (string.IsNullOrWhiteSpace(project.Name))
-                throw new InvalidOperationException("Le nom du projet est obligatoire.");
-
-            if (string.IsNullOrWhiteSpace(addr))
-                throw new InvalidOperationException("L’adresse du projet est obligatoire.");
-
-            Db.UpdateProject(project);
-
-            LoadProjects();
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(
-                $"Impossible d’enregistrer le projet.\n\n{ex.Message}",
-                "Projet",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
-
     private void ManageProjects_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureNotDirtyOrWarn()) return;
@@ -1173,7 +995,7 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
                 System.Diagnostics.Debug.WriteLine("Exception opening ProjectsWindow from Dashboard: " + ex);
                 var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
                 System.IO.File.WriteAllText(path, ex.ToString());
-                System.Windows.MessageBox.Show($"Erreur à l'ouverture de la fenêtre Projets : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Erreur à l'ouverture de la fenêtre Dossiers : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch { }
         }
@@ -1184,8 +1006,8 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(
-                $"Impossible d’ouvrir la fenêtre Projets.\n\n{ex.Message}",
-                "Projets",
+                $"Impossible d’ouvrir la fenêtre Dossiers.\n\n{ex.Message}",
+                "Dossiers",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -1209,7 +1031,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     {
         if (!EnsureNotDirtyOrWarn()) return;
 
-        LoadIdentity();
         LoadProjects();
         RefreshAll();
     }

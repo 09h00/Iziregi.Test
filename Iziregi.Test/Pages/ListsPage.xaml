@@ -52,14 +52,68 @@
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
 
+        <!-- ✅ Nom de champ/liste éditable directement au-dessus de chaque liste (remplace
+             l'ancien titre statique du GroupBox + l'ancienne section "Noms des 6 champs"). -->
+        <Style x:Key="ListLabelTextBoxStyle" TargetType="TextBox">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="#FAFAFA"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <!-- ✅ Template entièrement personnalisé : le template TextBox par défaut de
+                 Windows a son propre déclencheur de focus qui redessine la bordure en bleu
+                 système PAR-DESSUS la propriété BorderBrush du Style — d'où l'absence de
+                 changement malgré les couleurs testées précédemment. Ici, la bordure (Bd)
+                 est explicitement pilotée par nous, sans callback caché du thème. -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#4169E1"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ ComboBox "Sélection par défaut" : sans style, elles gardaient le bleu de focus
+             par défaut de Windows (différent du bleu de l'app) — même bleu/épaisseur que les
+             champs de libellé et les listes actives, pour un focus visuellement cohérent. -->
+        <Style x:Key="DefaultValueComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
     </UserControl.Resources>
 
     <Grid Margin="0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="6"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="8"/>
             <RowDefinition Height="*"/>
@@ -71,68 +125,13 @@
 			FontWeight="SemiBold"
 			Foreground="#111827"/>
 
-        <GroupBox Grid.Row="2"
-			Header="Noms des 6 champs de la section “Demande”">
-            <GroupBox.HeaderTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" FontWeight="SemiBold"/>
-                </DataTemplate>
-            </GroupBox.HeaderTemplate>
-
-            <Border BorderBrush="#E2E2E2"
-				BorderThickness="1"
-				CornerRadius="6"
-				Padding="8"
-				Background="#FAFAFA">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="30"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="30"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="450"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="6"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBox x:Name="LabelReserveTextBox" Grid.Row="0" Grid.Column="0" Height="22" HorizontalAlignment="Stretch"/>
-                    <TextBox x:Name="LabelRequestedByTextBox" Grid.Row="0" Grid.Column="2" Height="22" HorizontalAlignment="Stretch"/>
-                    <TextBox x:Name="LabelPerformedByTextBox" Grid.Row="0" Grid.Column="4" Height="22" HorizontalAlignment="Stretch"/>
-
-                    <Button Grid.Row="0"
-						Grid.Column="6"
-						Content="Enregistrer"
-						Style="{StaticResource PrimaryButtonStyle}"
-						Height="26"
-						HorizontalAlignment="Stretch"
-						VerticalAlignment="Center"
-						Click="SaveLabels_Click"/>
-
-                    <TextBox x:Name="LabelPlaceTextBox" Grid.Row="2" Grid.Column="0" Height="22" HorizontalAlignment="Stretch"/>
-                    <TextBox x:Name="LabelEtageTextBox" Grid.Row="2" Grid.Column="2" Height="22" HorizontalAlignment="Stretch"/>
-                    <TextBox x:Name="LabelDeadlineTextBox" Grid.Row="2" Grid.Column="4" Height="22" HorizontalAlignment="Stretch"/>
-                    <TextBox x:Name="LabelPlanningTextZoneTextBox" Grid.Row="2" Grid.Column="6" Height="22" HorizontalAlignment="Stretch"/>
-                </Grid>
-            </Border>
-        </GroupBox>
-
-        <Separator Grid.Row="3"
-			Height="1"
-			Background="#111827"
-			Margin="0,8,0,8"/>
-
-        <Border Grid.Row="4"
-			BorderBrush="#E2E2E2"
+        <Border Grid.Row="2"
+			BorderBrush="#E5E7EB"
 			BorderThickness="1"
-			CornerRadius="6"
+			CornerRadius="10"
 			Padding="8"
-			Background="#FFFFFF">
+			Background="#FFFFFF"
+			Effect="{StaticResource CardShadowEffect}">
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
                     <TextBlock Text="Listes déroulantes"
@@ -140,22 +139,31 @@
 						VerticalAlignment="Center"
 						Margin="0,0,12,0"/>
 
-                    <Button x:Name="CommonAddButton" Content="Ajouter" Width="90" Margin="0,0,8,0" Click="CommonAdd_Click"/>
-                    <Button x:Name="CommonRenameButton" Content="Renommer" Width="90" Margin="0,0,8,0" Click="CommonRename_Click"/>
-                    <Button x:Name="CommonDeleteButton" Content="Supprimer" Width="90" Margin="0,0,8,0" Click="CommonDelete_Click"/>
-                    <Button x:Name="CommonSetDefaultButton" Content="Définir par défaut" Width="140" Margin="0,0,8,0" Click="CommonSetDefault_Click"/>
-                    <Button x:Name="CommonCopyButton" Content="Copier" Width="90" Margin="0,0,8,0" Click="CommonCopy_Click"/>
-                    <Button x:Name="CommonPasteButton" Content="Coller" Width="90" Click="CommonPaste_Click"/>
+                    <Button x:Name="CommonAddButton" Content="Ajouter" Width="90" Margin="0,0,8,0" Click="CommonAdd_Click" Style="{StaticResource SmallButtonStyle}"/>
+                    <Button x:Name="CommonRenameButton" Content="Renommer" Width="90" Margin="0,0,8,0" Click="CommonRename_Click" Style="{StaticResource SmallButtonStyle}"/>
+                    <Button x:Name="CommonDeleteButton" Content="Supprimer" Width="90" Margin="0,0,8,0" Click="CommonDelete_Click" Style="{StaticResource SmallButtonStyle}"/>
+                    <Button x:Name="CommonSetDefaultButton" Content="Définir par défaut" Width="140" Margin="0,0,8,0" Click="CommonSetDefault_Click" Style="{StaticResource SmallButtonStyle}"/>
+                    <Button x:Name="CommonCopyButton" Content="Copier" Width="90" Margin="0,0,8,0" Click="CommonCopy_Click" Style="{StaticResource SmallButtonStyle}"/>
+                    <Button x:Name="CommonPasteButton" Content="Coller" Width="90" Click="CommonPaste_Click" Style="{StaticResource SmallButtonStyle}"/>
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                <Button Content="Enregistrer"
+                        DockPanel.Dock="Right"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="200"
+                        Height="26"
+                        Click="SaveLabels_Click"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="Liste active : " VerticalAlignment="Center" Foreground="#6B7280"/>
-                    <TextBlock x:Name="ActiveListLabel" Text="—" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="ActiveListLabel" Text="—" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#2563EB"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <Grid Grid.Row="6">
+        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+        <Grid Height="440">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="12"/>
@@ -171,19 +179,12 @@
             </Grid.ColumnDefinitions>
 
             <!-- Concerne -->
-            <GroupBox x:Name="ReservesGroupBox" Grid.Column="0" Header="Concerne">
-                <GroupBox.HeaderTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding}"/>
-                            <TextBlock Text=" (20 caractères max.)" Foreground="#9CA3AF"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </GroupBox.HeaderTemplate>
-
+            <GroupBox x:Name="ReservesGroupBox" Grid.Column="0">
                 <DockPanel>
+                    <TextBox x:Name="LabelReserveTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
+                    <TextBlock DockPanel.Dock="Top" Text="(20 caractères max. sur le bon)" Foreground="#9CA3AF" FontSize="10" Margin="0,-6,0,8"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="DefaultReserveComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="DefaultReserveComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
 
                     <Border x:Name="ReservesListBorder"
 						Background="Transparent"
@@ -199,10 +200,11 @@
             </GroupBox>
 
             <!-- Demandé par -->
-            <GroupBox x:Name="RequestersGroupBox" Header="Demandé par" Grid.Column="2">
+            <GroupBox x:Name="RequestersGroupBox" Grid.Column="2">
                 <DockPanel>
+                    <TextBox x:Name="LabelRequestedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="DefaultRequesterComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="DefaultRequesterComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
 
                     <Border x:Name="RequestersListBorder"
 						Background="Transparent"
@@ -218,10 +220,11 @@
             </GroupBox>
 
             <!-- Bâtiment -->
-            <GroupBox x:Name="PlacesGroupBox" Header="Bâtiment" Grid.Column="4">
+            <GroupBox x:Name="PlacesGroupBox" Grid.Column="4">
                 <DockPanel>
+                    <TextBox x:Name="LabelPlaceTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="DefaultPlaceComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="DefaultPlaceComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
                     <TextBox x:Name="NewPlaceTextBox" Visibility="Collapsed"/>
 
                     <Border x:Name="PlacesListBorder"
@@ -238,10 +241,11 @@
             </GroupBox>
 
             <!-- Étage -->
-            <GroupBox x:Name="EtagesGroupBox" Header="Étage" Grid.Column="6">
+            <GroupBox x:Name="EtagesGroupBox" Grid.Column="6">
                 <DockPanel>
+                    <TextBox x:Name="LabelEtageTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="DefaultEtageComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="DefaultEtageComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
                     <TextBox x:Name="NewEtageTextBox" Visibility="Collapsed"/>
 
                     <Border x:Name="EtagesListBorder"
@@ -258,10 +262,11 @@
             </GroupBox>
 
             <!-- Entreprise -->
-            <GroupBox x:Name="CompaniesGroupBox" Header="Entreprise" Grid.Column="8">
+            <GroupBox x:Name="CompaniesGroupBox" Grid.Column="8">
                 <DockPanel>
+                    <TextBox x:Name="LabelPerformedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="DefaultCompanyComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="DefaultCompanyComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
 
                     <!-- Boutons couleur (placés entre défaut et liste) -->
                     <Border DockPanel.Dock="Top"
@@ -274,9 +279,9 @@
                         <StackPanel>
                             <TextBox x:Name="NewCompanyTextBox" Visibility="Collapsed"/>
                             <WrapPanel VerticalAlignment="Center">
-                                <Border x:Name="SelectedCompanyColorPreview" Width="24" Height="24" Background="Transparent" BorderBrush="#666" BorderThickness="1" CornerRadius="3" Margin="0,0,8,0"/>
-                                <Button Content="Couleur..." Height="24" Width="80" Margin="0,0,8,0" Click="PickCompanyColor_Click"/>
-                                <Button Content="✕" Height="24" Width="24" ToolTip="Effacer" Click="ClearCompanyColor_Click"/>
+                                <Border x:Name="SelectedCompanyColorPreview" Width="24" Height="24" Background="Transparent" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="3" Margin="0,0,8,0"/>
+                                <Button Content="Couleur..." Height="24" Width="80" Margin="0,0,8,0" Click="PickCompanyColor_Click" Style="{StaticResource SmallButtonStyle}"/>
+                                <Button Content="✕" Height="24" Width="24" ToolTip="Effacer" Click="ClearCompanyColor_Click" Style="{StaticResource SmallButtonStyle}"/>
                             </WrapPanel>
                         </StackPanel>
                     </Border>
@@ -304,11 +309,42 @@
                 </DockPanel>
             </GroupBox>
 
-            <!-- Zone de texte planning -->
-            <GroupBox x:Name="PlanningTextZonesGroupBox" Header="Zone de texte planning" Grid.Column="10">
+            <!-- Délai (pas de liste associée : juste le nom du champ) -->
+            <GroupBox x:Name="DeadlineGroupBox" Grid.Column="10">
                 <DockPanel>
+                    <TextBox x:Name="LabelDeadlineTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
+                    <TextBlock DockPanel.Dock="Top" Text="Champ date (pas de liste associée)" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap"/>
+                </DockPanel>
+            </GroupBox>
+
+        </Grid>
+
+        <Border Height="8"/>
+
+        <!-- ✅ Listes liées au Planning (déplacées ensemble : Zone de texte, Cat., Urg.) —
+             mêmes ColumnDefinitions que la grille du haut pour que chaque liste ait
+             exactement la même largeur (seules les colonnes 0/2/4 sont utilisées). -->
+        <Grid Height="440">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Zone de texte planning -->
+            <GroupBox x:Name="PlanningTextZonesGroupBox" Grid.Column="0">
+                <DockPanel>
+                    <TextBox x:Name="LabelPlanningTextZoneTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="DefaultPlanningTextZoneComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="DefaultPlanningTextZoneComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
 
                     <Border x:Name="PlanningTextZonesListBorder"
 						Background="Transparent"
@@ -323,6 +359,48 @@
                 </DockPanel>
             </GroupBox>
 
+            <!-- Cat. (tâches Planning) -->
+            <GroupBox x:Name="TaskCategoriesGroupBox" Grid.Column="2">
+                <DockPanel>
+                    <TextBox x:Name="LabelTaskCategoryTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
+                    <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
+                    <ComboBox x:Name="DefaultTaskCategoryComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
+
+                    <Border x:Name="TaskCategoriesListBorder"
+						Background="Transparent"
+						BorderThickness="2"
+						CornerRadius="6"
+						BorderBrush="#E5E7EB"
+						PreviewMouseLeftButtonDown="TaskCategoriesListBorder_PreviewMouseLeftButtonDown">
+                        <ListBox x:Name="TaskCategoriesListBox"
+							GotFocus="TaskCategoriesListBox_GotFocus"
+							SelectionChanged="AnyListBox_SelectionChanged"/>
+                    </Border>
+                </DockPanel>
+            </GroupBox>
+
+            <!-- Urg. (tâches Planning) -->
+            <GroupBox x:Name="TaskUrgenciesGroupBox" Grid.Column="4">
+                <DockPanel>
+                    <TextBox x:Name="LabelTaskUrgencyTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus"/>
+                    <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
+                    <ComboBox x:Name="DefaultTaskUrgencyComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
+
+                    <Border x:Name="TaskUrgenciesListBorder"
+						Background="Transparent"
+						BorderThickness="2"
+						CornerRadius="6"
+						BorderBrush="#E5E7EB"
+						PreviewMouseLeftButtonDown="TaskUrgenciesListBorder_PreviewMouseLeftButtonDown">
+                        <ListBox x:Name="TaskUrgenciesListBox"
+							GotFocus="TaskUrgenciesListBox_GotFocus"
+							SelectionChanged="AnyListBox_SelectionChanged"/>
+                    </Border>
+                </DockPanel>
+            </GroupBox>
+
         </Grid>
+        </StackPanel>
+        </ScrollViewer>
     </Grid>
 </UserControl>

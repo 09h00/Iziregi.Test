@@ -22,5 +22,9 @@ public class Project
     // ✅ Couleur du projet (HEX) : ex "#2563EB"
     public string ColorHex { get; set; } = "";
 
+    // ✅ NOUVEAU : gestionnaire du dossier (nom + champ libre tél./email)
+    public string ManagerName { get; set; } = "";
+    public string ManagerContact { get; set; } = "";
+
     public bool IsActive { get; set; }
 }

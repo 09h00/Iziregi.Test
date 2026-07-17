@@ -15,6 +15,11 @@
         <!-- Converters couleur entreprise -->
         <local:CompanyNameToBrushConverter x:Key="CompanyBgConverter"/>
         <local:CompanyNameToTextBrushConverter x:Key="CompanyFgConverter"/>
+        <local:UrgencyToBrushConverter x:Key="UrgencyBgConverter"/>
+        <local:UrgencyToForegroundConverter x:Key="UrgencyFgConverter"/>
+        <local:TodoFirstLineConverter x:Key="TodoFirstLineConverter"/>
+        <local:TodoShowPencilConverter x:Key="TodoShowPencilConverter"/>
+        <local:TodoShowVoirPlusConverter x:Key="TodoShowVoirPlusConverter"/>
 
         <!-- ✅ Cell color only if not empty -->
         <local:CellTextAndCompanyToBrushConverter x:Key="CellCompanyColorIfNotEmptyConverter"/>
@@ -89,7 +94,7 @@
         <Style x:Key="SmallBlackButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallBlueButtonStyle}">
             <Setter Property="Background" Value="#111827"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -123,6 +128,43 @@
             </Setter>
         </Style>
 
+        <!-- ✅ Bouton "Colonnes" : blanc/bleu — au survol, juste une bordure plus épaisse
+             (pas de fond noir comme SmallBlackButtonStyle). -->
+        <Style x:Key="OutlineBlueButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallBlueButtonStyle}">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#2563EB"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+						        Background="{TemplateBinding Background}"
+						        BorderBrush="{TemplateBinding BorderBrush}"
+						        BorderThickness="{TemplateBinding BorderThickness}"
+						        CornerRadius="6"
+						        SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+							                  VerticalAlignment="Center"
+							                  Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#EFF6FF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#BFDBFE"/>
+                                <Setter Property="Foreground" Value="#BFDBFE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="PlanningDatePickerStyle" TargetType="DatePicker">
             <Setter Property="SelectedDateFormat" Value="Short"/>
             <Setter Property="Width" Value="130"/>
@@ -139,9 +181,12 @@
             <Setter Property="VerticalGridLinesBrush" Value="#E5E7EB"/>
             <Setter Property="HorizontalGridLinesBrush" Value="#E5E7EB"/>
             <Setter Property="HeadersVisibility" Value="Column"/>
-            <Setter Property="RowHeight" Value="24"/>
-            <Setter Property="ColumnHeaderHeight" Value="28"/>
-            <Setter Property="FontSize" Value="13"/>
+            <!-- ✅ Agrandi (demande de Joe, 16.07.2026) : le PDF Planning capture ces grilles
+                 telles qu'affichées à l'écran (voir PlanningPage.xaml.cs, CaptureScrollViewerContentToPngBytes),
+                 donc la police y était trop petite aussi. -->
+            <Setter Property="RowHeight" Value="28"/>
+            <Setter Property="ColumnHeaderHeight" Value="32"/>
+            <Setter Property="FontSize" Value="15"/>
             <Setter Property="SelectionMode" Value="Extended"/>
             <Setter Property="SelectionUnit" Value="CellOrRowHeader"/>
 
@@ -191,7 +236,7 @@
                     <Style TargetType="DataGridColumnHeader">
                         <Setter Property="FontWeight" Value="SemiBold"/>
                         <Setter Property="Foreground" Value="#111827"/>
-                        <Setter Property="BorderBrush" Value="Black"/>
+                        <Setter Property="BorderBrush" Value="#D1D5DB"/>
                         <Setter Property="BorderThickness" Value="0,0,1,2"/>
                         <Setter Property="HorizontalContentAlignment" Value="Center"/>
                         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -307,6 +352,108 @@
             </Setter>
         </Style>
 
+        <!-- ✅ Combo "Urg." dédié : GridComboStyle (utilisé par Bâtiment/Étage/Cat.) ne
+             surcharge PAS le Template du ComboBox — le chrome par défaut du thème Windows
+             reste opaque (fond blanc) même avec Background="Transparent" sur le ComboBox,
+             ce qui cachait la couleur du Border placé derrière lui. Repris du template
+             entièrement transparent de CompanyComboStyle (non éditable — valeurs 1/2/3
+             choisies dans la liste, pas de saisie libre nécessaire). -->
+        <Style x:Key="UrgencyComboStyle" TargetType="ComboBox" BasedOn="{StaticResource GridComboStyle}">
+            <Setter Property="IsEditable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+						              Focusable="False"
+						              ClickMode="Press"
+						              HorizontalContentAlignment="Stretch"
+						              VerticalContentAlignment="Center"
+						              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+						              Background="Transparent"
+						              BorderThickness="0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="16"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <ContentPresenter Grid.Column="0"
+									                  Margin="4,0,0,0"
+									                  VerticalAlignment="Center"
+									                  HorizontalAlignment="Center"
+									                  Content="{TemplateBinding SelectionBoxItem}">
+                                        <ContentPresenter.ContentTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}"
+												           Foreground="{Binding RelativeSource={RelativeSource AncestorType=ComboBox}, Path=Foreground}"/>
+                                            </DataTemplate>
+                                        </ContentPresenter.ContentTemplate>
+                                    </ContentPresenter>
+
+                                    <Path Grid.Column="1"
+									      Data="M 0 0 L 4 4 L 8 0 Z"
+									      Fill="#6B7280"
+									      HorizontalAlignment="Center"
+									      VerticalAlignment="Center"/>
+                                </Grid>
+                            </ToggleButton>
+
+                            <Popup x:Name="Popup"
+						       Placement="Bottom"
+						       IsOpen="{TemplateBinding IsDropDownOpen}"
+						       AllowsTransparency="True"
+						       Focusable="False"
+						       PopupAnimation="Fade">
+                                <Border Background="White"
+								        BorderBrush="#D1D5DB"
+								        BorderThickness="1"
+								        CornerRadius="6"
+								        SnapsToDevicePixels="True">
+                                    <ScrollViewer Margin="2"
+									              SnapsToDevicePixels="True"
+									              VerticalScrollBarVisibility="Auto"
+									              HorizontalScrollBarVisibility="Disabled"
+									              Background="White">
+                                        <ItemsPresenter>
+                                            <ItemsPresenter.Resources>
+                                                <Style TargetType="ComboBoxItem">
+                                                    <Setter Property="Background" Value="White"/>
+                                                    <Setter Property="Foreground" Value="#111827"/>
+                                                    <Setter Property="Padding" Value="6,4"/>
+                                                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                                    <Setter Property="BorderThickness" Value="0"/>
+                                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsHighlighted" Value="True">
+                                                            <Setter Property="Background" Value="#F3F4F6"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter Property="Background" Value="#E5E7EB"/>
+                                                            <Setter Property="Foreground" Value="#111827"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter Property="Foreground" Value="#9CA3AF"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ItemsPresenter.Resources>
+                                        </ItemsPresenter>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="TextZoneRichTextBoxStyle" TargetType="RichTextBox">
             <Setter Property="VerticalScrollBarVisibility" Value="Disabled"/>
             <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
@@ -336,17 +483,17 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd"
 						        Background="{TemplateBinding Background}"
-						        BorderBrush="Black"
+						        BorderBrush="#D1D5DB"
 						        BorderThickness="1"
 						        CornerRadius="999"
 						        SnapsToDevicePixels="True"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="Black"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="Black"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -461,12 +608,21 @@
 			            Style="{StaticResource PlanningDatePickerStyle}"
 			            SelectedDateChanged="EndDatePicker_SelectedDateChanged"/>
 
+            <!-- ✅ Marge droite de 8 pour aligner le bord droit avec la pastille "Dossier" de
+                 MainWindow : le conteneur de page (Border Padding="12") est inset de 4px de
+                 plus que le bandeau de nav (Padding="8,6"), et la pastille a elle-même une
+                 marge droite de 12 dans son StackPanel — 12+8-12 = 8 de marge ici pour
+                 compenser exactement l'écart. -->
             <Button x:Name="ExportPdfButton"
                     Grid.Column="14"
-                    Content="Exporter PDF"
-                    Style="{StaticResource SmallBlueButtonStyle}"
+                    Content="Générer PDF"
+                    Style="{StaticResource PdfButtonStyle}"
                     HorizontalAlignment="Right"
-                    Margin="12,0,0,0"
+                    VerticalAlignment="Center"
+                    Margin="12,0,8,0"
+                    Height="30"
+                    Width="150"
+                    FontSize="15"
                     Click="ExportPdfButton_Click"/>
         </Grid>
 
@@ -482,10 +638,11 @@
                 <!-- 1) Tâches -->
                 <Border x:Name="TaskSectionBorder"
                         Grid.Row="0"
-				        BorderBrush="Black"
+				        BorderBrush="#D1D5DB"
 				        BorderThickness="1"
-				        CornerRadius="10"
+				        CornerRadius="12"
 				        Padding="10"
+		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -503,6 +660,17 @@
 							           Foreground="#111827"
 							           DockPanel.Dock="Left"/>
 
+                            <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
+                                 (mémorisé entre les sessions via Db.GetTasksVisibleColumns/
+                                 SetTasksVisibleColumns). Tout à droite, espacement identique
+                                 aux autres boutons de cette barre. -->
+                            <Button x:Name="TaskColumnsButton"
+							        Content="Colonnes ▾"
+							        Style="{StaticResource OutlineBlueButtonStyle}"
+							        DockPanel.Dock="Right"
+							        Margin="8,0,0,0"
+							        Click="TaskColumnsButton_Click"/>
+
                             <Button x:Name="RemoveTaskRowButton"
 							        Content="Supprimer"
 							        Style="{StaticResource SmallBlackButtonStyle}"
@@ -517,18 +685,51 @@
 							        Click="AddTaskRowButton_Click"/>
                         </DockPanel>
 
+                        <Popup x:Name="TaskColumnsPopup"
+                               PlacementTarget="{Binding ElementName=TaskColumnsButton}"
+                               Placement="Bottom"
+                               StaysOpen="False"
+                               AllowsTransparency="True">
+                            <Border Background="White"
+                                    BorderBrush="#D1D5DB"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="10"
+                                    Effect="{StaticResource CardShadowEffect}">
+                                <StackPanel>
+                                    <TextBlock Text="Colonnes visibles" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                                    <CheckBox x:Name="ColShowCompanyCheckBox" Content="Entreprise" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                                    <CheckBox x:Name="ColShowBuildingCheckBox" Content="Bâtiment" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                                    <CheckBox x:Name="ColShowFloorCheckBox" Content="Étage" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                                    <CheckBox x:Name="ColShowCategoryCheckBox" Content="Catégorie" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                                    <CheckBox x:Name="ColShowUrgencyCheckBox" Content="Urg." Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+
                         <DataGrid x:Name="TasksDataGrid"
 						          Grid.Row="1"
 						          Style="{StaticResource PlanningGridStyle}"
 						          AutoGenerateColumns="False"
 						          CanUserAddRows="False"
 						          RowHeaderWidth="0"
+						          SelectionUnit="FullRow"
 						          Background="White"
-						          BorderBrush="Black"
+						          BorderBrush="#D1D5DB"
 						          BorderThickness="1"
 						          IsReadOnly="False">
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn x:Name="TaskRefColumn" Header="N° Réf." Width="70">
+                                <DataGridTemplateColumn x:Name="TaskSelectColumn" Header="" Width="28" CanUserResize="False">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox HorizontalAlignment="Center"
+											          VerticalAlignment="Center"
+											          IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn x:Name="TaskRefColumn" Header="N°" Width="70">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="0" Padding="0">
@@ -581,7 +782,117 @@
                                     </DataGridTemplateColumn.CellEditingTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskCompanyColumn" Header="Entreprise" MinWidth="130" Width="Auto">
+                                <!-- ✅ MaxWidth (demande de Joe, 16.07.2026) : un mot long dans cette colonne
+                                     ne doit pas élargir toute la grille — au-delà de ce plafond, le contenu
+                                     est simplement coupé et c'est "Descriptif" (colonne étoile) qui absorbe
+                                     l'espace restant. -->
+                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" MinWidth="90" MaxWidth="160" Width="Auto">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DataContext.BuildingLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox Style="{StaticResource GridComboStyle}"
+											          ItemsSource="{Binding DataContext.Buildings, RelativeSource={RelativeSource AncestorType=UserControl}}"
+											          SelectedItem="{Binding Building, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn x:Name="TaskFloorColumn" MinWidth="80" MaxWidth="140" Width="Auto">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DataContext.FloorLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox Style="{StaticResource GridComboStyle}"
+											          ItemsSource="{Binding DataContext.Floors, RelativeSource={RelativeSource AncestorType=UserControl}}"
+											          SelectedItem="{Binding Floor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- ✅ N'affiche que la 1ère ligne en mode lecture (le texte complet peut
+                                     être multi-lignes via l'éditeur agrandi) — édition rapide inline
+                                     toujours possible (reste sur une seule ligne, comme avant). -->
+                                <DataGridTemplateColumn x:Name="TaskTodoColumn" Header="Descriptif" MinWidth="120" Width="*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Todo, Converter={StaticResource TodoFirstLineConverter}}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding Todo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     MaxLength="80"
+                                                     BorderThickness="0"
+                                                     Background="Transparent"
+                                                     VerticalContentAlignment="Center"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- ✅ Éditeur agrandi du Descriptif (16.07.2026, demande de Joe) : ouvre
+                                     TaskDescriptionWindow en modal pour saisir/consulter un texte long,
+                                     avec bouton "Générer PDF" — le champ reste le même, juste plus
+                                     confortable pour écrire beaucoup de texte. Crayon si 1 seule ligne ;
+                                     texte "Voir +" (sans fond coloré) si plus d'une ligne. Icône/texte
+                                     agrandis (demande de Joe, 16.07.2026, 2e passe). -->
+                                <DataGridTemplateColumn x:Name="TaskExpandDescriptionColumn" Header="" Width="56" CanUserResize="False">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Padding="4,0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    ToolTip="Agrandir / éditer le descriptif"
+                                                    Click="TaskExpandDescriptionButton_Click">
+                                                <Grid>
+                                                    <Path Data="{StaticResource IconEditGeometry}"
+                                                          Stretch="Uniform"
+                                                          Width="15"
+                                                          Height="15"
+                                                          Fill="#6B7280"
+                                                          Visibility="{Binding Todo, Converter={StaticResource TodoShowPencilConverter}}"/>
+                                                    <TextBlock Text="Voir +"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="#2563EB"
+                                                               Visibility="{Binding Todo, Converter={StaticResource TodoShowVoirPlusConverter}}"/>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn x:Name="TaskCategoryColumn" MinWidth="90" MaxWidth="160" Width="Auto">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DataContext.TaskCategoryLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox Style="{StaticResource GridComboStyle}"
+											          ItemsSource="{Binding DataContext.TaskCategoriesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
+											          SelectedItem="{Binding Category, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- ✅ Déplacée entre Catégorie et Urg. (demande de Joe du 16.07.2026). -->
+                                <DataGridTemplateColumn x:Name="TaskCompanyColumn" MinWidth="130" MaxWidth="220" Width="Auto">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="4" Padding="0">
@@ -622,38 +933,8 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" Header="Bâtiment" MinWidth="90" Width="Auto">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox Style="{StaticResource GridComboStyle}"
-											          ItemsSource="{Binding DataContext.Buildings, RelativeSource={RelativeSource AncestorType=UserControl}}"
-											          SelectedItem="{Binding Building, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-
-                                <DataGridTemplateColumn x:Name="TaskFloorColumn" Header="Étage" MinWidth="80" Width="Auto">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox Style="{StaticResource GridComboStyle}"
-											          ItemsSource="{Binding DataContext.Floors, RelativeSource={RelativeSource AncestorType=UserControl}}"
-											          SelectedItem="{Binding Floor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-
-                                <DataGridTextColumn x:Name="TaskTodoColumn" Header="Descriptif" Width="*" Binding="{Binding Todo}"/>
-
-                                <DataGridTemplateColumn x:Name="TaskCategoryColumn" Header="Cat." MinWidth="90" Width="Auto">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox Style="{StaticResource GridComboStyle}"
-											          ItemsSource="{Binding DataContext.PlanningTextZones, RelativeSource={RelativeSource AncestorType=UserControl}}"
-											          SelectedItem="{Binding Category, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-
+                                <!-- ✅ Retiré du sélecteur "Colonnes" (remplacé par Urg.) — reste
+                                     masquée en permanence, comme avant l'ajout de ce sélecteur. -->
                                 <DataGridTemplateColumn x:Name="TaskReserveColumn" Header="Concerne" Width="110" Visibility="Collapsed">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -664,7 +945,32 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskDoneColumn" Header="Effectué" Width="72">
+                                <DataGridTemplateColumn x:Name="TaskUrgentColumn" MinWidth="52" Width="52">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DataContext.TaskUrgencyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <!-- ✅ Couleur selon la valeur (1=rouge, 2=orange, 3=jaune clair) via
+                                                 converter (UrgencyBgConverter) plutôt que DataTrigger : binding
+                                                 direct sur Background, sans dépendre du timing de sélection d'un
+                                                 ComboBox éditable (IsEditable="True" sur GridComboStyle). -->
+                                            <Border Background="{Binding Urgent, Converter={StaticResource UrgencyBgConverter}}" CornerRadius="4" Padding="0">
+                                                <ComboBox Style="{StaticResource UrgencyComboStyle}"
+												          ItemsSource="{Binding DataContext.TaskUrgenciesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
+												          SelectedItem="{Binding Urgent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+												          Foreground="{Binding Urgent, Converter={StaticResource UrgencyFgConverter}}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- ✅ Largeur augmentée (16.07.2026, demande de Joe) : 61px coupait la
+                                     dernière lettre de "Effectué" depuis l'agrandissement de la police
+                                     des grilles (13→15). -->
+                                <DataGridTemplateColumn x:Name="TaskDoneColumn" Header="Effectué" Width="90">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border x:Name="DoneCellBorder" Background="Transparent" CornerRadius="4" Padding="0">
@@ -689,10 +995,11 @@
                 <!-- 2) Planning hebdo -->
                 <Border x:Name="WeeklySectionBorder"
                         Grid.Row="1"
-				        BorderBrush="Black"
+				        BorderBrush="#D1D5DB"
 				        BorderThickness="1"
-				        CornerRadius="10"
+				        CornerRadius="12"
 				        Padding="10"
+		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -710,12 +1017,16 @@
 							           Foreground="#111827"
 							           DockPanel.Dock="Left"/>
 
-                            <Button x:Name="ToggleSaturdayButton"
-							        Content="Afficher samedi"
-							        Style="{StaticResource SmallBlueButtonStyle}"
+                            <!-- ✅ Choix Samedi / Dimanche indépendants (même mécanisme que le
+                                 bouton "Colonnes" du tableau des Tâches) — PAS mémorisé d'une
+                                 semaine à l'autre : les deux reviennent décochés/masqués à
+                                 chaque nouvelle semaine (voir Reload()). -->
+                            <Button x:Name="WeekendColumnsButton"
+							        Content="Samedi/Dimanche ▾"
+							        Style="{StaticResource OutlineBlueButtonStyle}"
 							        DockPanel.Dock="Right"
 							        Margin="8,0,0,0"
-							        Click="ToggleSaturdayButton_Click"/>
+							        Click="WeekendColumnsButton_Click"/>
 
                             <Button x:Name="RemovePlanningRowButton"
 							        Content="Supprimer"
@@ -731,6 +1042,25 @@
 							        Click="AddPlanningRowButton_Click"/>
                         </DockPanel>
 
+                        <Popup x:Name="WeekendColumnsPopup"
+                               PlacementTarget="{Binding ElementName=WeekendColumnsButton}"
+                               Placement="Bottom"
+                               StaysOpen="False"
+                               AllowsTransparency="True">
+                            <Border Background="White"
+                                    BorderBrush="#D1D5DB"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="10"
+                                    Effect="{StaticResource CardShadowEffect}">
+                                <StackPanel>
+                                    <TextBlock Text="Colonnes visibles" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                                    <CheckBox x:Name="WeekendShowSaturdayCheckBox" Content="Samedi" Margin="0,2" Click="WeekendColumnVisibility_Changed"/>
+                                    <CheckBox x:Name="WeekendShowSundayCheckBox" Content="Dimanche" Margin="0,2" Click="WeekendColumnVisibility_Changed"/>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+
                         <DataGrid x:Name="PlanningDataGrid"
 						          Grid.Row="1"
 						          Style="{StaticResource PlanningGridStyle}"
@@ -738,7 +1068,7 @@
 						          CanUserAddRows="False"
 						          RowHeaderWidth="0"
 						          Background="White"
-						          BorderBrush="Black"
+						          BorderBrush="#D1D5DB"
 						          BorderThickness="1"
 						          IsReadOnly="False">
                             <DataGrid.Columns>
@@ -971,6 +1301,42 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
+                                <!-- ✅ Dimanche : ajouté avec Samedi, DOIT rester avant "Jour 6"
+                                     (lundi suivant). Visibilité pilotée indépendamment via la
+                                     case à cocher "Dimanche" du bouton "Samedi/Dimanche ▾"
+                                     (WeekendColumnsPopup) — masqué par défaut à chaque nouvelle
+                                     semaine, comme Samedi. -->
+                                <DataGridTemplateColumn x:Name="SundayColumn" Header="Dimanche" Width="*" Visibility="Collapsed">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="0">
+                                                <Border.Background>
+                                                    <MultiBinding Converter="{StaticResource CellCompanyColorIfNotEmptyConverter}">
+                                                        <Binding Path="Sun"/>
+                                                        <Binding Path="Company"/>
+                                                        <Binding Path="DataContext.CompanyColorMap" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                    </MultiBinding>
+                                                </Border.Background>
+
+                                                <TextBox Text="{Binding Sun, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+												         FontWeight="SemiBold"
+												         BorderThickness="0"
+												         Background="Transparent"
+												         Padding="6,0"
+												         VerticalContentAlignment="Center">
+                                                    <TextBox.Foreground>
+                                                        <MultiBinding Converter="{StaticResource CellCompanyTextColorIfNotEmptyConverter}">
+                                                            <Binding Path="Sun"/>
+                                                            <Binding Path="Company"/>
+                                                            <Binding Path="DataContext.CompanyColorMap" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                        </MultiBinding>
+                                                    </TextBox.Foreground>
+                                                </TextBox>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
                                 <DataGridTemplateColumn Header="Jour 6" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -1010,10 +1376,11 @@
                 <!-- 3) Image -->
                 <Border x:Name="PlanSectionBorder"
                         Grid.Row="2"
-				        BorderBrush="Black"
+				        BorderBrush="#D1D5DB"
 				        BorderThickness="1"
-				        CornerRadius="10"
+				        CornerRadius="12"
 				        Padding="10"
+		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -1062,7 +1429,7 @@
                         <Border Grid.Row="1" Grid.Column="0"
                                 MinHeight="380"
                                 ClipToBounds="True"
-						        BorderBrush="Black"
+						        BorderBrush="#D1D5DB"
 						        BorderThickness="1"
 						        CornerRadius="8"
 						        Background="#FAFAFA"
@@ -1091,7 +1458,7 @@
                                             <DataTemplate>
                                                 <Border Width="{Binding Width}"
 												        Height="{Binding Height}"
-												        BorderBrush="Black"
+												        BorderBrush="#D1D5DB"
 												        BorderThickness="1"
 												        Background="Transparent"
 												        PreviewMouseLeftButtonDown="PlacedPlanImage_PreviewMouseLeftButtonDown"
@@ -1139,7 +1506,7 @@
 												        Height="{Binding Size}"
 												        CornerRadius="6"
 												        Background="{Binding ColorHex}"
-												        BorderBrush="Black"
+												        BorderBrush="#D1D5DB"
 												        BorderThickness="1"
 												        PreviewMouseLeftButtonDown="PlacedSticker_PreviewMouseLeftButtonDown"
 												        PreviewMouseMove="PlacedSticker_PreviewMouseMove"
@@ -1165,7 +1532,7 @@
                         <Border x:Name="StickerBankPanel"
                                 Grid.Row="1"
                                 Grid.Column="2"
-						        BorderBrush="Black"
+						        BorderBrush="#D1D5DB"
 						        BorderThickness="1"
 						        CornerRadius="8"
 						        Background="White"
@@ -1207,7 +1574,7 @@
                                     </ItemsControl>
                                 </WrapPanel>
 
-                                <Border Grid.Row="2" Height="1" Background="Black" Margin="0,0,0,6"/>
+                                <Border Grid.Row="2" Height="1" Background="#E5E7EB" Margin="0,0,0,6"/>
 
                                 <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
                                     <ItemsControl ItemsSource="{Binding Stickers}">
@@ -1223,7 +1590,7 @@
 												        Height="26"
 												        Width="42"
 												        Background="{Binding ColorHex}"
-												        BorderBrush="Black"
+												        BorderBrush="#D1D5DB"
 												        BorderThickness="1"
 												        HorizontalAlignment="Center"
 												        PreviewMouseRightButtonDown="Sticker_RightClick"
@@ -1269,10 +1636,11 @@
 
                 <!-- 4) Zones de texte -->
                 <Border Grid.Row="3"
-				        BorderBrush="Black"
+				        BorderBrush="#D1D5DB"
 				        BorderThickness="1"
-				        CornerRadius="10"
+				        CornerRadius="12"
 				        Padding="10"
+		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -1307,7 +1675,7 @@
                         <Border x:Name="TextZoneFontToolbar"
                                 Grid.Row="1"
 						        Background="White"
-						        BorderBrush="Black"
+						        BorderBrush="#D1D5DB"
 						        BorderThickness="1"
 						        CornerRadius="10"
 						        Padding="8"
@@ -1335,7 +1703,7 @@
 								          SelectionChanged="FontSizeCombo_SelectionChanged"/>
 
                                 <ToggleButton Grid.Column="4" x:Name="BoldToggle" Width="40" Height="28" Margin="0,0,8,0"
-								              Background="White" Foreground="#111827" BorderBrush="Black"
+								              Background="White" Foreground="#111827" BorderBrush="#D1D5DB"
 								              Click="BoldToggle_Click"
 								              ToolTip="Gras (police)">
                                     <TextBlock Text="G" FontSize="17" FontWeight="Bold"
@@ -1343,7 +1711,7 @@
                                 </ToggleButton>
 
                                 <ToggleButton Grid.Column="5" x:Name="ItalicToggle" Width="40" Height="28" Margin="0,0,8,0"
-								              Background="White" Foreground="#111827" BorderBrush="Black"
+								              Background="White" Foreground="#111827" BorderBrush="#D1D5DB"
 								              Click="ItalicToggle_Click"
 								              ToolTip="Italique (police)">
                                     <TextBlock Text="I" FontSize="14" FontStyle="Italic" FontWeight="Normal"
@@ -1351,7 +1719,7 @@
                                 </ToggleButton>
 
                                 <ToggleButton Grid.Column="6" x:Name="UnderlineToggle" Width="40" Height="28" Margin="0,0,16,0"
-								              Background="White" Foreground="#111827" BorderBrush="Black"
+								              Background="White" Foreground="#111827" BorderBrush="#D1D5DB"
 								              Click="UnderlineToggle_Click"
 								              ToolTip="Souligné (police)">
                                     <TextBlock Text="S" FontSize="14" FontWeight="Normal" TextDecorations="Underline"
@@ -1360,7 +1728,7 @@
 
                                 <Button Grid.Column="7" x:Name="FontColorButton" Width="56" Height="28" Margin="0,0,8,0"
 								        HorizontalAlignment="Left"
-								        Background="White" BorderBrush="Black" BorderThickness="1"
+								        Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
 								        Click="FontColorButton_Click"
 								        ToolTip="Couleur du texte (police)">
                                     <StackPanel>
@@ -1384,7 +1752,7 @@
 
                                 <Button Grid.Column="8" x:Name="FillColorButton" Width="56" Height="28"
 								        HorizontalAlignment="Left"
-								        Background="White" BorderBrush="Black" BorderThickness="1"
+								        Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
 								        Click="FillColorButton_Click"
 								        ToolTip="Couleur de remplissage (fond)">
                                     <StackPanel>
@@ -1435,7 +1803,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
-										          ItemsSource="{Binding DataContext.PlanningTextZones, RelativeSource={RelativeSource AncestorType=UserControl}}"
+										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"
 										          Margin="0,0,0,8"
@@ -1458,7 +1826,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
-										          ItemsSource="{Binding DataContext.PlanningTextZones, RelativeSource={RelativeSource AncestorType=UserControl}}"
+										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"
 										          Margin="0,0,0,8"
@@ -1483,7 +1851,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
-										          ItemsSource="{Binding DataContext.PlanningTextZones, RelativeSource={RelativeSource AncestorType=UserControl}}"
+										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"
 										          Margin="0,0,0,8"
@@ -1506,7 +1874,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
-										          ItemsSource="{Binding DataContext.PlanningTextZones, RelativeSource={RelativeSource AncestorType=UserControl}}"
+										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"
 										          Margin="0,0,0,8"

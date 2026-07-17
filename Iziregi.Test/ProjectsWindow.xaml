@@ -5,12 +5,13 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Projets"
+        Title="Dossiers"
         Height="680"
         Width="850"
         MinHeight="480"
         MinWidth="760"
         WindowStartupLocation="CenterOwner"
+        WindowState="Maximized"
         Background="#F6F7FB">
 
     <Window.Resources>
@@ -21,6 +22,7 @@
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="14"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
         </Style>
 
         <Style x:Key="LabelStyle" TargetType="TextBlock">
@@ -132,11 +134,11 @@
         <Border Grid.Row="0" Style="{StaticResource CardStyle}">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left">
-                    <TextBlock Text="Banque de projets"
+                    <TextBlock Text="Banque de dossiers"
                                FontSize="22"
                                FontWeight="Bold"
                                Foreground="#111827"/>
-                    <TextBlock Text="Créer et gérer les noms/adresses des projets utilisés dans les bons de régie."
+                    <TextBlock Text="Créer et gérer les noms/adresses des dossiers utilisés dans les bons d'intervention."
                                FontSize="13"
                                Foreground="#6B7280"
                                Margin="0,4,0,0"/>
@@ -167,7 +169,7 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="Liste des projets"
+                               Text="Liste des dossiers"
                                FontSize="16"
                                FontWeight="SemiBold"
                                Foreground="#111827"
@@ -181,7 +183,7 @@
                               Width="NaN">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="55"/>
-                            <DataGridTextColumn Header="Nom du projet" Binding="{Binding Name}" Width="1.2*"/>
+                            <DataGridTextColumn Header="Nom du dossier" Binding="{Binding Name}" Width="1.2*"/>
                             <DataGridTextColumn Header="Adresse" Binding="{Binding Address}" Width="1.6*"/>
                             <DataGridCheckBoxColumn Header="Actif" Binding="{Binding IsActive}" Width="70"/>
                         </DataGrid.Columns>
@@ -244,18 +246,72 @@
 
                     <!-- Champs -->
                     <StackPanel>
-                        <TextBlock Text="Projet"
+                        <TextBlock Text="Dossier"
                                    FontSize="16"
                                    FontWeight="SemiBold"
                                    Foreground="#111827"
                                    Margin="0,0,0,12"/>
 
-                        <TextBlock Text="Nom du projet" Style="{StaticResource LabelStyle}"/>
+                        <!-- Ligne 1 : Nom du dossier -->
+                        <TextBlock Text="Nom du dossier" Style="{StaticResource LabelStyle}"/>
                         <TextBox x:Name="ProjectNameTextBox"
                                  Style="{StaticResource InputStyle}"
                                  Margin="0,0,0,12"/>
 
-                        <TextBlock Text="Couleur du badge" Style="{StaticResource LabelStyle}"/>
+                        <!-- Ligne 2 : Adresse -->
+                        <TextBlock Text="Adresse" Style="{StaticResource LabelStyle}"/>
+                        <TextBox x:Name="ProjectAddressLineTextBox"
+                                 Style="{StaticResource InputStyle}"
+                                 Margin="0,0,0,10"/>
+
+                        <!-- Ligne 3 : Code postal et Ville -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.35*"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="0.65*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Code postal" Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="ProjectZipTextBox"
+                                         Style="{StaticResource InputStyle}"
+                                         MaxLength="4"
+                                         PreviewTextInput="Zip_PreviewTextInput"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Ville" Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="ProjectCityTextBox"
+                                         Style="{StaticResource InputStyle}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Ligne 4 : Géré par -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.5*"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="0.5*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Réf." Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="ProjectManagerNameTextBox"
+                                         Style="{StaticResource InputStyle}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <!-- ✅ Espaceur (sans texte) pour garder ProjectManagerContactTextBox
+                                     aligné avec ProjectManagerNameTextBox à gauche (qui a un label "Réf."). -->
+                                <TextBlock Text="" Style="{StaticResource LabelStyle}"/>
+                                <TextBox x:Name="ProjectManagerContactTextBox"
+                                         Style="{StaticResource InputStyle}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Ligne 5 : Couleur de la pastille -->
+                        <TextBlock Text="Couleur de la pastille" Style="{StaticResource LabelStyle}"/>
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -286,36 +342,8 @@
                                     Background="#111827"/>
                         </Grid>
 
-                        <!-- ✅ Adresse séparée -->
-                        <TextBlock Text="Adresse" Style="{StaticResource LabelStyle}"/>
-                        <TextBox x:Name="ProjectAddressLineTextBox"
-                                 Style="{StaticResource InputStyle}"
-                                 Margin="0,0,0,10"/>
-
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="0.35*"/>
-                                <ColumnDefinition Width="10"/>
-                                <ColumnDefinition Width="0.65*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Code postal" Style="{StaticResource LabelStyle}"/>
-                                <TextBox x:Name="ProjectZipTextBox"
-                                         Style="{StaticResource InputStyle}"
-                                         MaxLength="4"
-                                         PreviewTextInput="Zip_PreviewTextInput"/>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Ville" Style="{StaticResource LabelStyle}"/>
-                                <TextBox x:Name="ProjectCityTextBox"
-                                         Style="{StaticResource InputStyle}"/>
-                            </StackPanel>
-                        </Grid>
-
                         <CheckBox x:Name="ProjectIsActiveCheckBox"
-                                  Content="Projet actif"
+                                  Content="Dossier actif"
                                   IsChecked="True"
                                   Margin="0,0,0,18"/>
 
@@ -339,7 +367,7 @@
                 Padding="10"
                 Margin="0,12,0,0">
             <DockPanel LastChildFill="False">
-                <TextBlock Text="Astuce : sélectionne un projet dans la liste puis clique sur Modifier."
+                <TextBlock Text="Astuce : sélectionne un dossier dans la liste puis clique sur Modifier."
                            Foreground="#6B7280"
                            FontSize="12"
                            VerticalAlignment="Center"

@@ -86,6 +86,8 @@ public static class Db
         TryAddColumn(con, "Projects", "ColorHex", "TEXT");
         TryAddColumn(con, "Projects", "AddressLine", "TEXT NOT NULL DEFAULT ''");
         TryAddColumn(con, "Projects", "ZipCity", "TEXT NOT NULL DEFAULT ''");
+        TryAddColumn(con, "Projects", "ManagerName", "TEXT NOT NULL DEFAULT ''");
+        TryAddColumn(con, "Projects", "ManagerContact", "TEXT NOT NULL DEFAULT ''");
 
         con.Execute("""
             CREATE TABLE IF NOT EXISTS WorkOrderLines (
@@ -132,6 +134,25 @@ public static class Db
             );
         """);
         TryCreateUniqueIndex(con, "UX_PlanningTextZones_ProjectId_Name", "PlanningTextZones", "ProjectId, Name");
+
+        // ✅ NOUVEAU : Listes "Cat." et "Urg." des tâches de Planning (par projet)
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS TaskCategories (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ProjectId INTEGER NOT NULL,
+                Name TEXT NOT NULL
+            );
+        """);
+        TryCreateUniqueIndex(con, "UX_TaskCategories_ProjectId_Name", "TaskCategories", "ProjectId, Name");
+
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS TaskUrgencies (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ProjectId INTEGER NOT NULL,
+                Name TEXT NOT NULL
+            );
+        """);
+        TryCreateUniqueIndex(con, "UX_TaskUrgencies_ProjectId_Name", "TaskUrgencies", "ProjectId, Name");
 
         // Colonnes ajoutées progressivement (compat)
         TryAddColumn(con, "WorkOrders", "Description", "TEXT");
@@ -568,6 +589,19 @@ public static class Db
     public static void SetDefaultPlanningTextZone(long projectId, string value) =>
         SetSetting(MakeProjectKey("DefaultPlanningTextZone", projectId), (value ?? "").Trim());
 
+    // ✅ NOUVEAU : "Cat." / "Urg." par défaut (tâches de Planning, par projet)
+    public static string GetDefaultTaskCategory(long projectId) =>
+        GetSetting(MakeProjectKey("DefaultTaskCategory", projectId)) ?? "";
+
+    public static void SetDefaultTaskCategory(long projectId, string value) =>
+        SetSetting(MakeProjectKey("DefaultTaskCategory", projectId), (value ?? "").Trim());
+
+    public static string GetDefaultTaskUrgency(long projectId) =>
+        GetSetting(MakeProjectKey("DefaultTaskUrgency", projectId)) ?? "";
+
+    public static void SetDefaultTaskUrgency(long projectId, string value) =>
+        SetSetting(MakeProjectKey("DefaultTaskUrgency", projectId), (value ?? "").Trim());
+
     public static string GetDefaultPlace() => GetSetting("DefaultPlace") ?? "";
     public static void SetDefaultPlace(string value) => SetSetting("DefaultPlace", (value ?? "").Trim());
 
@@ -591,6 +625,12 @@ public static class Db
 
     public static string GetDefaultEtage() => GetSetting("DefaultEtage") ?? "";
     public static void SetDefaultEtage(string value) => SetSetting("DefaultEtage", (value ?? "").Trim());
+
+    // ✅ Colonnes à listes déroulantes visibles dans le tableau des Tâches (Planning),
+    // choisies via le bouton "Colonnes" — mémorisé globalement (pas par projet), liste
+    // de clés séparées par des virgules parmi : Company, Building, Floor, Category, Reserve.
+    public static string GetTasksVisibleColumns() => GetSetting("TasksVisibleColumns") ?? "Company,Building,Floor,Category";
+    public static void SetTasksVisibleColumns(string value) => SetSetting("TasksVisibleColumns", (value ?? "").Trim());
 
     // =========================
     // ✅ Libellés UI (noms affichés) — par projet
@@ -650,6 +690,13 @@ public static class Db
     public static string GetLabelPlanningTextZone(long projectId) => GetLabel(projectId, "PlanningTextZone", "Zone de texte planning");
     public static void SetLabelPlanningTextZone(long projectId, string value) => SetLabel(projectId, "PlanningTextZone", value);
 
+    // ✅ NOUVEAU : Libellés pour les listes "Cat." et "Urg." (page Listes)
+    public static string GetLabelTaskCategory(long projectId) => GetLabel(projectId, "TaskCategory", "Cat.");
+    public static void SetLabelTaskCategory(long projectId, string value) => SetLabel(projectId, "TaskCategory", value);
+
+    public static string GetLabelTaskUrgency(long projectId) => GetLabel(projectId, "TaskUrgency", "Urg.");
+    public static void SetLabelTaskUrgency(long projectId, string value) => SetLabel(projectId, "TaskUrgency", value);
+
     // =========================
     // ✅ Liste "Zone de texte planning" — par projet
     // =========================
@@ -708,10 +755,148 @@ public static class Db
             tx
         );
         if (exists > 0)
-            throw new Exception("Ce nom existe déjà dans la liste « Zone de texte planning » (pour ce projet).");
+            throw new Exception("Ce nom existe déjà dans la liste « Zone de texte planning » (pour ce dossier).");
 
         con.Execute(
             "UPDATE PlanningTextZones SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
+            new { ProjectId = projectId, OldName = oldName, NewName = newName },
+            tx
+        );
+
+        tx.Commit();
+    }
+
+    // =========================
+    // ✅ Liste "Cat." des tâches de Planning — par projet
+    // =========================
+    public static List<string> GetTaskCategories(long projectId)
+    {
+        using var con = Open();
+        con.Open();
+        return con.Query<string>(
+            "SELECT Name FROM TaskCategories WHERE ProjectId=@Id ORDER BY Name;",
+            new { Id = projectId }
+        ).ToList();
+    }
+
+    public static void InsertTaskCategory(long projectId, string name)
+    {
+        name = (name ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(name))
+            return;
+
+        using var con = Open();
+        con.Open();
+        con.Execute(
+            "INSERT OR IGNORE INTO TaskCategories (ProjectId, Name) VALUES (@ProjectId, @Name);",
+            new { ProjectId = projectId, Name = name }
+        );
+    }
+
+    public static void DeleteTaskCategory(long projectId, string name)
+    {
+        name = (name ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(name))
+            return;
+
+        using var con = Open();
+        con.Open();
+        con.Execute(
+            "DELETE FROM TaskCategories WHERE ProjectId=@ProjectId AND Name=@Name;",
+            new { ProjectId = projectId, Name = name }
+        );
+    }
+
+    public static void RenameTaskCategory(long projectId, string oldName, string newName)
+    {
+        oldName = (oldName ?? "").Trim();
+        newName = (newName ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        var exists = con.ExecuteScalar<long>(
+            "SELECT COUNT(1) FROM TaskCategories WHERE ProjectId=@ProjectId AND Name=@Name;",
+            new { ProjectId = projectId, Name = newName },
+            tx
+        );
+        if (exists > 0)
+            throw new Exception("Ce nom existe déjà dans la liste « Cat. » (pour ce dossier).");
+
+        con.Execute(
+            "UPDATE TaskCategories SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
+            new { ProjectId = projectId, OldName = oldName, NewName = newName },
+            tx
+        );
+
+        tx.Commit();
+    }
+
+    // =========================
+    // ✅ Liste "Urg." des tâches de Planning — par projet
+    // =========================
+    public static List<string> GetTaskUrgencies(long projectId)
+    {
+        using var con = Open();
+        con.Open();
+        return con.Query<string>(
+            "SELECT Name FROM TaskUrgencies WHERE ProjectId=@Id ORDER BY Name;",
+            new { Id = projectId }
+        ).ToList();
+    }
+
+    public static void InsertTaskUrgency(long projectId, string name)
+    {
+        name = (name ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(name))
+            return;
+
+        using var con = Open();
+        con.Open();
+        con.Execute(
+            "INSERT OR IGNORE INTO TaskUrgencies (ProjectId, Name) VALUES (@ProjectId, @Name);",
+            new { ProjectId = projectId, Name = name }
+        );
+    }
+
+    public static void DeleteTaskUrgency(long projectId, string name)
+    {
+        name = (name ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(name))
+            return;
+
+        using var con = Open();
+        con.Open();
+        con.Execute(
+            "DELETE FROM TaskUrgencies WHERE ProjectId=@ProjectId AND Name=@Name;",
+            new { ProjectId = projectId, Name = name }
+        );
+    }
+
+    public static void RenameTaskUrgency(long projectId, string oldName, string newName)
+    {
+        oldName = (oldName ?? "").Trim();
+        newName = (newName ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        var exists = con.ExecuteScalar<long>(
+            "SELECT COUNT(1) FROM TaskUrgencies WHERE ProjectId=@ProjectId AND Name=@Name;",
+            new { ProjectId = projectId, Name = newName },
+            tx
+        );
+        if (exists > 0)
+            throw new Exception("Ce nom existe déjà dans la liste « Urg. » (pour ce dossier).");
+
+        con.Execute(
+            "UPDATE TaskUrgencies SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
             new { ProjectId = projectId, OldName = oldName, NewName = newName },
             tx
         );
@@ -832,6 +1017,14 @@ public static class Db
     // =========================
     public static string GetArchitectName() => GetSetting("ArchitectName") ?? "";
     public static void SetArchitectName(string value) => SetSetting("ArchitectName", (value ?? "").Trim());
+
+    // ✅ "Réf." : nom + éventuellement téléphone du responsable, affiché à côté de "Bureau"
+    public static string GetArchitectRef() => GetSetting("ArchitectRef") ?? "";
+    public static void SetArchitectRef(string value) => SetSetting("ArchitectRef", (value ?? "").Trim());
+
+    // ✅ Champ libre 2 (sous le champ libre 1), affiché à la suite dans les bons/PDF
+    public static string GetArchitectRef2() => GetSetting("ArchitectRef2") ?? "";
+    public static void SetArchitectRef2(string value) => SetSetting("ArchitectRef2", (value ?? "").Trim());
 
     public static string GetArchitectAddress() => GetSetting("ArchitectAddress") ?? "";
     public static void SetArchitectAddress(string value) => SetSetting("ArchitectAddress", (value ?? "").Trim());
@@ -1364,7 +1557,7 @@ public static class Db
             projectId = GetCurrentProjectId();
 
         if (!projectId.HasValue || projectId.Value <= 0)
-            throw new InvalidOperationException("Aucun projet courant pour importer le bon.");
+            throw new InvalidOperationException("Aucun dossier courant pour importer le bon.");
 
         var wanted = imported.BdrNumber;
         int bdrLocal;
@@ -2045,7 +2238,7 @@ public static class Db
         if (cur.HasValue && cur.Value > 0)
             return cur.Value;
 
-        throw new Exception("Aucun projet courant. Sélectionne un projet avant d’utiliser les listes.");
+        throw new Exception("Aucun dossier courant. Sélectionne un dossier avant d’utiliser les listes.");
     }
 
     public static List<string> GetPlaces(long projectId)
@@ -2095,7 +2288,7 @@ public static class Db
             tx
         );
         if (exists > 0)
-            throw new Exception("Ce nom existe déjà dans la liste des lieux (pour ce projet).");
+            throw new Exception("Ce nom existe déjà dans la liste des lieux (pour ce dossier).");
 
         con.Execute(
             "UPDATE Places SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
@@ -2160,7 +2353,7 @@ public static class Db
             tx
         );
         if (exists > 0)
-            throw new Exception("Ce nom existe déjà dans la liste des étages (pour ce projet).");
+            throw new Exception("Ce nom existe déjà dans la liste des étages (pour ce dossier).");
 
         con.Execute(
             "UPDATE Etages SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
@@ -2227,7 +2420,7 @@ public static class Db
             tx
         );
         if (exists > 0)
-            throw new Exception("Ce nom existe déjà dans la liste des entreprises (pour ce projet).");
+            throw new Exception("Ce nom existe déjà dans la liste des entreprises (pour ce dossier).");
 
         con.Execute(
             "UPDATE Companies SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
@@ -2294,7 +2487,7 @@ public static class Db
             tx
         );
         if (exists > 0)
-            throw new Exception("Ce nom existe déjà dans la liste « Demandé par » (pour ce projet).");
+            throw new Exception("Ce nom existe déjà dans la liste « Demandé par » (pour ce dossier).");
 
         con.Execute(
             "UPDATE Requesters SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
@@ -2358,7 +2551,7 @@ public static class Db
             tx
         );
         if (exists > 0)
-            throw new Exception("Ce nom existe déjà dans la liste « Réserve » (pour ce projet).");
+            throw new Exception("Ce nom existe déjà dans la liste « Réserve » (pour ce dossier).");
 
         con.Execute(
             "UPDATE Reserves SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
@@ -2399,6 +2592,22 @@ public static class Db
     public static void InsertReserve(string name) => InsertReserve(RequireProjectId(null), name);
     public static void DeleteReserve(string name) => DeleteReserve(RequireProjectId(null), name);
     public static void RenameReserve(string oldName, string newName) => RenameReserve(RequireProjectId(null), oldName, newName);
+
+    // ✅ Ajoute une option vide sélectionnable en tête d'une liste de référence (nettoyée,
+    // dédupliquée, triée) — pour les listes déroulantes où l'utilisateur doit pouvoir
+    // choisir explicitement "rien" plutôt que de devoir effacer le texte à la main.
+    public static List<string> WithEmptyOption(List<string> items)
+    {
+        items ??= new List<string>();
+        var cleaned = items.Select(s => (s ?? "").Trim())
+                           .Where(s => !string.IsNullOrWhiteSpace(s))
+                           .Distinct(StringComparer.OrdinalIgnoreCase)
+                           .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                           .ToList();
+
+        cleaned.Insert(0, ""); // option vide sélectionnable
+        return cleaned;
+    }
 
     public static void SeedPlacesIfEmpty(params string[] places)
     {
@@ -2667,5 +2876,16 @@ public static class Db
 
         con.Execute("UPDATE Projects SET ColorHex=@ColorHex WHERE Id=@Id;",
             new { Id = projectId, ColorHex = colorHex });
+    }
+
+    public static void SetProjectManager(long projectId, string? managerName, string? managerContact)
+    {
+        if (projectId <= 0) return;
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute("UPDATE Projects SET ManagerName=@ManagerName, ManagerContact=@ManagerContact WHERE Id=@Id;",
+            new { Id = projectId, ManagerName = (managerName ?? "").Trim(), ManagerContact = (managerContact ?? "").Trim() });
     }
 }

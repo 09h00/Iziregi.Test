@@ -11,7 +11,10 @@
 #      a chaque premier demarrage apres une mise a jour).
 #   3. Regenere l'installateur avec Inno Setup.
 #   4. Envoie le nouvel installateur sur le serveur.
-#   5. Met a jour latest-version.txt sur le serveur EN DERNIER, uniquement
+#   5. Calcule le hash SHA-256 de l'installateur et le publie
+#      (latest-version.sha256) -- verifie par le client avant d'executer
+#      l'installateur telecharge (revue de securite du 17.07.2026).
+#   6. Met a jour latest-version.txt sur le serveur EN DERNIER, uniquement
 #      si tout ce qui precede a reussi.
 #
 # C'est ce dernier point qui corrige le bug rencontre le 4 juillet 2026 :
@@ -19,7 +22,8 @@
 # qu'aucun installateur "1.0.2" correspondant n'avait ete construit ni
 # envoye -> tous les clients bouclaient en proposant une "mise a jour" qui
 # ne changeait jamais rien. Avec ce script, latest-version.txt n'est modifie
-# QUE si le build et l'envoi de l'installateur ont reellement reussi avant.
+# QUE si le build, l'envoi de l'installateur ET la publication du hash ont
+# reellement reussi avant.
 #
 # Prerequis : Inno Setup 6 installe, acces SSH/SCP configure vers le
 # serveur (le meme que celui utilise par deploy.ps1 / publish-installer.ps1).
@@ -42,7 +46,7 @@ $issFile     = Join-Path $testProjDir "Installer\Iziregi.iss"
 $server      = "ubuntu@179.237.69.222"
 
 try {
-    Write-Host "1/6 - Mise a jour du numero de version ($Version) dans le .csproj et le .iss..." -ForegroundColor Cyan
+    Write-Host "1/7 - Mise a jour du numero de version ($Version) dans le .csproj et le .iss..." -ForegroundColor Cyan
 
     if (-not (Test-Path $csproj))  { throw "Introuvable : $csproj" }
     if (-not (Test-Path $issFile)) { throw "Introuvable : $issFile" }
@@ -57,7 +61,7 @@ try {
     $issContent = $issContent -replace '#define MyAppVersion "[\d\.]+"', "#define MyAppVersion `"$Version`""
     [System.IO.File]::WriteAllText($issFile, $issContent, [System.Text.Encoding]::UTF8)
 
-    Write-Host "2/6 - Publication (Release, autonome, plusieurs fichiers)..." -ForegroundColor Cyan
+    Write-Host "2/7 - Publication (Release, autonome, plusieurs fichiers)..." -ForegroundColor Cyan
     Push-Location $testProjDir
     try {
         if (Test-Path "publish-installer") { Remove-Item "publish-installer" -Recurse -Force }
@@ -71,7 +75,7 @@ try {
             --self-contained true -r win-x64
         if ($LASTEXITCODE -ne 0) { throw "Echec dotnet publish" }
 
-        Write-Host "3/6 - Compilation de l'installateur..." -ForegroundColor Cyan
+        Write-Host "3/7 - Compilation de l'installateur..." -ForegroundColor Cyan
         $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
         if (-not (Test-Path $iscc)) { throw "Inno Setup introuvable a l'emplacement attendu : $iscc" }
 
@@ -85,21 +89,26 @@ try {
     $exeLocal = Join-Path $testProjDir "installer\Output\IziregiSetup.exe"
     if (-not (Test-Path $exeLocal)) { throw "Installateur introuvable apres compilation : $exeLocal" }
 
-    Write-Host "4/6 - Envoi de l'installateur vers le serveur..." -ForegroundColor Cyan
+    Write-Host "4/7 - Envoi de l'installateur vers le serveur..." -ForegroundColor Cyan
     scp $exeLocal "${server}:/tmp/IziregiSetup.exe"
     if ($LASTEXITCODE -ne 0) { throw "Echec scp de l'installateur" }
 
-    Write-Host "5/6 - Installation sur le serveur (emplacement definitif + permissions)..." -ForegroundColor Cyan
+    Write-Host "5/7 - Installation sur le serveur (emplacement definitif + permissions)..." -ForegroundColor Cyan
     ssh $server "sudo mv /tmp/IziregiSetup.exe /opt/iziregi/downloads/IziregiSetup.exe && sudo chmod 644 /opt/iziregi/downloads/IziregiSetup.exe && echo OK"
     if ($LASTEXITCODE -ne 0) { throw "Echec installation de l'installateur sur le serveur" }
 
-    Write-Host "6/6 - Mise a jour de latest-version.txt (annonce la nouvelle version aux clients)..." -ForegroundColor Cyan
+    Write-Host "6/7 - Publication du hash SHA-256 (verification d'integrite cote client)..." -ForegroundColor Cyan
+    $sha256 = (Get-FileHash -Path $exeLocal -Algorithm SHA256).Hash
+    ssh $server "echo '$sha256' | sudo tee /opt/iziregi/latest-version.sha256 > /dev/null && sudo chmod 644 /opt/iziregi/latest-version.sha256 && echo OK"
+    if ($LASTEXITCODE -ne 0) { throw "Echec publication du hash SHA-256" }
+
+    Write-Host "7/7 - Mise a jour de latest-version.txt (annonce la nouvelle version aux clients)..." -ForegroundColor Cyan
     ssh $server "echo '$Version' | sudo tee /opt/iziregi/latest-version.txt > /dev/null && echo OK"
     if ($LASTEXITCODE -ne 0) { throw "Echec mise a jour de latest-version.txt" }
 
     Write-Host ""
     Write-Host "Version $Version publiee avec succes." -ForegroundColor Green
-    Write-Host "Le .csproj, le .iss, l'installateur sur le serveur et latest-version.txt sont maintenant tous coherents entre eux." -ForegroundColor Green
+    Write-Host "Le .csproj, le .iss, l'installateur sur le serveur, le hash SHA-256 et latest-version.txt sont maintenant tous coherents entre eux." -ForegroundColor Green
     Write-Host "Chaque client Iziregi proposera automatiquement cette mise a jour a son prochain demarrage." -ForegroundColor Green
 }
 catch {

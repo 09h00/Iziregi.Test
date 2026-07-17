@@ -4,7 +4,7 @@ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 mc:Ignorable="d"
-Title="Bon de régie"
+Title="Bon d'intervention"
 Height="586"
 Width="844"
 MinHeight="540"
@@ -21,6 +21,7 @@ FontFamily="Arial">
             <Setter Property="CornerRadius" Value="14"/>
             <Setter Property="Padding" Value="16"/>
             <Setter Property="Margin" Value="0,0,0,14"/>
+            <Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
         </Style>
 
         <Style x:Key="CardDemandeStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
@@ -201,7 +202,7 @@ RecognizesAccessKey="True"/>
         <!-- Barre d'actions bas -->
         <Border DockPanel.Dock="Bottom"
 Background="White"
-BorderBrush="Black"
+BorderBrush="#D1D5DB"
 BorderThickness="2"
 CornerRadius="14"
 Padding="10"
@@ -233,8 +234,8 @@ Click="ResetValidationBottomButton_Click"
 Margin="0,0,8,0"/>
 
                     <Button x:Name="PdfButton"
-Content="Télécharger PDF"
-Style="{StaticResource SecondaryButtonStyle}"
+Content="Générer PDF"
+Style="{StaticResource PdfButtonStyle}"
 Click="PdfButton_Click"
 Margin="0,0,8,0"/>
 
@@ -278,7 +279,7 @@ HorizontalScrollBarVisibility="Disabled">
                                 <ColumnDefinition Width="1*"/>
                             </Grid.ColumnDefinitions>
 
-                            <Grid Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                            <Grid Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Top">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="78"/>
                                     <ColumnDefinition Width="*"/>
@@ -306,12 +307,13 @@ VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
 
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="1" VerticalAlignment="Top">
                                     <TextBlock x:Name="ArchitectNameTextBlock"
 Text="Architecte"
 FontSize="15"
 FontWeight="SemiBold"
-Foreground="#111827"/>
+Foreground="#111827"
+TextWrapping="Wrap"/>
 
                                     <TextBlock x:Name="ArchitectAddressLine1TextBlock"
 Text=""
@@ -326,15 +328,32 @@ FontSize="12"
 Foreground="#4B5563"
 TextWrapping="Wrap"
 Margin="0,0,0,0"/>
+
+                                    <TextBlock x:Name="ArchitectRefTextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,-14,0,0"/>
+
+                                    <TextBlock x:Name="ArchitectRef2TextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,0,0,0"/>
                                 </StackPanel>
                             </Grid>
 
-                            <!-- ✅ Bloc central vraiment centré + espacement autour du "-" -->
+                            <!-- ✅ Bloc central vraiment centré, aligné en haut avec les 2 autres colonnes -->
+                            <!-- ✅ Width fixe : sans ça, une ligne Réf/Tél longue force la colonne Auto à
+                                 s'étirer et écrase les colonnes Architecte/Dossier (bug vu en prod). -->
                             <StackPanel Grid.Column="1"
 HorizontalAlignment="Center"
-VerticalAlignment="Center"
+VerticalAlignment="Top"
+Width="220"
 Margin="0,0,0,0">
-                                <TextBlock Text="Bon de régie"
+                                <TextBlock Text="Bon d'intervention"
 FontSize="19"
 FontWeight="Bold"
 Foreground="#111827"
@@ -380,13 +399,17 @@ Margin="0,0,6,0"/>
 Width="105"
 Height="22"/>
                                 </StackPanel>
+
                             </StackPanel>
 
+                            <!-- ✅ Pas de Width fixe : une largeur codée en dur peut dépasser la colonne
+                                 réellement disponible et couper le texte à gauche (bug vu en prod).
+                                 HorizontalAlignment="Stretch" + TextWrapping="Wrap" sur chaque ligne
+                                 s'adapte à la largeur réelle de la colonne, quelle qu'elle soit. -->
                             <StackPanel Grid.Column="2"
-VerticalAlignment="Center"
-Margin="12,0,0,0"
-HorizontalAlignment="Right"
-Width="160">
+VerticalAlignment="Top"
+Margin="8,0,0,0"
+HorizontalAlignment="Stretch">
                                 <TextBlock x:Name="ProjectNameTextBlock"
 Text=""
 FontSize="15"
@@ -402,6 +425,20 @@ TextWrapping="Wrap"
 Margin="0,4,0,0"/>
 
                                 <TextBlock x:Name="ProjectAddressLine2TextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,0,0,0"/>
+
+                                <TextBlock x:Name="ProjectManagerRefTextBlock"
+Text=""
+FontSize="12"
+Foreground="#4B5563"
+TextWrapping="Wrap"
+Margin="0,12,0,0"/>
+
+                                <TextBlock x:Name="ProjectManagerContactTextBlock"
 Text=""
 FontSize="12"
 Foreground="#4B5563"
@@ -614,7 +651,13 @@ AlternationCount="1000000">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Libellé / Matériel"
 Binding="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
-Width="*"/>
+Width="*">
+                                        <DataGridTextColumn.HeaderStyle>
+                                            <Style TargetType="DataGridColumnHeader">
+                                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                            </Style>
+                                        </DataGridTextColumn.HeaderStyle>
+                                    </DataGridTextColumn>
 
                                     <DataGridTextColumn Header="Qt"
 Binding="{Binding QtyDisplay, UpdateSourceTrigger=PropertyChanged}"
@@ -648,7 +691,7 @@ ElementStyle="{StaticResource RightAlignedCellTextStyle}"/>
                                     </Grid.RowDefinitions>
 
                                     <StackPanel Grid.Row="0">
-                                        <TextBlock Text="Devis forfait (PDF)" Style="{StaticResource LabelStyle}" Margin="0,27,0,2"/>
+                                        <TextBlock Text="Devis forfait (PDF)" Style="{StaticResource LabelStyle}" Margin="0,27,0,2" FontStyle="Italic" Foreground="RoyalBlue"/>
 
                                         <StackPanel Orientation="Horizontal">
                                             <Button x:Name="CompanyPdfUploadButton"
@@ -731,11 +774,15 @@ Style="{StaticResource TotalsAmountStyle}"/>
                                         </Border>
                                     </Grid>
 
+                                    <Border Height="1"
+Background="#94A3B8"
+Margin="0,10,0,10"/>
+
                                     <Border Background="White"
 BorderBrush="#E5E7EB"
 BorderThickness="1"
 CornerRadius="0"
-Margin="0,10,0,0">
+Margin="0,0,0,0">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="24"/>
@@ -847,15 +894,15 @@ FontWeight="SemiBold"
 Foreground="#111827"/>
                                             </Border>
 
-                                            <Border Grid.Row="2" Grid.Column="0"
+                                            <Border Grid.Row="3" Grid.Column="0"
 Background="White"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,1,1"
 Padding="6,0">
-                                                <TextBlock Text="Forfait selon doc annexé" VerticalAlignment="Center" Foreground="#111827"/>
+                                                <TextBlock Text="Forfait HT, selon pdf annexé" VerticalAlignment="Center" FontStyle="Italic" Foreground="RoyalBlue"/>
                                             </Border>
 
-                                            <Border Grid.Row="2" Grid.Column="1"
+                                            <Border Grid.Row="3" Grid.Column="1"
 Background="White"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,1,1"
@@ -868,7 +915,7 @@ Background="Transparent"
 VerticalContentAlignment="Center"/>
                                             </Border>
 
-                                            <Border Grid.Row="2" Grid.Column="2"
+                                            <Border Grid.Row="3" Grid.Column="2"
 Background="White"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,1,1"
@@ -882,7 +929,7 @@ Background="Transparent"
 VerticalContentAlignment="Center"/>
                                             </Border>
 
-                                            <Border Grid.Row="2" Grid.Column="3"
+                                            <Border Grid.Row="3" Grid.Column="3"
 Background="White"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,0,1"
@@ -895,7 +942,7 @@ FontWeight="SemiBold"
 Foreground="#111827"/>
                                             </Border>
 
-                                            <Border Grid.Row="3" Grid.Column="0"
+                                            <Border Grid.Row="2" Grid.Column="0"
 Background="White"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,1,1"
@@ -903,7 +950,7 @@ Padding="6,0">
                                                 <TextBlock Text="Rabais (%)" VerticalAlignment="Center" Foreground="#111827"/>
                                             </Border>
 
-                                            <Border Grid.Row="3" Grid.Column="1"
+                                            <Border Grid.Row="2" Grid.Column="1"
 Background="#F3F4F6"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,1,1"
@@ -912,7 +959,7 @@ IsHitTestVisible="False">
                                                 <TextBlock Text=""/>
                                             </Border>
 
-                                            <Border Grid.Row="3" Grid.Column="2"
+                                            <Border Grid.Row="2" Grid.Column="2"
 Background="White"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,1,1"
@@ -927,7 +974,7 @@ Background="Transparent"
 VerticalContentAlignment="Center"/>
                                             </Border>
 
-                                            <Border Grid.Row="3" Grid.Column="3"
+                                            <Border Grid.Row="2" Grid.Column="3"
 Background="White"
 BorderBrush="#94A3B8"
 BorderThickness="0,0,0,1"
@@ -1039,7 +1086,7 @@ Margin="0,0,7,2"/>
 
                                             <Border Grid.Row="2"
 Grid.ColumnSpan="4"
-BorderBrush="#111827"
+BorderBrush="#D1D5DB"
 BorderThickness="0,2,0,0"
 Margin="0,6,0,0"/>
                                         </Grid>

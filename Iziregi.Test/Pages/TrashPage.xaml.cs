@@ -56,7 +56,7 @@ public partial class TrashPage : System.Windows.Controls.UserControl, IReloadabl
             RefreshBatchSelectionUi();
 
             System.Windows.MessageBox.Show(
-                "Aucun projet courant. Sélectionne un projet avant d’afficher la corbeille.",
+                "Aucun dossier courant. Sélectionne un dossier avant d’afficher la corbeille.",
                 "Info",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);

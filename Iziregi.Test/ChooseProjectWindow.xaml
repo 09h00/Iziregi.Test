@@ -1,7 +1,7 @@
 ﻿<Window x:Class="Iziregi.Test.ChooseProjectWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Choisir un projet" Height="520" Width="760"
+        Title="Choisir un dossier" Height="520" Width="760"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -21,7 +21,7 @@
             <TextBox x:Name="SearchTextBox" Height="30" VerticalContentAlignment="Center"
                      TextChanged="SearchTextBox_TextChanged"/>
 
-            <Button Grid.Column="2" Content="+ Nouveau projet" Height="30"
+            <Button Grid.Column="2" Content="+ Nouveau dossier" Height="30"
                     Click="NewProject_Click"/>
         </Grid>
 

@@ -34,9 +34,10 @@
                         Margin="8,0,0,0"
                         Click="Refresh_Click"/>
 
-                <Button Content="Télécharger PDF"
+                <Button Content="Générer PDF"
                         Width="150"
                         Margin="8,0,0,0"
+                        Style="{StaticResource PdfButtonStyle}"
                         Click="ExportPdf_Click"/>
             </StackPanel>
 
@@ -127,11 +128,12 @@
 
                                 <!-- Totaux -->
                                 <Border Grid.Row="0"
-                                        BorderBrush="Black"
+                                        BorderBrush="#D1D5DB"
                                         BorderThickness="1"
-                                        CornerRadius="6"
+                                        CornerRadius="10"
                                         Padding="12"
-                                        Background="White">
+                                        Background="White"
+                                        Effect="{StaticResource CardShadowEffect}">
                                     <DockPanel>
 
                                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -168,9 +170,9 @@
                                                   HeadersVisibility="Column"
                                                   SelectionChanged="ByCompanyGrid_SelectionChanged"
                                                   GridLinesVisibility="All"
-                                                  VerticalGridLinesBrush="Black"
-                                                  HorizontalGridLinesBrush="Black"
-                                                  BorderBrush="Black"
+                                                  VerticalGridLinesBrush="#E5E7EB"
+                                                  HorizontalGridLinesBrush="#E5E7EB"
+                                                  BorderBrush="#D1D5DB"
                                                   BorderThickness="1"
                                                   RowHeight="18"
                                                   ColumnHeaderHeight="18"
@@ -182,7 +184,7 @@
                                                 <Style TargetType="DataGridColumnHeader">
                                                     <Setter Property="HorizontalContentAlignment" Value="Center"/>
                                                     <Setter Property="FontWeight" Value="SemiBold"/>
-                                                    <Setter Property="BorderBrush" Value="Black"/>
+                                                    <Setter Property="BorderBrush" Value="#D1D5DB"/>
                                                     <Setter Property="BorderThickness" Value="0,0,1,1"/>
                                                 </Style>
                                             </DataGrid.ColumnHeaderStyle>
@@ -193,7 +195,7 @@
                                                         <DataTrigger Binding="{Binding IsTotal}" Value="True">
                                                             <Setter Property="FontWeight" Value="Bold"/>
                                                             <Setter Property="Background" Value="#FAFAFA"/>
-                                                            <Setter Property="BorderBrush" Value="Black"/>
+                                                            <Setter Property="BorderBrush" Value="#D1D5DB"/>
                                                             <Setter Property="BorderThickness" Value="0,1,0,1"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -270,11 +272,12 @@
 
                                 <!-- Détail -->
                                 <Border Grid.Row="2"
-                                        BorderBrush="Black"
+                                        BorderBrush="#D1D5DB"
                                         BorderThickness="1"
-                                        CornerRadius="6"
+                                        CornerRadius="10"
                                         Padding="12"
-                                        Background="White">
+                                        Background="White"
+                                        Effect="{StaticResource CardShadowEffect}">
                                     <DockPanel>
 
                                         <Border x:Name="DetailsTitleBorder"
@@ -295,9 +298,9 @@
                                                   ColumnWidth="Auto"
                                                   HeadersVisibility="Column"
                                                   GridLinesVisibility="All"
-                                                  VerticalGridLinesBrush="Black"
-                                                  HorizontalGridLinesBrush="Black"
-                                                  BorderBrush="Black"
+                                                  VerticalGridLinesBrush="#E5E7EB"
+                                                  HorizontalGridLinesBrush="#E5E7EB"
+                                                  BorderBrush="#D1D5DB"
                                                   BorderThickness="1"
                                                   RowHeight="18"
                                                   ColumnHeaderHeight="18"
@@ -310,7 +313,7 @@
                                                 <Style TargetType="DataGridColumnHeader">
                                                     <Setter Property="HorizontalContentAlignment" Value="Center"/>
                                                     <Setter Property="FontWeight" Value="SemiBold"/>
-                                                    <Setter Property="BorderBrush" Value="Black"/>
+                                                    <Setter Property="BorderBrush" Value="#D1D5DB"/>
                                                     <Setter Property="BorderThickness" Value="0,0,1,1"/>
                                                 </Style>
                                             </DataGrid.ColumnHeaderStyle>
@@ -321,7 +324,7 @@
                                                         <DataTrigger Binding="{Binding IsTotal}" Value="True">
                                                             <Setter Property="FontWeight" Value="Bold"/>
                                                             <Setter Property="Background" Value="#FAFAFA"/>
-                                                            <Setter Property="BorderBrush" Value="Black"/>
+                                                            <Setter Property="BorderBrush" Value="#D1D5DB"/>
                                                             <Setter Property="BorderThickness" Value="0,2,0,2"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -367,11 +370,12 @@
 
                             <!-- Graphique -->
                             <Border Grid.Column="2"
-                                    BorderBrush="Black"
+                                    BorderBrush="#D1D5DB"
                                     BorderThickness="1"
-                                    CornerRadius="6"
+                                    CornerRadius="10"
                                     Padding="12"
-                                    Background="White">
+                                    Background="White"
+                                    Effect="{StaticResource CardShadowEffect}">
                                 <DockPanel>
 
                                     <TextBlock x:Name="ChartTitleTextBlock"
@@ -400,7 +404,7 @@
                                     </Grid>
 
                                     <Border DockPanel.Dock="Top"
-                                            BorderBrush="Black"
+                                            BorderBrush="#D1D5DB"
                                             BorderThickness="0,0,0,1"
                                             Margin="0,4,0,20"/>
 
@@ -437,7 +441,7 @@
                                                                     Height="16"
                                                                     CornerRadius="2"
                                                                     Background="{Binding BarBrush}"
-                                                                    BorderBrush="Black"
+                                                                    BorderBrush="#D1D5DB"
                                                                     BorderThickness="1"
                                                                     HorizontalAlignment="Left"/>
                                                         </Border>

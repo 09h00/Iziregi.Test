@@ -126,5 +126,76 @@
             <Setter Property="Margin" Value="6,0,6,0"/>
         </Style>
 
+        <!-- ✅ Modernisation du look (session 13.07.2026) : ombre douce partagée pour les
+             cartes/panneaux blancs, à la place du plat sans profondeur d'avant. Utilisée via
+             Effect="{StaticResource CardShadowEffect}" sur les Border "carte" de chaque page. -->
+        <DropShadowEffect x:Key="CardShadowEffect"
+                          Color="#0F172A"
+                          Direction="270"
+                          ShadowDepth="1.5"
+                          BlurRadius="10"
+                          Opacity="0.10"/>
+
+        <!-- ✅ Icônes vectorielles remplaçant les emojis couleur (✎ 📦 🗑), qui s'affichaient
+             en glyphes multicolores façon clip-art selon le rendu Windows — pas cohérent avec
+             le reste de l'interface (monochrome, bleu/gris). Dessinées en segments droits
+             uniquement (M/L/Z) pour rester simples et fiables sans aperçu visuel possible ici. -->
+        <Geometry x:Key="IconEditGeometry">M2,14 L2,16 L4,16 L13,7 L11,5 Z M11,5 L13,3 L15,5 L13,7 Z</Geometry>
+        <!-- ✅ Variante "crayon" symétrique (pointe en bas à droite au lieu de bas à gauche) —
+             miroir horizontal exact de IconEditGeometry (donc tout aussi fiable), pour un
+             symbole visuellement différent (colonne "Descriptif", Planning, 16.07.2026). -->
+        <Geometry x:Key="IconPencilAltGeometry">M14,14 L14,16 L12,16 L3,7 L5,5 Z M5,5 L3,3 L1,5 L3,7 Z</Geometry>
+        <Geometry x:Key="IconArchiveGeometry">M1,4 L15,4 L15,7 L1,7 Z M2,7 L2,15 L14,15 L14,7 M6,10 L10,10</Geometry>
+        <Geometry x:Key="IconTrashGeometry">M2,6 L14,6 M6,3 L6,6 M10,3 L10,6 M6,3 L10,3 M3,6 L3,15 L13,15 L13,6 M6,8 L6,13 M10,8 L10,13</Geometry>
+
+        <!-- ✅ Icône de recherche vectorielle (loupe) remplaçant l'emoji couleur 🔍 (Dashboard,
+             barre de recherche) — même logique que les icônes ci-dessus : monochrome, trait
+             (Stroke), suit la couleur du texte plutôt qu'un rendu clip-art multicolore. Le
+             cercle est fait de deux arcs (A) formant un tour complet ; seule courbe du lot,
+             une loupe carrée en segments droits n'étant pas reconnaissable. -->
+        <Geometry x:Key="IconSearchGeometry">M11,6 A5,5 0 1,1 1,6 A5,5 0 1,1 11,6 Z M9.5,9.5 L14,14</Geometry>
+
+        <!-- ✅ Style partagé pour TOUS les boutons "générer/exporter un PDF" de l'app (demande
+             de Joe du 16.07.2026, appliqué aussi côté serveur/web sur le même principe) : fond
+             blanc, texte noir, bordure rouge qui s'épaissit au survol (pas de changement de
+             fond). Template personnalisé pour garantir que le survol ne soit pas écrasé par
+             un déclencheur caché du thème Windows (piège déjà rencontré sur d'autres boutons). -->
+        <Style x:Key="PdfButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#DC2626"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="3"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Application.Resources>
 </Application>

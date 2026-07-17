@@ -7,6 +7,7 @@ using System.Linq;
 using System.Media;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -184,7 +185,7 @@ public partial class MainWindow : Window
                 // que celle installée, on propose de la télécharger et de l'installer
                 // maintenant. Ne bloque jamais le démarrage (serveur muet, refus utilisateur,
                 // téléchargement impossible -> l'appli continue avec la version actuelle).
-                PromptForUpdateIfNewer(licenseInfo.LatestVersion, licenseInfo.DownloadUrl);
+                PromptForUpdateIfNewer(licenseInfo.LatestVersion, licenseInfo.DownloadUrl, licenseInfo.InstallerSha256);
             }
         };
 
@@ -268,7 +269,7 @@ public partial class MainWindow : Window
 
             // contenu et couleur selon projet courant
             var p = _selectedProject ?? Db.GetCurrentProject();
-            btn.Content = p != null ? (p.Name ?? "Projet") : "Projet";
+            btn.Content = p != null ? (p.Name ?? "Dossier") : "Dossier";
 
             var bg = p != null ? BrushFromHexOrNull(p.ColorHex) : BrushFromHexOrNull("#111827");
             if (bg == null || bg == MediaBrushes.Transparent)
@@ -422,7 +423,7 @@ public partial class MainWindow : Window
     // Interroge /internal/ping avec le machineId. Retourne false UNIQUEMENT si le serveur
     // répond explicitement que la limite de machines est atteinte (403). Toute autre
     // situation (serveur OK, ou serveur injoignable) retourne true — fail-open.
-    private static async Task<(bool Allowed, string? LatestVersion, string? DownloadUrl)> CheckMachineLicenseAllowedAsync()
+    private static async Task<(bool Allowed, string? LatestVersion, string? DownloadUrl, string? InstallerSha256)> CheckMachineLicenseAllowedAsync()
     {
         try
         {
@@ -434,10 +435,11 @@ public partial class MainWindow : Window
             using var resp = await GetWithApiKeyAsync(Http, url);
             LogUpdateStep($"Ping : reponse HTTP {(int)resp.StatusCode} ({resp.StatusCode})");
             if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
-                return (false, null, null);
+                return (false, null, null, null);
 
             string? latestVersion = null;
             string? downloadUrl = null;
+            string? installerSha256 = null;
             try
             {
                 var body = await resp.Content.ReadAsStringAsync();
@@ -447,7 +449,12 @@ public partial class MainWindow : Window
                     latestVersion = lv.GetString();
                 if (doc.RootElement.TryGetProperty("downloadUrl", out var du) && du.ValueKind == JsonValueKind.String)
                     downloadUrl = du.GetString();
-                LogUpdateStep($"Ping : latestVersion={latestVersion ?? "(null)"} downloadUrl={downloadUrl ?? "(null)"}");
+                // ✅ Hash SHA-256 de l'installateur publié par le serveur (vérification
+                // d'intégrité avant exécution, 17.07.2026) : absent = null, ancien serveur ou
+                // hash pas encore publié -> pas de vérification possible, voir DownloadAndLaunchUpdateAsync.
+                if (doc.RootElement.TryGetProperty("installerSha256", out var sha) && sha.ValueKind == JsonValueKind.String)
+                    installerSha256 = sha.GetString();
+                LogUpdateStep($"Ping : latestVersion={latestVersion ?? "(null)"} downloadUrl={downloadUrl ?? "(null)"} installerSha256={installerSha256 ?? "(null)"}");
             }
             catch (Exception exParse)
             {
@@ -455,24 +462,24 @@ public partial class MainWindow : Window
                 LogUpdateStep($"Ping : ECHEC parsing JSON : {exParse.GetType().FullName}: {exParse.Message}");
             }
 
-            return (true, latestVersion, downloadUrl);
+            return (true, latestVersion, downloadUrl, installerSha256);
         }
         catch (Exception ex)
         {
             // Serveur injoignable / réseau coupé : fail-open, l'appli continue de fonctionner.
             LogUpdateStep($"Ping : ECHEC (exception) : {ex.GetType().FullName}: {ex.Message}\n{ex}");
-            return (true, null, null);
+            return (true, null, null, null);
         }
     }
 
     // Compare la version annoncée par le serveur à la version installée localement (celle
     // définie par <Version> dans Iziregi.Test.csproj). Si le serveur en propose une plus
     // récente, demande à l'utilisateur s'il veut l'installer maintenant.
-    private void PromptForUpdateIfNewer(string? latestVersion, string? downloadUrl)
+    private void PromptForUpdateIfNewer(string? latestVersion, string? downloadUrl, string? installerSha256)
     {
         try
         {
-            LogUpdateStep($"PromptForUpdateIfNewer : latestVersion={latestVersion ?? "(null)"} downloadUrl={downloadUrl ?? "(null)"}");
+            LogUpdateStep($"PromptForUpdateIfNewer : latestVersion={latestVersion ?? "(null)"} downloadUrl={downloadUrl ?? "(null)"} installerSha256={installerSha256 ?? "(null)"}");
 
             if (string.IsNullOrWhiteSpace(latestVersion) || string.IsNullOrWhiteSpace(downloadUrl))
             {
@@ -512,6 +519,7 @@ public partial class MainWindow : Window
             // modale séparée, ce qui évite complètement le problème ci-dessus.
             _pendingUpdateVersion = latestVersion;
             _pendingUpdateDownloadUrl = downloadUrl;
+            _pendingUpdateSha256 = installerSha256;
             UpdateBannerText.Text = $"Une nouvelle version d'Iziregi est disponible ({latestVersion}).";
             UpdateBanner.Visibility = Visibility.Visible;
             LogUpdateStep($"Bandeau de mise a jour affiche pour la version {latestVersion} (url={downloadUrl})");
@@ -529,6 +537,7 @@ public partial class MainWindow : Window
     // l'utilisateur clique sur "Mettre à jour maintenant" (ou "Plus tard") dans le bandeau.
     private string? _pendingUpdateVersion;
     private string? _pendingUpdateDownloadUrl;
+    private string? _pendingUpdateSha256;
 
     // Bouton "Mettre à jour maintenant" du bandeau : lance le téléchargement + la
     // préparation de l'installateur, exactement comme avant, mais désormais uniquement
@@ -552,7 +561,7 @@ public partial class MainWindow : Window
         var progressWindow = new UpdateProgressWindow();
         progressWindow.Loaded += async (_, _) =>
         {
-            await DownloadAndLaunchUpdateAsync(downloadUrl!, progressWindow);
+            await DownloadAndLaunchUpdateAsync(downloadUrl!, _pendingUpdateSha256, progressWindow);
             // N'est atteint que si le téléchargement/lancement a échoué : en cas de
             // succès, DownloadAndLaunchUpdateAsync ferme déjà l'application avant
             // d'arriver ici.
@@ -594,7 +603,7 @@ public partial class MainWindow : Window
         catch { /* le journal lui-même ne doit jamais faire planter l'app */ }
     }
 
-    private static async Task DownloadAndLaunchUpdateAsync(string downloadUrl, UpdateProgressWindow? progressWindow = null)
+    private static async Task DownloadAndLaunchUpdateAsync(string downloadUrl, string? expectedSha256, UpdateProgressWindow? progressWindow = null)
     {
         try
         {
@@ -621,6 +630,41 @@ public partial class MainWindow : Window
                     progressWindow?.ReportProgress(totalRead, totalBytes);
                 }
                 LogUpdateStep($"Telechargement termine : {totalRead} octets ecrits dans {tempPath}");
+            }
+
+            // ✅ Vérification d'intégrité (17.07.2026, revue de sécurité) : le hash SHA-256
+            // publié par le serveur (voir /internal/ping, champ installerSha256) est comparé
+            // au fichier réellement téléchargé AVANT tout lancement. Si le serveur n'a pas
+            // encore publié de hash (déploiement en transition, ancien serveur), on ne bloque
+            // pas la mise à jour — mais si un hash EST fourni et ne correspond pas, on refuse
+            // net : mieux vaut une mise à jour manquée qu'un exécutable altéré lancé en silence.
+            if (!string.IsNullOrWhiteSpace(expectedSha256))
+            {
+                string actualSha256;
+                await using (var verifyStream = File.OpenRead(tempPath))
+                {
+                    var hashBytes = await SHA256.HashDataAsync(verifyStream);
+                    actualSha256 = Convert.ToHexString(hashBytes);
+                }
+
+                LogUpdateStep($"Verification SHA-256 : attendu={expectedSha256} obtenu={actualSha256}");
+
+                if (!string.Equals(actualSha256, expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    LogUpdateStep("ECHEC : le hash SHA-256 de l'installateur telecharge ne correspond pas -- installation refusee.");
+                    try { File.Delete(tempPath); } catch { /* non bloquant */ }
+
+                    WpfMessageBox.Show(
+                        "La mise à jour téléchargée n'a pas pu être vérifiée (hash SHA-256 incorrect) et n'a donc pas été installée, par précaution.\n\nRéessayez plus tard ou contactez l'éditeur Iziregi si le problème persiste.",
+                        "Mise à jour",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+            }
+            else
+            {
+                LogUpdateStep("Verification SHA-256 : aucun hash publie par le serveur, installation non verifiee.");
             }
 
             progressWindow?.SetInstalling();
@@ -1377,7 +1421,7 @@ public partial class MainWindow : Window
                 {
                     try { btn.Background = bg; } catch { }
                     try { btn.Foreground = GetTextBrushForBackground(bg); } catch { }
-                    try { btn.Content = p2 != null ? (p2.Name ?? "Projet") : "Projet"; } catch { }
+                    try { btn.Content = p2 != null ? (p2.Name ?? "Dossier") : "Dossier"; } catch { }
                     try { btn.UpdateLayout(); } catch { }
                 }
             }
@@ -1402,6 +1446,10 @@ public partial class MainWindow : Window
     {
         var win = new ArchitectIdentityWindow(ServerBaseUrl, ServerApiKey) { Owner = this };
         win.ShowDialog();
+
+        // ✅ Rafraîchit automatiquement le Dashboard (Bureau/Réf./Adresse) après
+        // modification de l'identité architecte — évite d'avoir à cliquer "Rafraîchir".
+        _dashboardPage?.Reload();
     }
 
     private void NavSettings_Click(object sender, RoutedEventArgs e)
@@ -1420,9 +1468,50 @@ public partial class MainWindow : Window
         try { (MainContent.Content as PlanningPage)?.FlushPendingChanges(); } catch { }
     }
 
+    // ✅ Page Listes : les noms de champs/listes se modifient directement dans des
+    // TextBox (plus de bouton "Enregistrer" dédié par section) — si l'utilisateur change
+    // de page sans avoir cliqué "Enregistrer", on lui demande explicitement quoi faire
+    // plutôt que de perdre silencieusement la saisie. Retourne false pour annuler la
+    // navigation (choix "Annuler").
+    private bool ConfirmLeaveListsPageIfDirty()
+    {
+        if (MainContent.Content is ListsPage lp && lp.HasUnsavedLabelChanges)
+        {
+            var result = WpfMessageBox.Show(
+                "Des noms de champs/listes modifiés n'ont pas été enregistrés.\n\nEnregistrer avant de quitter cette page ?",
+                "Modifications non enregistrées",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Cancel) return false;
+            if (result == MessageBoxResult.Yes) lp.SaveLabelsNow();
+        }
+
+        return true;
+    }
+
+    // ✅ Modernisation du look (13.07.2026) : met en évidence l'onglet de navigation
+    // correspondant à la page actuellement affichée (fond bleu, texte blanc), les autres
+    // repassent au style neutre. Appelé au début de chaque Show*() ci-dessous.
+    private void SetActiveNavButton(System.Windows.Controls.Button active)
+    {
+        var all = new[]
+        {
+            NavDashboardButton, NavAccountingButton, NavArchivesButton,
+            NavTrashButton, NavListsButton, NavPlanningButton
+        };
+
+        foreach (var b in all)
+        {
+            b.Style = (Style)FindResource(b == active ? "NavPillButtonActiveStyle" : "NavPillButtonStyle");
+        }
+    }
+
     private void ShowDashboard()
     {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
+        SetActiveNavButton(NavDashboardButton);
         _dashboardPage ??= new DashboardPage(this);
         MainContent.Content = _dashboardPage;
         _dashboardPage.Reload();
@@ -1432,7 +1521,9 @@ public partial class MainWindow : Window
 
     internal void ShowAccounting()
     {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
+        SetActiveNavButton(NavAccountingButton);
         _accountingPage ??= new AccountingPage(this);
         MainContent.Content = _accountingPage;
         _accountingPage.Reload();
@@ -1442,7 +1533,9 @@ public partial class MainWindow : Window
 
     private void ShowArchives()
     {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
+        SetActiveNavButton(NavArchivesButton);
         _archivesPage ??= new ArchivesPage(this);
         MainContent.Content = _archivesPage;
         _archivesPage.Reload();
@@ -1452,7 +1545,9 @@ public partial class MainWindow : Window
 
     private void ShowTrash()
     {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
+        SetActiveNavButton(NavTrashButton);
         _trashPage ??= new TrashPage(this);
         MainContent.Content = _trashPage;
         _trashPage.Reload();
@@ -1463,6 +1558,7 @@ public partial class MainWindow : Window
     private void ShowLists()
     {
         FlushPlanningIfActive();
+        SetActiveNavButton(NavListsButton);
         _listsPage ??= new ListsPage(this);
         MainContent.Content = _listsPage;
         _listsPage.Reload();
@@ -1472,7 +1568,9 @@ public partial class MainWindow : Window
 
     private void ShowPlanning()
     {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
+        SetActiveNavButton(NavPlanningButton);
         _planningPage = new PlanningPage(this);
         MainContent.Content = _planningPage;
         _planningPage.Reload();

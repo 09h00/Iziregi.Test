@@ -39,38 +39,38 @@ public class WorkOrder
     public System.DateTime? CompanyLinkSentAt { get; set; }
     public System.DateTime? SignerLinkSentAt { get; set; }
 
-    // Lien entreprise expire après 15 jours sans devis reçu
+    // Lien entreprise expire après 9 jours sans devis reçu
     public bool IsCompanyLinkExpired =>
         IsSentToCompany && !IsQuoteReceived &&
         CompanyLinkSentAt.HasValue &&
-        (System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays > 15;
+        (System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays > 9;
 
-    // Lien signataire expire après 7 jours sans validation
+    // Lien signataire expire après 9 jours sans validation
     public bool IsSignerLinkExpired =>
         IsSentToSigner && !IsValidated &&
         SignerLinkSentAt.HasValue &&
-        (System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays > 7;
+        (System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays > 9;
 
-    // Avertissement : lien va expirer dans ≤ 5 jours (entreprise) ou ≤ 3 jours (signataire)
+    // Avertissement : lien va expirer dans ≤ 3 jours
     public bool IsCompanyLinkExpiringSoon =>
         IsSentToCompany && !IsQuoteReceived && CompanyLinkSentAt.HasValue &&
         !IsCompanyLinkExpired &&
-        (System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays >= 10;
+        (System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays >= 6;
 
     public bool IsSignerLinkExpiringSoon =>
         IsSentToSigner && !IsValidated && SignerLinkSentAt.HasValue &&
         !IsSignerLinkExpired &&
-        (System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays >= 4;
+        (System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays >= 6;
 
     // Jours restants (pour affichage J-X)
     public int CompanyLinkDaysRemaining =>
         CompanyLinkSentAt.HasValue
-            ? System.Math.Max(0, 15 - (int)System.Math.Floor((System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays))
+            ? System.Math.Max(0, 9 - (int)System.Math.Floor((System.DateTime.UtcNow - CompanyLinkSentAt.Value).TotalDays))
             : 0;
 
     public int SignerLinkDaysRemaining =>
         SignerLinkSentAt.HasValue
-            ? System.Math.Max(0, 7 - (int)System.Math.Floor((System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays))
+            ? System.Math.Max(0, 9 - (int)System.Math.Floor((System.DateTime.UtcNow - SignerLinkSentAt.Value).TotalDays))
             : 0;
 
     public string CompanyLinkDaysRemainingLabel
@@ -102,9 +102,9 @@ public class WorkOrder
             if (IsCompanyLinkExpired && IsSignerLinkExpired)
                 return "Lien entreprise et lien signataire expirés — Regénérer dans la fiche";
             if (IsCompanyLinkExpired)
-                return "Lien entreprise expiré (> 15 jours) — Regénérer dans la fiche";
+                return "Lien entreprise expiré (> 9 jours) — Regénérer dans la fiche";
             if (IsSignerLinkExpired)
-                return "Lien signataire expiré (> 7 jours) — Regénérer dans la fiche";
+                return "Lien signataire expiré (> 9 jours) — Regénérer dans la fiche";
             return "";
         }
     }

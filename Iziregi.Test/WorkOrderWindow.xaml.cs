@@ -691,8 +691,8 @@ public partial class WorkOrderWindow : Window
             {
                 System.Windows.MessageBox.Show(
                     this,
-                    $"Erreur lors de l'ouverture du bon de régie :\n\n{ex.Message}",
-                    "Bon de régie",
+                    $"Erreur lors de l'ouverture du bon d'intervention :\n\n{ex.Message}",
+                    "Bon d'intervention",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
@@ -1072,6 +1072,8 @@ public partial class WorkOrderWindow : Window
         var (a1, a2) = SplitAddressTwoLines(archAddr);
         if (ArchitectAddressLine1TextBlock != null) ArchitectAddressLine1TextBlock.Text = a1;
         if (ArchitectAddressLine2TextBlock != null) ArchitectAddressLine2TextBlock.Text = a2;
+        if (ArchitectRefTextBlock != null) ArchitectRefTextBlock.Text = Db.GetArchitectRef();
+        if (ArchitectRef2TextBlock != null) ArchitectRef2TextBlock.Text = Db.GetArchitectRef2();
 
         LoadArchitectLogo(Db.GetArchitectLogoPath());
 
@@ -1082,6 +1084,15 @@ public partial class WorkOrderWindow : Window
         var (p1, p2) = SplitAddressTwoLines(projAddr);
         if (ProjectAddressLine1TextBlock != null) ProjectAddressLine1TextBlock.Text = p1;
         if (ProjectAddressLine2TextBlock != null) ProjectAddressLine2TextBlock.Text = p2;
+
+        var managerName = (currentProject?.ManagerName ?? "").Trim();
+        var managerContact = (currentProject?.ManagerContact ?? "").Trim();
+
+        if (ProjectManagerRefTextBlock != null)
+            ProjectManagerRefTextBlock.Text = string.IsNullOrWhiteSpace(managerName) ? "" : $"Réf : {managerName}";
+
+        if (ProjectManagerContactTextBlock != null)
+            ProjectManagerContactTextBlock.Text = managerContact;
     }
 
     private void LoadArchitectLogo(string? path)
@@ -1116,11 +1127,11 @@ public partial class WorkOrderWindow : Window
         _isLoading = true;
         try
         {
-            ReserveComboBox.ItemsSource = Db.GetReserves();
-            RequestedByComboBox.ItemsSource = Db.GetRequesters();
-            PerformedByComboBox.ItemsSource = Db.GetCompanies();
-            PlaceComboBox.ItemsSource = Db.GetPlaces();
-            EtageComboBox.ItemsSource = Db.GetEtages();
+            ReserveComboBox.ItemsSource = Db.WithEmptyOption(Db.GetReserves());
+            RequestedByComboBox.ItemsSource = Db.WithEmptyOption(Db.GetRequesters());
+            PerformedByComboBox.ItemsSource = Db.WithEmptyOption(Db.GetCompanies());
+            PlaceComboBox.ItemsSource = Db.WithEmptyOption(Db.GetPlaces());
+            EtageComboBox.ItemsSource = Db.WithEmptyOption(Db.GetEtages());
         }
         finally { _isLoading = false; }
     }
@@ -1133,22 +1144,22 @@ public partial class WorkOrderWindow : Window
             if (_workOrder == null)
             {
                 _workOrder = CreateDefaultWorkOrder();
-                Title = "Nouveau bon de régie";
+                Title = "Nouveau bon d'intervention";
             }
             else
             {
                 try
                 {
                     _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
-                    Title = $"Bon de régie — N° {_workOrder.BdrDisplay}";
+                    Title = $"Bon d'intervention — N° {_workOrder.BdrDisplay}";
                 }
                 catch (Exception ex)
                 {
                     // si lecture bdd plante, afficher message et basculer en création
-                    try { System.Windows.MessageBox.Show(this, $"Impossible de charger le bon depuis la base :\n\n{ex.Message}", "Bon de régie", MessageBoxButton.OK, MessageBoxImage.Warning); } catch { }
+                    try { System.Windows.MessageBox.Show(this, $"Impossible de charger le bon depuis la base :\n\n{ex.Message}", "Bon d'intervention", MessageBoxButton.OK, MessageBoxImage.Warning); } catch { }
                     _workOrder = CreateDefaultWorkOrder();
                     _isCreateMode = true;
-                    Title = "Nouveau bon de régie";
+                    Title = "Nouveau bon d'intervention";
                 }
             }
 
@@ -1711,7 +1722,7 @@ public partial class WorkOrderWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                $"Impossible d’enregistrer le bon de régie.\n\n{ex.Message}",
+                $"Impossible d’enregistrer le bon d'intervention.\n\n{ex.Message}",
                 "Enregistrement",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -1918,6 +1929,8 @@ public partial class WorkOrderWindow : Window
         string projectName = "";
         string projectAddressLine = "";
         string projectZipCity = "";
+        string managerName = "";
+        string managerContact = "";
 
         if (wo.ProjectId.HasValue && wo.ProjectId.Value > 0)
         {
@@ -1938,6 +1951,9 @@ public partial class WorkOrderWindow : Window
                     {
                         projectAddressLine = raw;
                     }
+
+                    managerName = proj.ManagerName ?? "";
+                    managerContact = proj.ManagerContact ?? "";
                 }
             }
             catch { }
@@ -1949,6 +1965,8 @@ public partial class WorkOrderWindow : Window
             projectName,
             projectAddressLine,
             projectZipCity,
+            managerName,
+            managerContact,
             place            = wo.Place ?? "",
             etage            = wo.Etage ?? "",
             requestedBy      = wo.RequestedBy ?? "",
@@ -2171,7 +2189,7 @@ public partial class WorkOrderWindow : Window
 
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
-                Title = "Enregistrer le PDF (bon de régie)",
+                Title = "Enregistrer le PDF (bon d'intervention)",
                 Filter = "PDF (*.pdf)|*.pdf",
                 FileName = $"BDR-{_workOrder.BdrDisplay}-{DateTime.Now:yyyyMMdd-HHmmss}.pdf",
                 AddExtension = true,

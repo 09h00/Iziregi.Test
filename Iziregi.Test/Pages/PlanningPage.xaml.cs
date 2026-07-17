@@ -27,6 +27,7 @@ namespace Iziregi.Test.Pages;
 
 // ✅ Alias WPF (évite ambiguïtés avec System.Drawing / WinForms)
 using WpfUserControl = System.Windows.Controls.UserControl;
+using WpfButton = System.Windows.Controls.Button;
 using WpfCheckBox = System.Windows.Controls.CheckBox;
 using WpfComboBox = System.Windows.Controls.ComboBox;
 using WpfTextBox = System.Windows.Controls.TextBox;
@@ -61,6 +62,29 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     public List<string> Floors { get; private set; } = new();
     public List<string> PlanningTextZones { get; private set; } = new();
     public List<string> Reserves { get; private set; } = new();
+    public List<string> TaskCategories { get; private set; } = new();
+    public List<string> TaskUrgencies { get; private set; } = new();
+
+    // ✅ Libellés (page Listes) affichés comme en-têtes des colonnes "Cat."/"Urg."
+    public string TaskCategoryLabel { get; private set; } = "Cat.";
+    public string TaskUrgencyLabel { get; private set; } = "Urg.";
+    public string CompanyLabel { get; private set; } = "Entreprise";
+    public string BuildingLabel { get; private set; } = "Bâtiment";
+    public string FloorLabel { get; private set; } = "Étage";
+
+    // ✅ Même liste que PlanningTextZones, avec une entrée vide en tête pour permettre
+    // de ne sélectionner aucun titre de zone de texte. Utilisée uniquement pour les
+    // ComboBox de titre des zones de texte (pas pour la colonne "Cat." des tâches).
+    public List<string> PlanningTextZonesWithBlank
+        => new List<string> { "" }.Concat(PlanningTextZones).ToList();
+
+    // ✅ Listes "Cat." et "Urg." des tâches (gérées page Listes), avec une entrée vide
+    // en tête pour permettre de ne rien sélectionner.
+    public List<string> TaskCategoriesWithBlank
+        => new List<string> { "" }.Concat(TaskCategories).ToList();
+
+    public List<string> TaskUrgenciesWithBlank
+        => new List<string> { "" }.Concat(TaskUrgencies).ToList();
 
     // ✅ Couleurs entreprise (par projet)
     public Dictionary<string, string> CompanyColorMap { get; private set; } =
@@ -68,8 +92,6 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private readonly ObservableCollection<TaskRow> _taskRows = new();
     private readonly ObservableCollection<PlanningRow> _planningRows = new();
-
-    private bool _isSaturdayVisible = false;
 
     // ✅ jour de départ configurable (par l’utilisateur)
     private DayOfWeek _weekStartDay = DayOfWeek.Monday;
@@ -580,14 +602,24 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // - Garder les titres visuels
         // - Ne PAS afficher les boutons / UI d'action
 
-        // ---- Section Tâches : cacher boutons Ajouter/Supprimer
+        // ---- Section Tâches : cacher boutons Ajouter/Supprimer/Colonnes + crayons Descriptif
         HideElementForCapture(AddTaskRowButton, restore);
         HideElementForCapture(RemoveTaskRowButton, restore);
+        HideElementForCapture(TaskColumnsButton, restore);
+
+        // ✅ TaskExpandDescriptionColumn est un DataGridColumn (pas un UIElement) : sa
+        // visibilité se gère différemment de HideElementForCapture (voir plus bas).
+        if (TaskExpandDescriptionColumn != null)
+        {
+            var oldColVis = TaskExpandDescriptionColumn.Visibility;
+            restore.Add(() => TaskExpandDescriptionColumn.Visibility = oldColVis);
+            TaskExpandDescriptionColumn.Visibility = Visibility.Collapsed;
+        }
 
         // ---- Section Planning hebdomadaire : cacher boutons Ajouter/Supprimer + samedi
         HideElementForCapture(AddPlanningRowButton, restore);
         HideElementForCapture(RemovePlanningRowButton, restore);
-        HideElementForCapture(ToggleSaturdayButton, restore);
+        HideElementForCapture(WeekendColumnsButton, restore);
 
         // ---- Section Image : cacher boutons Ajouter/Retirer/Reset
         HideElementForCapture(PlanAddButton, restore);
@@ -651,6 +683,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             content.Width = targetWidth;
 
             // Mesurer tout le contenu (hauteur infinie)
+            content.Measure(new System.Windows.Size(targetWidth, double.PositiveInfinity));
+            content.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0),
+                new System.Windows.Size(targetWidth, content.DesiredSize.Height)));
+            content.UpdateLayout();
+
+            // ✅ 2e passe (demande de Joe, 16.07.2026) : la colonne étoile "Descriptif" de la
+            // grille des Tâches ne recalcule sa largeur qu'après qu'ActualWidth soit mis à
+            // jour par la 1ère passe — sans ce second passage, une bande vide apparaissait
+            // après la dernière colonne ("Effectué") sur le PDF capturé.
             content.Measure(new System.Windows.Size(targetWidth, double.PositiveInfinity));
             content.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0),
                 new System.Windows.Size(targetWidth, content.DesiredSize.Height)));
@@ -1153,6 +1194,27 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             TryAddPlacedPlanImage(fp);
     }
 
+    private static string GetPlanImagesDir(long? projectId)
+    {
+        var pid = (projectId.HasValue && projectId.Value > 0)
+            ? projectId.Value.ToString(CultureInfo.InvariantCulture) : "0";
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Iziregi", "Planning", "Images", pid);
+    }
+
+    // ✅ Copie l'image importée dans le stockage de l'app : si le fichier source est
+    // déplacé/supprimé/sur une clé USB retirée, le plan ne perd plus son image.
+    private string CopyImageIntoAppStorage(string sourcePath)
+    {
+        var dir = GetPlanImagesDir(Db.GetCurrentProjectId());
+        Directory.CreateDirectory(dir);
+        var ext = Path.GetExtension(sourcePath);
+        if (string.IsNullOrWhiteSpace(ext)) ext = ".png";
+        var destPath = Path.Combine(dir, $"{Guid.NewGuid():N}{ext}");
+        File.Copy(sourcePath, destPath, overwrite: false);
+        return destPath;
+    }
+
     private void TryAddPlacedPlanImage(string filePath)
     {
         try
@@ -1160,16 +1222,20 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             var path = (filePath ?? "").Trim();
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
 
+            string storedPath;
+            try { storedPath = CopyImageIntoAppStorage(path); }
+            catch { storedPath = path; }
+
             var bmp = new BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.UriSource = new Uri(storedPath, UriKind.Absolute);
             bmp.EndInit();
             bmp.Freeze();
 
             var it = new PlacedPlanImageItem
             {
-                FilePath = path,
+                FilePath = storedPath,
                 ImageSource = bmp,
                 X = 20 + (PlacedPlanImages.Count * 20),
                 Y = 20 + (PlacedPlanImages.Count * 20),
@@ -1455,12 +1521,33 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (SelectedTextZoneIndex < 0 || SelectedTextZoneIndex > 3)
             return;
 
-        var z = TextZones[SelectedTextZoneIndex];
+        var idx = SelectedTextZoneIndex;
+        var z = TextZones[idx];
         if (!z.Visible) return;
 
         z.Visible = false;
+
+        // ✅ Efface le texte de la zone : sinon, la remettre (Ajouter) faisait
+        // réapparaître l'ancien contenu au lieu de repartir vide.
+        z.DocumentXaml = "";
+        var rtb = GetRtbFromZoneIndex(idx);
+        if (rtb != null)
+        {
+            rtb.Document = new FlowDocument();
+            EnsureRtbHasAtLeastOneParagraph(rtb);
+        }
+
         SelectedTextZoneIndex = FindFirstVisibleTextZoneIndex();
     }
+
+    private WpfRichTextBox? GetRtbFromZoneIndex(int idx) => idx switch
+    {
+        0 => Rtb0,
+        1 => Rtb1,
+        2 => Rtb2,
+        3 => Rtb3,
+        _ => null
+    };
 
     private int FindFirstVisibleTextZoneIndex()
     {
@@ -1635,13 +1722,45 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         if (!_isPageActive) return;
 
-        var toRemove = TasksDataGrid.SelectedItems.Cast<object>().OfType<TaskRow>().ToList();
-        if (toRemove.Count == 0 && TasksDataGrid.SelectedItem is TaskRow one) toRemove.Add(one);
+        var toRemove = _taskRows.Where(r => r.IsSelected).ToList();
+
+        if (toRemove.Count == 0)
+        {
+            toRemove = TasksDataGrid.SelectedItems.Cast<object>().OfType<TaskRow>().ToList();
+            if (toRemove.Count == 0 && TasksDataGrid.SelectedItem is TaskRow one) toRemove.Add(one);
+        }
 
         foreach (var r in toRemove)
             _taskRows.Remove(r);
 
         SaveProjectTasks();
+    }
+
+    // ✅ Éditeur agrandi du Descriptif (16.07.2026, demande de Joe) : ouvre TaskDescriptionWindow
+    // en modal sur la ligne concernée. Le texte n'est appliqué que si l'utilisateur clique sur
+    // "Enregistrer" dans la fenêtre (DialogResult == true) ; "Annuler" ne modifie rien.
+    private void TaskExpandDescriptionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isPageActive) return;
+        if (sender is not WpfButton btn || btn.DataContext is not TaskRow row) return;
+
+        var win = new TaskDescriptionWindow(
+            row.Ref, row.Company, row.Building, row.Floor, row.Category, row.Reserve, row.Urgent, row.Done, row.Todo,
+            CompanyLabel, BuildingLabel, FloorLabel, TaskCategoryLabel, TaskUrgencyLabel,
+            showCompany: TaskCompanyColumn.Visibility == Visibility.Visible,
+            showBuilding: TaskBuildingColumn.Visibility == Visibility.Visible,
+            showFloor: TaskFloorColumn.Visibility == Visibility.Visible,
+            showCategory: TaskCategoryColumn.Visibility == Visibility.Visible,
+            showUrgent: TaskUrgentColumn.Visibility == Visibility.Visible)
+        {
+            Owner = System.Windows.Window.GetWindow(this)
+        };
+
+        if (win.ShowDialog() == true)
+        {
+            row.Todo = win.ResultText;
+            SaveProjectTasks();
+        }
     }
 
     private void AddPlanningRowButton_Click(object sender, RoutedEventArgs e)
@@ -1670,23 +1789,23 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             _planningRows.Add(new PlanningRow());
     }
 
-    private void ToggleSaturdayButton_Click(object sender, RoutedEventArgs e)
+    // ✅ Samedi et Dimanche sont deux cases à cocher indépendantes (même mécanisme que
+    // le bouton "Colonnes" du tableau des Tâches) : on peut afficher l'un, l'autre, les
+    // deux ou aucun. Contrairement aux colonnes des Tâches, ce choix n'est PAS mémorisé
+    // d'une semaine à l'autre — Reload() remet toujours les deux à masqué/décoché.
+    private void WeekendColumnsButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!_isPageActive) return;
-
-        _isSaturdayVisible = !_isSaturdayVisible;
-
-        if (SaturdayColumn != null)
-            SaturdayColumn.Visibility = _isSaturdayVisible ? Visibility.Visible : Visibility.Collapsed;
-
-        SetToggleSaturdayButtonUi();
-        PlanningDataGrid?.UpdateLayout();
+        WeekendColumnsPopup.IsOpen = !WeekendColumnsPopup.IsOpen;
     }
 
-    private void SetToggleSaturdayButtonUi()
+    private void WeekendColumnVisibility_Changed(object sender, RoutedEventArgs e)
     {
-        ToggleSaturdayButton.Content = _isSaturdayVisible ? "Masquer samedi" : "Afficher samedi";
-        ToggleSaturdayButton.Style = (Style)Resources[_isSaturdayVisible ? "SmallBlackButtonStyle" : "SmallBlueButtonStyle"];
+        if (SaturdayColumn != null)
+            SaturdayColumn.Visibility = WeekendShowSaturdayCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        if (SundayColumn != null)
+            SundayColumn.Visibility = WeekendShowSundayCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+
+        PlanningDataGrid?.UpdateLayout();
     }
 
     // ✅ Choix jour de départ (combo) - affichage FR via options Label/Value
@@ -1827,6 +1946,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         return new WeekStateFile
         {
             WeekKey = weekKey,
+            // ✅ Samedi/Dimanche : figé PAR SEMAINE (pas mémorisé globalement) — si tu
+            // les affiches pour une semaine donnée, le choix reste attaché à cette
+            // semaine et se retrouve tel quel en y revenant plus tard.
+            ShowSaturday = WeekendShowSaturdayCheckBox?.IsChecked == true,
+            ShowSunday = WeekendShowSundayCheckBox?.IsChecked == true,
             // ✅ Les tâches ne sont plus persistées par semaine (voir LoadProjectTasks /
             // SaveProjectTasks) : elles sont désormais communes à tout le projet, pour
             // qu'une tâche non terminée reste visible d'une semaine à l'autre au lieu
@@ -1842,7 +1966,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 D4 = r.D4,
                 D5 = r.D5,
                 D6 = r.D6,
-                Sat = r.Sat
+                Sat = r.Sat,
+                Sun = r.Sun
             }).ToList(),
             PlacedStickerStates = PlacedStickers.Select(s => new PlacedStickerState
             {
@@ -1957,6 +2082,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                         Todo = r.Todo,
                         Category = r.Category,
                         Reserve = r.Reserve,
+                        Urgent = r.Urgent,
                         Done = r.Done
                     });
 
@@ -1993,6 +2119,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                             Todo = r.Todo,
                             Category = r.Category,
                             Reserve = r.Reserve,
+                            Urgent = r.Urgent,
                             Done = r.Done
                         });
                 }
@@ -2027,6 +2154,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Todo = r.Todo,
                 Category = r.Category,
                 Reserve = r.Reserve,
+                Urgent = r.Urgent,
                 Done = r.Done
             }).ToList();
 
@@ -2047,6 +2175,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         PlacedStickers.Clear();
         PlacedPlanImages.Clear();
 
+        // ✅ Samedi/Dimanche : figé par semaine (voir BuildCurrentWeekStateForKey) — par
+        // défaut masqué/décoché pour une semaine sans fichier (jamais visitée/sauvegardée).
+        bool showSaturday = false;
+        bool showSunday = false;
+
         if (File.Exists(filePath))
         {
             try
@@ -2057,6 +2190,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
                 if (state != null)
                 {
+                    showSaturday = state.ShowSaturday;
+                    showSunday = state.ShowSunday;
+
                     // ✅ state.TaskRows n'est plus utilisé (voir LoadProjectTasks) — laissé
                     // dans le fichier/la classe uniquement pour compatibilité de lecture des
                     // anciens fichiers, sans effet ici.
@@ -2071,7 +2207,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                             D4 = r.D4,
                             D5 = r.D5,
                             D6 = r.D6,
-                            Sat = r.Sat
+                            Sat = r.Sat,
+                            Sun = r.Sun
                         });
 
                     foreach (var s in state.PlacedStickerStates)
@@ -2115,6 +2252,14 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         }
 
         EnsureDefaultRows();
+
+        // ✅ Samedi/Dimanche : applique le choix figé pour CETTE semaine (voir plus haut),
+        // que ce soit au premier affichage (Reload) ou en changeant de semaine (◀ ▶), qui
+        // passe uniquement par LoadWeekState sans repasser par Reload().
+        if (SaturdayColumn != null) SaturdayColumn.Visibility = showSaturday ? Visibility.Visible : Visibility.Collapsed;
+        if (SundayColumn != null) SundayColumn.Visibility = showSunday ? Visibility.Visible : Visibility.Collapsed;
+        if (WeekendShowSaturdayCheckBox != null) WeekendShowSaturdayCheckBox.IsChecked = showSaturday;
+        if (WeekendShowSundayCheckBox != null) WeekendShowSundayCheckBox.IsChecked = showSunday;
     }
 
     private void DuplicateCurrentWeekTo_Click(object sender, RoutedEventArgs e)
@@ -2172,8 +2317,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // 4 = D4
         // 5 = D5 (vendredi)
         // 6 = Samedi (SaturdayColumn)
-        // 7 = D6 (lundi suivant)
-        if (PlanningDataGrid.Columns.Count < 8)
+        // 7 = Dimanche (SundayColumn)
+        // 8 = D6 (lundi suivant)
+        if (PlanningDataGrid.Columns.Count < 9)
             return;
 
         var start = SnapToStartOfWeek(_startDay, _weekStartDay);
@@ -2187,8 +2333,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         var saturdayDate = NextDayOfWeek(businessDays[4], DayOfWeek.Saturday);
         SaturdayColumn.Header = HeaderForDay(saturdayDate);
+        SundayColumn.Header = HeaderForDay(saturdayDate.AddDays(1));
 
-        PlanningDataGrid.Columns[7].Header = HeaderForDay(businessDays[5]);
+        PlanningDataGrid.Columns[8].Header = HeaderForDay(businessDays[5]);
 
         _isSyncingDates = true;
         try
@@ -2234,7 +2381,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var fr = CultureInfo.GetCultureInfo("fr-CH");
         var name = fr.DateTimeFormat.GetDayName(d.DayOfWeek);
         name = char.ToUpper(name[0]) + name.Substring(1);
-        return $"{name} {d:dd.MM}";
+        return $"{name} {d.ToString("d MMMM", fr)}";
     }
 
     public void Reload()
@@ -2259,17 +2406,67 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         // Charger l'état de la semaine (planning, stickers, images) depuis le fichier
         // (première ouverture ou retour sur la page)
+        // ✅ Samedi/Dimanche (figés par semaine) sont restaurés par LoadWeekState() lui-même
+        // dans la branche ci-dessous ; si les données sont déjà en mémoire (branche
+        // EnsureDefaultRows), l'état actuel des colonnes/cases est laissé tel quel.
         if (_planningRows.Count == 0
             && PlacedStickers.Count == 0 && PlacedPlanImages.Count == 0)
             LoadWeekState(_startDay);
         else
             EnsureDefaultRows();
 
-        _isSaturdayVisible = false;
-        SaturdayColumn.Visibility = Visibility.Collapsed;
-        SetToggleSaturdayButtonUi();
+        InitializeTaskColumnsVisibility();
 
         ApplyPlanningHeadersAndSyncDatePickers();
+    }
+
+    // ✅ Choix des colonnes à listes déroulantes du tableau des Tâches (Entreprise,
+    // Bâtiment, Étage, Catégorie, Urg.) — affichées/masquées via le bouton "Colonnes",
+    // mémorisé entre les sessions (Db.GetTasksVisibleColumns/SetTasksVisibleColumns).
+    // Seules les colonnes à listes déroulantes sont concernées (pas N°, Descriptif,
+    // ni Effectué, qui restent toujours visibles).
+    private void InitializeTaskColumnsVisibility()
+    {
+        var visible = (Db.GetTasksVisibleColumns() ?? "Company,Building,Floor,Category")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        ApplyTaskColumnVisibility(TaskCompanyColumn, ColShowCompanyCheckBox, visible.Contains("Company"));
+        ApplyTaskColumnVisibility(TaskBuildingColumn, ColShowBuildingCheckBox, visible.Contains("Building"));
+        ApplyTaskColumnVisibility(TaskFloorColumn, ColShowFloorCheckBox, visible.Contains("Floor"));
+        ApplyTaskColumnVisibility(TaskCategoryColumn, ColShowCategoryCheckBox, visible.Contains("Category"));
+        ApplyTaskColumnVisibility(TaskUrgentColumn, ColShowUrgencyCheckBox, visible.Contains("Urgency"));
+    }
+
+    private static void ApplyTaskColumnVisibility(DataGridColumn column, WpfCheckBox checkBox, bool isVisible)
+    {
+        column.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (checkBox != null)
+            checkBox.IsChecked = isVisible;
+    }
+
+    private void TaskColumnsButton_Click(object sender, RoutedEventArgs e)
+    {
+        TaskColumnsPopup.IsOpen = !TaskColumnsPopup.IsOpen;
+    }
+
+    private void TaskColumnVisibility_Changed(object sender, RoutedEventArgs e)
+    {
+        TaskCompanyColumn.Visibility = ColShowCompanyCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TaskBuildingColumn.Visibility = ColShowBuildingCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TaskFloorColumn.Visibility = ColShowFloorCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TaskCategoryColumn.Visibility = ColShowCategoryCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TaskUrgentColumn.Visibility = ColShowUrgencyCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+
+        var visibleKeys = new List<string>();
+        if (ColShowCompanyCheckBox.IsChecked == true) visibleKeys.Add("Company");
+        if (ColShowBuildingCheckBox.IsChecked == true) visibleKeys.Add("Building");
+        if (ColShowFloorCheckBox.IsChecked == true) visibleKeys.Add("Floor");
+        if (ColShowCategoryCheckBox.IsChecked == true) visibleKeys.Add("Category");
+        if (ColShowUrgencyCheckBox.IsChecked == true) visibleKeys.Add("Urgency");
+
+        Db.SetTasksVisibleColumns(string.Join(",", visibleKeys));
     }
 
     private void LoadLists()
@@ -2277,11 +2474,18 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var pid = Db.GetCurrentProjectId();
         var p = (pid.HasValue && pid.Value > 0) ? pid.Value : 0;
 
-        Companies = p > 0 ? Db.GetCompanies(p) : new List<string>();
-        Buildings = p > 0 ? Db.GetPlaces(p) : new List<string>();
-        Floors = p > 0 ? Db.GetEtages(p) : new List<string>();
+        Companies = p > 0 ? Db.WithEmptyOption(Db.GetCompanies(p)) : new List<string>();
+        Buildings = p > 0 ? Db.WithEmptyOption(Db.GetPlaces(p)) : new List<string>();
+        Floors = p > 0 ? Db.WithEmptyOption(Db.GetEtages(p)) : new List<string>();
         PlanningTextZones = p > 0 ? Db.GetPlanningTextZones(p) : new List<string>();
-        Reserves = p > 0 ? Db.GetReserves(p) : new List<string>();
+        Reserves = p > 0 ? Db.WithEmptyOption(Db.GetReserves(p)) : new List<string>();
+        TaskCategories = p > 0 ? Db.GetTaskCategories(p) : new List<string>();
+        TaskUrgencies = p > 0 ? Db.GetTaskUrgencies(p) : new List<string>();
+        TaskCategoryLabel = p > 0 ? Db.GetLabelTaskCategory(p) : "Cat.";
+        TaskUrgencyLabel = p > 0 ? Db.GetLabelTaskUrgency(p) : "Urg.";
+        CompanyLabel = p > 0 ? Db.GetLabelPerformedBy(p) : "Entreprise";
+        BuildingLabel = p > 0 ? Db.GetLabelPlace(p) : "Bâtiment";
+        FloorLabel = p > 0 ? Db.GetLabelEtage(p) : "Étage";
 
         CompanyColorMap = p > 0
             ? Db.GetCompanyColorMap(p)
@@ -2293,7 +2497,17 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         OnPropertyChanged(nameof(Buildings));
         OnPropertyChanged(nameof(Floors));
         OnPropertyChanged(nameof(PlanningTextZones));
+        OnPropertyChanged(nameof(PlanningTextZonesWithBlank));
         OnPropertyChanged(nameof(Reserves));
+        OnPropertyChanged(nameof(TaskCategories));
+        OnPropertyChanged(nameof(TaskCategoriesWithBlank));
+        OnPropertyChanged(nameof(TaskUrgencies));
+        OnPropertyChanged(nameof(TaskUrgenciesWithBlank));
+        OnPropertyChanged(nameof(TaskCategoryLabel));
+        OnPropertyChanged(nameof(TaskUrgencyLabel));
+        OnPropertyChanged(nameof(CompanyLabel));
+        OnPropertyChanged(nameof(BuildingLabel));
+        OnPropertyChanged(nameof(FloorLabel));
         OnPropertyChanged(nameof(CompanyColorMap));
 
         // Forcer la recréation des ItemsSource pour éviter le partage de brushes
@@ -2405,6 +2619,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             dep = VisualTreeHelper.GetParent(dep);
 
         if (dep is not WpfCheckBox cb)
+            return;
+
+        // ✅ Ne concerne que la case "Effectué" — pas la case de sélection à gauche,
+        // qui doit garder son comportement de toggle normal (binding IsSelected).
+        var cellDep = (DependencyObject)cb;
+        while (cellDep != null && cellDep is not DataGridCell)
+            cellDep = VisualTreeHelper.GetParent(cellDep);
+
+        if (cellDep is not DataGridCell cell || !ReferenceEquals(cell.Column, TaskDoneColumn))
             return;
 
         if (cb.DataContext is not TaskRow row)
@@ -2886,7 +3109,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         private string _todo = "";
         private string _category = "";
         private string _reserve = "";
+        private string _urgent = "";
         private bool _done;
+        private bool _isSelected;
 
         public string Ref { get => _ref; set => SetField(ref _ref, value); }
         public string Company { get => _company; set => SetField(ref _company, value); }
@@ -2895,7 +3120,22 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string Todo { get => _todo; set => SetField(ref _todo, value); }
         public string Category { get => _category; set => SetField(ref _category, value); }
         public string Reserve { get => _reserve; set => SetField(ref _reserve, value); }
-        public bool Done { get => _done; set => SetField(ref _done, value); }
+        public string Urgent { get => _urgent; set => SetField(ref _urgent, value); }
+
+        // ✅ Une tâche marquée "Effectué" n'a plus besoin d'indicateur d'urgence — on
+        // l'efface automatiquement dès que la case est cochée.
+        public bool Done
+        {
+            get => _done;
+            set
+            {
+                if (SetField(ref _done, value) && value)
+                    Urgent = "";
+            }
+        }
+
+        // ✅ Sélection via case à cocher (colonne de gauche) pour suppression multiple — non persistée.
+        public bool IsSelected { get => _isSelected; set => SetField(ref _isSelected, value); }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -2921,6 +3161,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         private string _d5 = "";
         private string _d6 = "";
         private string _sat = "";
+        private string _sun = "";
 
         public string Company { get => _company; set => SetField(ref _company, value); }
         public string D1 { get => _d1; set => SetField(ref _d1, value); }
@@ -2930,6 +3171,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string D5 { get => _d5; set => SetField(ref _d5, value); }
         public string D6 { get => _d6; set => SetField(ref _d6, value); }
         public string Sat { get => _sat; set => SetField(ref _sat, value); }
+        public string Sun { get => _sun; set => SetField(ref _sun, value); }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -2956,6 +3198,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public List<PlanningRowState> PlanningRows { get; set; } = new();
         public List<PlacedStickerState> PlacedStickerStates { get; set; } = new();
         public List<PlacedImageState> PlacedImageStates { get; set; } = new();
+        public bool ShowSaturday { get; set; }
+        public bool ShowSunday { get; set; }
     }
 
     private sealed class TaskRowState
@@ -2967,6 +3211,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string Todo { get; set; } = "";
         public string Category { get; set; } = "";
         public string Reserve { get; set; } = "";
+        public string Urgent { get; set; } = "";
         public bool Done { get; set; }
     }
 
@@ -2980,6 +3225,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string D5 { get; set; } = "";
         public string D6 { get; set; } = "";
         public string Sat { get; set; } = "";
+        public string Sun { get; set; } = "";
     }
 
     private sealed class PlacedStickerState
@@ -3007,6 +3253,89 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 // ============================================================
 // ✅ Converters (TOP-LEVEL pour être trouvés par XAML)
 // ============================================================
+
+// ✅ Colore la colonne "Urg." selon la valeur sélectionnée (1=rouge, 2=orange,
+// 3=jaune clair) — converter au lieu de DataTrigger : binding direct, sans dépendre
+// du timing de sélection d'un ComboBox éditable (IsEditable="True" sur GridComboStyle).
+public sealed class UrgencyToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var s = (value as string)?.Trim();
+        return s switch
+        {
+            "1" => new WpfSolidColorBrush((WpfColor)WpfColorConverter.ConvertFromString("#DC2626")),
+            "2" => new WpfSolidColorBrush((WpfColor)WpfColorConverter.ConvertFromString("#FED7AA")),
+            "3" => new WpfSolidColorBrush((WpfColor)WpfColorConverter.ConvertFromString("#FEF9C3")),
+            _ => WpfBrushes.Transparent
+        };
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+// ✅ Texte en blanc sur fond rouge vif (valeur "1"), foncé sinon — voir UrgencyToBrushConverter.
+public sealed class UrgencyToForegroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var s = (value as string)?.Trim();
+        return s == "1" ? WpfBrushes.White : new WpfSolidColorBrush((WpfColor)WpfColorConverter.ConvertFromString("#111827"));
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+// ✅ Bouton "Voir +" / crayon "Descriptif" (saisi via l'éditeur agrandi, TaskDescriptionWindow).
+// Seuil corrigé le 16.07.2026 (demande de Joe) : "plus d'une ligne" (donc 2+), pas "plus de
+// 2 lignes" comme dans la 1ère version.
+internal static class TodoLineCountHelper
+{
+    public static bool HasMoreThanOneLine(object value)
+    {
+        var s = value as string;
+        if (string.IsNullOrEmpty(s)) return false;
+        return s.Replace("\r\n", "\n").Split('\n').Length > 1;
+    }
+}
+
+// ✅ Colonne "Descriptif" (grille) : n'affiche que la 1ère ligne en mode lecture, même si
+// le texte complet (saisi via l'éditeur agrandi) contient plusieurs lignes.
+public sealed class TodoFirstLineConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var s = value as string;
+        if (string.IsNullOrEmpty(s)) return "";
+        var firstLine = s.Replace("\r\n", "\n").Split('\n')[0];
+        return firstLine;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+// ✅ Bouton "agrandir le Descriptif" : crayon si 1 seule ligne, texte "Voir +" si plus d'une
+// ligne (voir TodoShowVoirPlusConverter) — pas de couleur de fond dans les deux cas.
+public sealed class TodoShowPencilConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => TodoLineCountHelper.HasMoreThanOneLine(value) ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+public sealed class TodoShowVoirPlusConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => TodoLineCountHelper.HasMoreThanOneLine(value) ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
 
 public sealed class CompanyNameToBrushConverter : IMultiValueConverter
 {

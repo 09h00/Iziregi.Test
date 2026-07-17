@@ -57,6 +57,8 @@ public static class PdfService
         var project = Db.GetCurrentProject();
         var projectName = project?.Name ?? "";
         var projectAddress = project?.Address ?? "";
+        var projectManagerRefLine = GetProjectManagerRefLine(project);
+        var projectManagerContactLine = GetProjectManagerContactLine(project);
 
         var textMain = Colors.Grey.Darken4;
         var textMuted = Colors.Grey.Darken1;
@@ -126,6 +128,7 @@ public static class PdfService
                                     .Text(DateTime.Now.ToString("dd.MM.yyyy HH:mm"))
                                     .FontSize(9)
                                     .FontColor(textMuted);
+
                             });
 
                             row.RelativeItem(1.2f).Element(right =>
@@ -134,7 +137,7 @@ public static class PdfService
                                 {
                                     c.Item()
                                         .AlignLeft()
-                                        .Text(string.IsNullOrWhiteSpace(projectName) ? "Projet / chantier" : projectName)
+                                        .Text(string.IsNullOrWhiteSpace(projectName) ? "Dossier / chantier" : projectName)
                                         .SemiBold()
                                         .FontSize(12);
 
@@ -156,6 +159,25 @@ public static class PdfService
                                         c.Item()
                                             .AlignLeft()
                                             .Text(p2)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(projectManagerRefLine))
+                                    {
+                                        c.Item()
+                                            .AlignLeft()
+                                            .PaddingTop(8)
+                                            .Text(projectManagerRefLine)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(projectManagerContactLine))
+                                    {
+                                        c.Item()
+                                            .AlignLeft()
+                                            .Text(projectManagerContactLine)
                                             .FontSize(9)
                                             .FontColor(textMuted);
                                     }
@@ -200,6 +222,8 @@ public static class PdfService
 
         var architectName = Db.GetArchitectName();
         var architectAddress = Db.GetArchitectAddress();
+        var architectRef = Db.GetArchitectRef();
+        var architectRef2 = Db.GetArchitectRef2();
         var logoPath = Db.GetArchitectLogoPath();
 
         byte[]? logoBytes = null;
@@ -216,6 +240,9 @@ public static class PdfService
         var project = Db.GetCurrentProject();
         var projectName = project?.Name ?? "";
         var projectAddress = project?.Address ?? "";
+        var projectWebsite = (project?.Website ?? "").Trim();
+        var projectManagerRefLine = GetProjectManagerRefLine(project);
+        var projectManagerContactLine = GetProjectManagerContactLine(project);
 
         var textMain = Colors.Grey.Darken4;
         var textMuted = Colors.Grey.Darken1;
@@ -277,6 +304,20 @@ public static class PdfService
                                             .FontSize(9)
                                             .FontColor(textMuted);
                                     }
+
+                                    if (!string.IsNullOrWhiteSpace(architectRef))
+                                    {
+                                        c.Item().Text(architectRef)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(architectRef2))
+                                    {
+                                        c.Item().Text(architectRef2)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
                                 });
                             });
 
@@ -287,6 +328,7 @@ public static class PdfService
                                     .Text(DateTime.Now.ToString("dd.MM.yyyy"))
                                     .FontSize(9)
                                     .FontColor(textMuted);
+
                             });
 
                             // Droite
@@ -296,7 +338,7 @@ public static class PdfService
                                 {
                                     c.Item()
                                         .AlignLeft()
-                                        .Text(string.IsNullOrWhiteSpace(projectName) ? "Projet / chantier" : projectName)
+                                        .Text(string.IsNullOrWhiteSpace(projectName) ? "Dossier / chantier" : projectName)
                                         .SemiBold()
                                         .FontSize(12);
 
@@ -318,6 +360,34 @@ public static class PdfService
                                         c.Item()
                                             .AlignLeft()
                                             .Text(p2)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(projectManagerRefLine))
+                                    {
+                                        c.Item()
+                                            .AlignLeft()
+                                            .PaddingTop(8)
+                                            .Text(projectManagerRefLine)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(projectManagerContactLine))
+                                    {
+                                        c.Item()
+                                            .AlignLeft()
+                                            .Text(projectManagerContactLine)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(projectWebsite))
+                                    {
+                                        c.Item()
+                                            .AlignLeft()
+                                            .Text(projectWebsite)
                                             .FontSize(9)
                                             .FontColor(textMuted);
                                     }
@@ -377,6 +447,8 @@ public static class PdfService
 
         // ---- Données header
         var architectName = Db.GetArchitectName();
+        var architectRef = Db.GetArchitectRef();
+        var architectRef2 = Db.GetArchitectRef2();
         var architectAddress = Db.GetArchitectAddress();
         var logoPath = Db.GetArchitectLogoPath();
 
@@ -394,6 +466,8 @@ public static class PdfService
 
         var projectName = project?.Name ?? "";
         var projectAddress = project?.Address ?? "";
+        var projectManagerRefLine = GetProjectManagerRefLine(project);
+        var projectManagerContactLine = GetProjectManagerContactLine(project);
 
         var tag = (wo.ProjectId.HasValue && wo.ProjectId.Value > 0) ? $"P{wo.ProjectId.Value}" : "";
         var bdrShort = wo.BdrNumber < 10 ? $"0{wo.BdrNumber}" : wo.BdrNumber.ToString();
@@ -426,17 +500,18 @@ public static class PdfService
         double travelTotal = Math.Round(wo.TravelQty * wo.TravelRate, 2);
 
         double forfaitTotal = Math.Round(wo.ForfaitQty * wo.ForfaitUnitPrice, 2);
-        bool hasForfait = Math.Abs(forfaitTotal) > 0.0000000001;
 
-        double htBrut = Math.Round(materialTotal + laborTotal + travelTotal + (hasForfait ? forfaitTotal : 0), 2);
+        double htBrut = Math.Round(materialTotal + laborTotal + travelTotal + forfaitTotal, 2);
 
         double discountRate = wo.DiscountRate;
         if (double.IsNaN(discountRate) || double.IsInfinity(discountRate)) discountRate = 0;
         discountRate = Math.Max(0, discountRate);
 
-        double htNet = Math.Round(htBrut * (1.0 - (discountRate / 100.0)), 2);
+        // ✅ Réplique serveur : montant du rabais toujours positif (magnitude), le "-" est
+        // ajouté littéralement à l'affichage — pas déduit d'une soustraction HT net/brut.
+        double discountAmount = Math.Round(htBrut * (discountRate / 100.0), 2);
+        double htNet = Math.Round(htBrut - discountAmount, 2);
 
-        double discountAmount = Math.Round(htNet - htBrut, 2); // négatif si rabais
         double tvaRate = wo.TvaRate;
         if (double.IsNaN(tvaRate) || double.IsInfinity(tvaRate)) tvaRate = 0;
 
@@ -448,7 +523,13 @@ public static class PdfService
         try { signatureBytes = wo.SignaturePng; } catch { signatureBytes = null; }
         bool hasSignature = signatureBytes != null && signatureBytes.Length > 0;
 
-        var decision = (wo.ValidationDecision ?? "").Trim();
+        // ✅ Recadrage sur le tracé réel (identique au cropToContent() côté web) : une
+        // signature saisie sur le grand InkCanvas du client desktop est capturée avec
+        // tout son fond blanc autour ; sans recadrage, le trait reste minuscule au milieu
+        // de la box PDF quelle que soit sa hauteur.
+        if (hasSignature) signatureBytes = CropSignatureToContent(signatureBytes!);
+
+        var decision = DecisionLabelFr((wo.ValidationDecision ?? "").Trim());
         var sigName = (wo.SignatureName ?? "").Trim();
         var sigDate = wo.SignatureDate.HasValue ? FormatDateShort(wo.SignatureDate.Value) : "";
 
@@ -486,7 +567,10 @@ public static class PdfService
 
                                 left.RelativeItem().Column(c =>
                                 {
-                                    c.Item()
+                                    // ✅ Hauteur fixe + alignement bas : la police du titre central (14pt)
+                                    // est plus grande que celle-ci (12pt) — sans ça, les premières lignes
+                                    // des 3 blocs de l'entête ne tombent pas sur la même ligne de base.
+                                    c.Item().Height(18).AlignBottom()
                                         .Text(string.IsNullOrWhiteSpace(architectName) ? "Architecte" : architectName)
                                         .SemiBold()
                                         .FontSize(12);
@@ -507,18 +591,38 @@ public static class PdfService
                                             .FontSize(9)
                                             .FontColor(textMuted);
                                     }
+
+                                    if (!string.IsNullOrWhiteSpace(architectRef))
+                                    {
+                                        c.Item().Text(architectRef)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(architectRef2))
+                                    {
+                                        c.Item().Text(architectRef2)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
                                 });
                             });
 
                             row.RelativeItem(0.9f).Column(center =>
                             {
-                                center.Item().AlignCenter().Text("Bon de régie")
+                                center.Item().Height(18).AlignCenter().AlignBottom().Text("Bon d'intervention")
                                     .SemiBold()
                                     .FontSize(14);
 
                                 center.Item().AlignCenter().PaddingTop(2).Row(r =>
                                 {
                                     r.Spacing(4);
+
+                                    r.AutoItem()
+                                        .AlignBottom()
+                                        .Text("N°")
+                                        .FontSize(11)
+                                        .FontColor(textMuted);
 
                                     r.AutoItem()
                                         .AlignBottom()
@@ -540,6 +644,7 @@ public static class PdfService
                                 center.Item().AlignCenter().PaddingTop(2).Text($"Créé le {FormatDateShort(wo.RequestDate)}")
                                     .FontSize(9)
                                     .FontColor(textMuted);
+
                             });
 
                             row.RelativeItem(1.2f).Element(right =>
@@ -547,8 +652,10 @@ public static class PdfService
                                 right.AlignRight().Column(c =>
                                 {
                                     c.Item()
+                                        .Height(18)
                                         .AlignLeft()
-                                        .Text(string.IsNullOrWhiteSpace(projectName) ? "Projet / chantier" : projectName)
+                                        .AlignBottom()
+                                        .Text(string.IsNullOrWhiteSpace(projectName) ? "Dossier / chantier" : projectName)
                                         .SemiBold()
                                         .FontSize(12);
 
@@ -570,6 +677,25 @@ public static class PdfService
                                         c.Item()
                                             .AlignLeft()
                                             .Text(p2)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(projectManagerRefLine))
+                                    {
+                                        c.Item()
+                                            .AlignLeft()
+                                            .PaddingTop(8)
+                                            .Text(projectManagerRefLine)
+                                            .FontSize(9)
+                                            .FontColor(textMuted);
+                                    }
+
+                                    if (!string.IsNullOrWhiteSpace(projectManagerContactLine))
+                                    {
+                                        c.Item()
+                                            .AlignLeft()
+                                            .Text(projectManagerContactLine)
                                             .FontSize(9)
                                             .FontColor(textMuted);
                                     }
@@ -605,15 +731,15 @@ public static class PdfService
                     // DEMANDE
                     // -------------------------
                     col.Item().ShowEntire()
-                        .CornerRadius(6)
+                        .CornerRadius(14)
                         .Background(demandeBg)
-                        .Border(1).BorderColor(demandeBorder)
+                        .Border(2).BorderColor(demandeBorder)
                         .Padding(10)
                         .Column(section =>
                     {
                         section.Item().Text("Demande")
-                            .SemiBold()
-                            .FontSize(13);
+                            .Bold()
+                            .FontSize(16);
 
                         section.Item().PaddingTop(5).Row(row =>
                         {
@@ -625,33 +751,27 @@ public static class PdfService
                                     c.RelativeColumn();
                                 });
 
-                                AddInfoCell(t, "Concerne", wo.Reserve, lineLighter, textMuted, rightDivider: true);
-                                AddInfoCell(t, "Demandé par", wo.RequestedBy, lineLighter, textMuted);
+                                t.Cell().Padding(3).Element(e => FieldBoxText(e, "Concerne", wo.Reserve));
+                                t.Cell().Padding(3).Element(e => FieldBoxText(e, "Demandé par", wo.RequestedBy));
 
-                                AddInfoCell(t, "Entreprise", wo.PerformedBy, lineLighter, textMuted, rightDivider: true);
-                                AddInfoCell(t, "Bâtiment", wo.Place, lineLighter, textMuted);
+                                t.Cell().Padding(3).Element(e => FieldBoxText(e, "Bâtiment", wo.Place));
+                                t.Cell().Padding(3).Element(e => FieldBoxText(e, "Étage", wo.Etage));
 
-                                AddInfoCell(t, "Étage", wo.Etage, lineLighter, textMuted, rightDivider: true);
+                                t.Cell().Padding(3).Element(e => FieldBoxText(e, "Entreprise", wo.PerformedBy));
 
                                 var deadline = wo.DeadlineDate == default ? "" : FormatDateShort(wo.DeadlineDate);
-                                AddInfoCell(t, "Délai", string.IsNullOrWhiteSpace(deadline) ? null : deadline, lineLighter, textMuted);
+                                t.Cell().Padding(3).Element(e => FieldBoxText(e, "Délai", deadline));
                             });
 
                             row.ConstantItem(15);
 
-                            row.RelativeItem(1f).Column(desc =>
+                            row.RelativeItem(1f).Element(e => FieldBox(e, "Descriptif", box =>
                             {
-                                desc.Item()
-                                    .Text("Descriptif")
-                                    .SemiBold()
-                                    .FontSize(9)
-                                    .FontColor(Colors.Grey.Darken4);
-
                                 var description = (wo.Description ?? "").Trim();
 
                                 if (string.IsNullOrWhiteSpace(description))
                                 {
-                                    desc.Item().PaddingTop(2).Text("—").FontColor(textMuted);
+                                    box.Text("").FontSize(10);
                                     return;
                                 }
 
@@ -662,15 +782,12 @@ public static class PdfService
                                     .Select(x => (x ?? "").TrimEnd())
                                     .ToList();
 
-                                desc.Item().PaddingTop(2).Column(list =>
+                                box.Column(list =>
                                 {
-                                    for (int i = 0; i < descriptionLines.Count; i++)
-                                    {
-                                        var ln = descriptionLines[i];
+                                    foreach (var ln in descriptionLines)
                                         list.Item().Text(string.IsNullOrWhiteSpace(ln) ? " " : ln).FontSize(10);
-                                    }
                                 });
-                            });
+                            }, minHeight: 70));
                         });
 
                         section.Item().PaddingTop(6).LineHorizontal(1).LineColor(separatorBlack);
@@ -680,21 +797,21 @@ public static class PdfService
                     // DEVIS (Nom centré)
                     // -------------------------
                     col.Item().ShowEntire()
-                        .CornerRadius(6)
+                        .CornerRadius(14)
                         .Background(devisBg)
-                        .Border(1).BorderColor(devisBorder)
+                        .Border(2).BorderColor(devisBorder)
                         .Padding(10)
                         .Column(section =>
                     {
-                        var d = wo.QuoteDate == default ? "" : FormatDateShort(wo.QuoteDate);
+                        var d = wo.QuoteDate == default ? "" : FormatDateLong(wo.QuoteDate);
                         var quoteName = string.IsNullOrWhiteSpace(wo.QuoteName) ? "—" : wo.QuoteName;
                         var dateText = string.IsNullOrWhiteSpace(d) ? "—" : d;
 
                         section.Item().Row(r =>
                         {
-                            r.RelativeItem(0.45f).AlignLeft().Text("Devis").SemiBold().FontSize(13);
-                            r.RelativeItem(1.10f).AlignCenter().Text($"Nom : {quoteName}").FontSize(10).FontColor(textMain);
-                            r.RelativeItem(0.45f).AlignRight().Text($"Date : {dateText}").FontSize(10).FontColor(textMain);
+                            r.RelativeItem(0.45f).AlignLeft().Text("Devis").Bold().FontSize(16);
+                            r.RelativeItem(0.90f).AlignCenter().Text($"Nom : {quoteName}").FontSize(10).FontColor(textMain);
+                            r.RelativeItem(0.65f).AlignRight().Text($"Devis créé le : {dateText}").FontSize(10).FontColor(textMain);
                         });
 
                         var printableLines = lines
@@ -714,9 +831,9 @@ public static class PdfService
                             t.ColumnsDefinition(c =>
                             {
                                 c.RelativeColumn(1);
-                                c.ConstantColumn(34);
-                                c.ConstantColumn(56);
-                                c.ConstantColumn(62);
+                                c.ConstantColumn(55);
+                                c.ConstantColumn(72);
+                                c.ConstantColumn(82);
                             });
 
                             t.Header(h =>
@@ -733,15 +850,15 @@ public static class PdfService
                                 if (string.IsNullOrWhiteSpace(label)) label = "—";
 
                                 t.Cell().Element(CellBody).Text(label);
-                                t.Cell().Element(CellBody).AlignRight().Text(FormatQty(l.Qty, culture));
-                                t.Cell().Element(CellBody).AlignRight().Text(l.UnitPrice.ToString("0.00", culture));
-                                t.Cell().Element(CellBody).AlignRight().Text(l.LineTotal.ToString("0.00", culture));
+                                t.Cell().Element(CellBody).AlignRight().Text(FormatQty(l.Qty));
+                                t.Cell().Element(CellBody).AlignRight().Text(FmtOptInv(l.UnitPrice));
+                                t.Cell().Element(CellBody).AlignRight().Text(FmtInv(l.LineTotal));
                             }
                         });
 
                         section.Item().PaddingTop(8).Row(row =>
                         {
-                            row.RelativeItem(0.7f).Column(left =>
+                            row.ConstantItem(130).Column(left =>
                             {
                                 left.Item().Text("Note").SemiBold().FontSize(9).FontColor(Colors.Grey.Darken4);
 
@@ -757,7 +874,7 @@ public static class PdfService
 
                                 left.Item()
                                     .PaddingTop(3)
-                                    .Border(1).BorderColor(lineLight)
+                                    .Border(0.75f).BorderColor(lineLight)
                                     .Background(Colors.White)
                                     .Padding(6)
                                     .Column(list =>
@@ -767,51 +884,50 @@ public static class PdfService
                                     });
                             });
 
-                            row.ConstantItem(14);
+                            row.ConstantItem(6);
 
-                            row.RelativeItem(1.0f).Table(t =>
+                            row.RelativeItem().Table(t =>
                             {
                                 t.ColumnsDefinition(c =>
                                 {
                                     c.RelativeColumn(1);
-                                    c.ConstantColumn(34);
-                                    c.ConstantColumn(56);
-                                    c.ConstantColumn(62);
+                                    c.ConstantColumn(55);
+                                    c.ConstantColumn(72);
+                                    c.ConstantColumn(82);
                                 });
 
-                                AddTotalsRow4Cols(t, "Total Matériel", "", "", materialTotal.ToString("0.00", culture), isStrong: true);
+                                AddTotalsRow4Cols(t, "Total Matériel", "", "", FmtInv(materialTotal),
+                                    isStrong: true, noInnerDividers: true, bottomBorderThickness: 0f);
 
-                                if (!hasForfait)
-                                {
-                                    AddTotalsRow4Cols(t, "Main d’œuvre",
-                                        qtyText: FormatQty(wo.LaborHours, culture),
-                                        unitPriceText: wo.LaborRate.ToString("0.00", culture),
-                                        totalText: laborTotal.ToString("0.00", culture),
-                                        isStrong: false);
+                                t.Cell().ColumnSpan(4).BorderBottom(0.75f).BorderColor("#000000").PaddingVertical(4);
 
-                                    AddTotalsRow4Cols(t, "Déplacements",
-                                        qtyText: FormatQty(wo.TravelQty, culture),
-                                        unitPriceText: wo.TravelRate.ToString("0.00", culture),
-                                        totalText: travelTotal.ToString("0.00", culture),
-                                        isStrong: false);
-                                }
+                                AddTotalsRow4Cols(t, "Main d’œuvre",
+                                    qtyText: FormatQty(wo.LaborHours),
+                                    unitPriceText: FmtOptInv(wo.LaborRate),
+                                    totalText: FmtInv(laborTotal),
+                                    isStrong: true);
 
-                                if (hasForfait)
-                                {
-                                    AddTotalsRow4Cols(t, "Forfait selon doc annexé",
-                                        qtyText: FormatQty(wo.ForfaitQty, culture),
-                                        unitPriceText: wo.ForfaitUnitPrice.ToString("0.00", culture),
-                                        totalText: forfaitTotal.ToString("0.00", culture),
-                                        isStrong: false);
-                                }
+                                AddTotalsRow4Cols(t, "Déplacements",
+                                    qtyText: FormatQty(wo.TravelQty),
+                                    unitPriceText: FmtOptInv(wo.TravelRate),
+                                    totalText: FmtInv(travelTotal),
+                                    isStrong: true);
 
-                                var rabaisLabel = discountRate <= 0 ? "Rabais (%)" : $"Rabais ({discountRate:0}%)";
-                                var discountRateText = discountRate <= 0 ? "" : $"{discountRate:0}%";
-                                AddTotalsRow4Cols(t, rabaisLabel, "", discountRateText, discountAmount.ToString("0.00", culture), isStrong: false);
+                                // ✅ Réplique serveur : le taux va dans la colonne Qt, le libellé reste statique,
+                                // et le total est toujours préfixé d'un "-" littéral (même à 0 : "-0.00").
+                                AddTotalsRow4Cols(t, "Rabais (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false);
 
-                                AddTotalsRow4Cols(t, "Total HT", "", "", htNet.ToString("0.00", culture), isStrong: true);
-                                AddTotalsRow4Cols(t, $"TVA ({tvaRate:0.00}%)", "", "", tvaAmount.ToString("0.00", culture), isStrong: false);
-                                AddTotalsRow4Cols(t, "Total TTC", "", "", ttcTotal.ToString("0.00", culture), isStrong: true, isGrandTotal: true);
+                                AddTotalsRow4Cols(t, "Forfait HT, selon pdf annexé",
+                                    qtyText: FormatQty(wo.ForfaitQty),
+                                    unitPriceText: FmtOptInv(wo.ForfaitUnitPrice),
+                                    totalText: FmtInv(forfaitTotal),
+                                    isStrong: true,
+                                    isForfait: true,
+                                    bottomBorderThickness: 1.5f);
+
+                                AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true);
+                                AddTotalsRow4Cols(t, "TVA (%)", FormatQty(tvaRate), "", FmtInv(tvaAmount), isStrong: false);
+                                AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true);
                             });
                         });
 
@@ -822,18 +938,20 @@ public static class PdfService
                     // VALIDATION (✅ box signature remontée ; libellé "Signature" aligné sur Nom/Date ; bas box aligné bas Date)
                     // -------------------------
                     col.Item().ShowEntire()
-                        .CornerRadius(6)
+                        .CornerRadius(14)
                         .Background(validationBg)
-                        .Border(1).BorderColor(validationBorder)
+                        .Border(2).BorderColor(validationBorder)
                         .Padding(10)
                         .Column(section =>
                     {
                         // Constantes d'alignement (cohérentes avec la mise en page des tables à gauche)
+                        // ✅ Hauteurs recalculées pour les champs "boîte blanche" (FieldBox), plus hauts
+                        // que l'ancien style à simple ligne de séparation.
                         const float titleHeight = 18f;         // hauteur visuelle du titre "Validation"
                         const float afterTitleToDecision = 6f; // PaddingTop(6)
-                        const float decisionBlockHeight = 28f; // hauteur approx de la table décision (1 ligne)
+                        const float decisionBlockHeight = 38f; // hauteur du champ Décision (boîte blanche)
                         const float betweenDecisionAndNameDate = 4f; // PaddingTop(4)
-                        const float nameDateBlockHeight = 28f; // hauteur approx de la table Nom/Date (1 ligne)
+                        const float nameDateBlockHeight = 38f; // hauteur des champs Nom/Date (boîte blanche)
                         const float signatureBoxHeight = decisionBlockHeight + betweenDecisionAndNameDate + nameDateBlockHeight; // bas aligné bas Date
 
                         section.Item().Row(row =>
@@ -843,22 +961,18 @@ public static class PdfService
                             {
                                 left.Item().Text("Validation").SemiBold().FontSize(13);
 
-                                left.Item().PaddingTop(afterTitleToDecision).Table(t =>
-                                {
-                                    t.ColumnsDefinition(c => c.RelativeColumn());
-                                    AddInfoCell1Col(t, "Décision", string.IsNullOrWhiteSpace(decision) ? "—" : decision, lineLighter);
-                                });
+                                left.Item().PaddingTop(afterTitleToDecision)
+                                    .Element(e => FieldBoxText(e, "Décision", string.IsNullOrWhiteSpace(decision) ? "—" : decision));
 
-                                left.Item().PaddingTop(betweenDecisionAndNameDate).Table(t =>
+                                left.Item().PaddingTop(betweenDecisionAndNameDate).Row(nd =>
                                 {
-                                    t.ColumnsDefinition(c =>
-                                    {
-                                        c.RelativeColumn();
-                                        c.RelativeColumn();
-                                    });
+                                    nd.RelativeItem()
+                                        .Element(e => FieldBoxText(e, "Nom", string.IsNullOrWhiteSpace(sigName) ? "—" : sigName));
 
-                                    AddInfoCell(t, "Nom", string.IsNullOrWhiteSpace(sigName) ? "—" : sigName, lineLighter, textMuted, rightDivider: true);
-                                    AddInfoCell(t, "Date", string.IsNullOrWhiteSpace(sigDate) ? "—" : sigDate, lineLighter, textMuted);
+                                    nd.ConstantItem(8);
+
+                                    nd.RelativeItem()
+                                        .Element(e => FieldBoxText(e, "Date", string.IsNullOrWhiteSpace(sigDate) ? "—" : sigDate));
                                 });
                             });
 
@@ -884,15 +998,15 @@ public static class PdfService
                                     // Box : remonte (débute juste sous le titre) et bas aligné au bas de Date
                                     var box = sig.RelativeItem()
                                         .PaddingTop(afterTitleToDecision)
-                                        .Border(1)
+                                        .Border(0.75f)
                                         .BorderColor(lineLight)
                                         .Background(Colors.White)
                                         .Padding(6)
                                         .Height(signatureBoxHeight);
 
                                     if (hasSignature)
-                                        // ✅ Centre l'image de signature dans la box (horizontal + vertical)
-                                        // au lieu de la laisser collée en haut/bas selon son ratio.
+                                        // ✅ Centre l'image (déjà recadrée sur son contenu par
+                                        // CropSignatureToContent) dans la box, horizontal + vertical.
                                         box.AlignCenter().AlignMiddle().Image(signatureBytes!).FitArea();
                                     else
                                         box.AlignCenter().Text("—").FontColor(textMuted);
@@ -906,13 +1020,104 @@ public static class PdfService
     }
 
     // =========================
+    // ✅ PDF Descriptif de tâche (Planning, tableau des Tâches, 16.07.2026) : document simple
+    // généré directement à partir du texte (pas une capture d'écran) — un petit en-tête avec
+    // les infos de la ligne, suivi du texte du descriptif en entier, sur autant de pages que
+    // nécessaire. `infoFields` est fourni par TaskDescriptionWindow à partir des mêmes
+    // libellés/valeurs affichés dans sa fenêtre (mêmes colonnes visibles, mêmes libellés
+    // dynamiques) — corrige le bug du 16.07.2026 où Urg./Effectué n'apparaissaient jamais
+    // dans le PDF (champs jamais transmis à cette méthode).
+    // =========================
+    public static void GenerateTaskDescriptionPdf(
+        string filePath,
+        string taskRef,
+        List<(string Label, string Value)> infoFields,
+        string todo)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Chemin PDF invalide.", nameof(filePath));
+
+        var culture = new CultureInfo("fr-CH");
+        var textMain = Colors.Grey.Darken4;
+        var textMuted = Colors.Grey.Darken1;
+        var lineLight = Colors.Grey.Lighten2;
+
+        var project = Db.GetCurrentProject();
+        var projectName = project?.Name ?? "";
+
+        Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(30);
+                page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(10).FontColor(textMain));
+
+                page.Header().Column(col =>
+                {
+                    col.Item().Text($"Tâche N° {taskRef}").FontSize(16).SemiBold().FontColor(textMain);
+
+                    if (!string.IsNullOrWhiteSpace(projectName))
+                        col.Item().PaddingTop(2).Text(projectName).FontSize(10).FontColor(textMuted);
+
+                    // ✅ Date seule, sans l'heure (demande de Joe, 16.07.2026).
+                    col.Item().PaddingTop(2).Text(DateTime.Now.ToString("dd.MM.yyyy", culture)).FontSize(8).FontColor(textMuted);
+
+                    // ✅ Par rangées de 4 max (Urg./Effectué/Concerne peuvent porter le total
+                    // à 5-7 champs selon les colonnes visibles dans la grille).
+                    foreach (var chunk in (infoFields ?? new List<(string, string)>()).Chunk(4))
+                    {
+                        col.Item().PaddingTop(8).Table(table =>
+                        {
+                            table.ColumnsDefinition(c =>
+                            {
+                                for (int i = 0; i < chunk.Length; i++)
+                                    c.RelativeColumn();
+                            });
+
+                            foreach (var field in chunk)
+                                AddTaskInfoCell(table, field.Label, field.Value, textMuted, textMain);
+                        });
+                    }
+
+                    col.Item().PaddingTop(10).LineHorizontal(1).LineColor(lineLight);
+                });
+
+                page.Content().PaddingTop(14).Text(string.IsNullOrWhiteSpace(todo) ? "" : todo)
+                    .FontSize(11)
+                    .LineHeight(1.4f);
+
+                page.Footer().AlignCenter().Text(x =>
+                {
+                    x.CurrentPageNumber();
+                    x.Span(" / ");
+                    x.TotalPages();
+                });
+            });
+        }).GeneratePdf(filePath);
+    }
+
+    private static void AddTaskInfoCell(TableDescriptor table, string label, string? value, string labelColor, string valueColor)
+    {
+        table.Cell().Element(c => c
+                .Background("#F9FAFB")
+                .Border(1).BorderColor("#E5E7EB")
+                .Padding(6))
+            .Column(cc =>
+            {
+                cc.Item().Text(label).FontSize(8).FontColor(labelColor);
+                cc.Item().Text(string.IsNullOrWhiteSpace(value) ? "—" : value).FontSize(10).SemiBold().FontColor(valueColor);
+            });
+    }
+
+    // =========================
     // Styles (tables)
     // =========================
     private static IContainer CellHeader(IContainer c)
     {
         return c
             .Background("#DBEAFE")
-            .Border(1).BorderColor("#1D4ED8")
+            .Border(0.75f).BorderColor("#000000")
             .PaddingVertical(5).PaddingHorizontal(7)
             .DefaultTextStyle(x => x.SemiBold().FontSize(9).FontColor("#1E3A8A"));
     }
@@ -920,26 +1125,35 @@ public static class PdfService
     private static IContainer CellBody(IContainer c)
     {
         return c
-            .Border(1).BorderColor(Colors.Grey.Lighten3)
+            .Border(0.75f).BorderColor("#000000")
             .PaddingVertical(5).PaddingHorizontal(7)
             .DefaultTextStyle(x => x.FontSize(9));
     }
 
-    private static IContainer CellBodyTotal(IContainer c)
+    // ✅ Réplique exacte de Fmt/FmtOpt/FmtQty côté serveur (Bdr.razor) : culture invariante
+    // (décimales avec point, pas virgule), quantité/prix vides si 0 — pas de "0" affiché.
+    private static string FmtInv(double v)
+        => v.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string FmtOptInv(double v)
     {
-        return c
-            .Background("#DBEAFE")
-            .Border(1).BorderColor("#1D4ED8")
-            .PaddingVertical(6).PaddingHorizontal(7)
-            .DefaultTextStyle(x => x.FontSize(9).FontColor("#1E3A8A"));
+        if (Math.Abs(v) < 0.0000000001) return "";
+        return v.ToString("0.00", CultureInfo.InvariantCulture);
     }
 
-    private static string FormatQty(double v, CultureInfo culture)
+    private static string FormatQty(double v)
     {
-        if (Math.Abs(v) < 0.0000000001) return "0";
-        return v.ToString("0.##", culture);
+        if (Math.Abs(v) < 0.0000000001) return "";
+        var rounded = Math.Round(v, 2);
+        return Math.Abs(rounded % 1) < 0.0000000001
+            ? ((long)rounded).ToString(CultureInfo.InvariantCulture)
+            : rounded.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
+    // ✅ Grille des totaux : contrôle fin des bordures (réplique .tot-row du serveur) —
+    // pas de bordure latérale gauche/droite (bord extérieur), séparateurs internes
+    // (BorderLeft) désactivables pour "Total Matériel", épaisseur du bas paramétrable
+    // pour un séparateur plus épais (ex. avant "Total HT").
     private static void AddTotalsRow4Cols(
         TableDescriptor t,
         string label,
@@ -947,7 +1161,10 @@ public static class PdfService
         string unitPriceText,
         string totalText,
         bool isStrong,
-        bool isGrandTotal = false)
+        bool isGrandTotal = false,
+        bool isForfait = false,
+        bool noInnerDividers = false,
+        float bottomBorderThickness = 0.75f)
     {
         var fontSize = isGrandTotal ? 12 : 10;
 
@@ -960,12 +1177,33 @@ public static class PdfService
             valueStyle = valueStyle.SemiBold();
         }
 
-        Func<IContainer, IContainer> cellElement = isGrandTotal ? CellBodyTotal : CellBody;
+        if (isForfait)
+        {
+            labelStyle = labelStyle.Italic().FontColor("#4169E1");
+        }
 
-        t.Cell().Element(cellElement).Text(label).Style(labelStyle);
-        t.Cell().Element(cellElement).AlignRight().Text(qtyText ?? "");
-        t.Cell().Element(cellElement).AlignRight().Text(unitPriceText ?? "");
-        t.Cell().Element(cellElement).AlignRight().Text(totalText ?? "").Style(valueStyle);
+        IContainer Cell(bool isFirst)
+        {
+            IContainer c = t.Cell();
+
+            if (isGrandTotal)
+                c = c.Background("#DBEAFE");
+
+            if (!isFirst && !noInnerDividers)
+                c = c.BorderLeft(0.75f).BorderColor("#000000");
+
+            if (bottomBorderThickness > 0)
+                c = c.BorderBottom(bottomBorderThickness).BorderColor("#000000");
+
+            c = c.PaddingVertical(isGrandTotal ? 6 : 4).PaddingHorizontal(7);
+
+            return c;
+        }
+
+        Cell(true).Text(label).Style(labelStyle);
+        Cell(false).AlignRight().Text(qtyText ?? "");
+        Cell(false).AlignRight().Text(unitPriceText ?? "");
+        Cell(false).AlignRight().Text(totalText ?? "").Style(valueStyle);
     }
 
     // =========================
@@ -1031,6 +1269,74 @@ public static class PdfService
         return ms.ToArray();
     }
 
+    // ✅ Recadre l'image de signature sur son contenu réel (identique au cropToContent()
+    // JS côté web, Bdr.razor) : une signature saisie sur le grand InkCanvas du client
+    // desktop est capturée avec tout son fond blanc autour — sans ce recadrage, le trait
+    // reste minuscule au milieu de la box PDF quelle que soit la hauteur de celle-ci.
+    private static byte[] CropSignatureToContent(byte[] pngBytes)
+    {
+        var source = LoadPngToBitmapSource(pngBytes);
+        if (source == null) return pngBytes;
+
+        var converted = new FormatConvertedBitmap(source, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+        int width = converted.PixelWidth;
+        int height = converted.PixelHeight;
+        if (width <= 0 || height <= 0) return pngBytes;
+
+        int stride = width * 4;
+        var pixels = new byte[height * stride];
+
+        try { converted.CopyPixels(pixels, stride, 0); }
+        catch { return pngBytes; }
+
+        int minX = width, minY = height, maxX = -1, maxY = -1;
+
+        for (int y = 0; y < height; y++)
+        {
+            int rowStart = y * stride;
+            for (int x = 0; x < width; x++)
+            {
+                int i = rowStart + x * 4;
+                byte b = pixels[i];
+                byte g = pixels[i + 1];
+                byte r = pixels[i + 2];
+                byte a = pixels[i + 3];
+
+                // Pixel d'encre : opaque et sensiblement plus sombre que le fond blanc.
+                if (a > 20 && (r < 235 || g < 235 || b < 235))
+                {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+
+        if (maxX < 0 || maxY < 0)
+            return pngBytes; // rien détecté (page blanche) : garder l'image telle quelle
+
+        const int padding = 10;
+        int cropX = Math.Max(0, minX - padding);
+        int cropY = Math.Max(0, minY - padding);
+        int cropRight = Math.Min(width, maxX + padding + 1);
+        int cropBottom = Math.Min(height, maxY + padding + 1);
+        int cropW = cropRight - cropX;
+        int cropH = cropBottom - cropY;
+
+        if (cropW <= 0 || cropH <= 0) return pngBytes;
+
+        try
+        {
+            var cropped = new CroppedBitmap(converted, new Int32Rect(cropX, cropY, cropW, cropH));
+            return EncodeBitmapSourceToPng(cropped);
+        }
+        catch
+        {
+            return pngBytes;
+        }
+    }
+
     private static string? GetAddressLine1(string? raw)
     {
         var lines = SplitAddressLines(raw);
@@ -1042,6 +1348,15 @@ public static class PdfService
         var lines = SplitAddressLines(raw);
         return lines.Length >= 2 ? lines[1] : "";
     }
+
+    private static string GetProjectManagerRefLine(Project? project)
+    {
+        var name = (project?.ManagerName ?? "").Trim();
+        return string.IsNullOrWhiteSpace(name) ? "" : $"Réf : {name}";
+    }
+
+    private static string GetProjectManagerContactLine(Project? project)
+        => (project?.ManagerContact ?? "").Trim();
 
     private static string[] SplitAddressLines(string? raw)
     {
@@ -1080,54 +1395,45 @@ public static class PdfService
         return date.ToString("dd.MM.yyyy", CultureInfo.GetCultureInfo("fr-CH"));
     }
 
-    // =========================
-    // Helpers BDR (Demande / Validation)
-    // =========================
-    private static void AddInfoCell(
-        TableDescriptor t,
-        string label,
-        string? value,
-        string borderColor,
-        string labelColor,
-        bool rightDivider = false)
+    // ✅ Réplique de FmtDateLong côté serveur ("9 juillet 2026")
+    private static string FormatDateLong(DateTime date)
     {
-        var cell = t.Cell()
-            .BorderBottom(1)
-            .BorderColor(borderColor)
-            .PaddingVertical(3)
-            .PaddingRight(8);
+        return date.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("fr-FR"));
+    }
 
-        if (rightDivider)
-        {
-            cell = cell
-                .BorderRight(1)
-                .BorderColor(borderColor)
-                .PaddingRight(12);
-        }
+    // ✅ Réplique du texte de DecisionLabel() côté serveur (wo.ValidationDecision contient déjà
+    // le mot français), SANS les émojis : Arial n'a pas de glyphes emoji couleur, ils s'affichaient
+    // comme une case à cocher cassée dans le PDF.
+    private static string DecisionLabelFr(string decision) => decision switch
+    {
+        "Validé" => "Je valide le devis",
+        "Refusé" => "Je refuse le devis",
+        "Annulé" => "J'annule la demande du devis",
+        _ => decision
+    };
 
-        cell.Column(c =>
+    // =========================
+    // Helpers BDR — champ "boîte blanche" (réplique .flabel/.fvalue du serveur)
+    // =========================
+    private static void FieldBox(IContainer container, string label, Action<IContainer> content, float minHeight = 20)
+    {
+        container.Column(c =>
         {
-            c.Item().Text(label).SemiBold().FontSize(9).FontColor(Colors.Grey.Darken4);
-            c.Item().PaddingTop(1).Text(string.IsNullOrWhiteSpace(value) ? "—" : value);
+            c.Item().Text(label).FontSize(9).SemiBold().FontColor("#6B7280");
+
+            var box = c.Item()
+                .PaddingTop(4)
+                .Background(Colors.White)
+                .Border(0.75f).BorderColor("#D1D5DB")
+                .CornerRadius(4)
+                .MinHeight(minHeight)
+                .Padding(5);
+
+            content(box);
         });
     }
 
-    private static void AddInfoCell1Col(
-        TableDescriptor t,
-        string label,
-        string? value,
-        string borderColor)
-    {
-        var cell = t.Cell()
-            .BorderBottom(1)
-            .BorderColor(borderColor)
-            .PaddingVertical(3)
-            .PaddingRight(8);
+    private static void FieldBoxText(IContainer container, string label, string? value, float minHeight = 20)
+        => FieldBox(container, label, box => box.Text(string.IsNullOrWhiteSpace(value) ? "" : value).FontSize(10), minHeight);
 
-        cell.Column(c =>
-        {
-            c.Item().Text(label).SemiBold().FontSize(9).FontColor(Colors.Grey.Darken4);
-            c.Item().PaddingTop(1).Text(string.IsNullOrWhiteSpace(value) ? "—" : value);
-        });
-    }
 }

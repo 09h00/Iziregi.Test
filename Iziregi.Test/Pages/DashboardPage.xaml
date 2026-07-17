@@ -20,6 +20,31 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- ✅ OK en surbrillance quand dirty -->
@@ -80,6 +105,11 @@
             <Setter Property="BorderBrush" Value="#FCA5A5"/>
         </Style>
 
+        <Style x:Key="ArchiveSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+            <Setter Property="Foreground" Value="#15803D"/>
+            <Setter Property="BorderBrush" Value="#15803D"/>
+        </Style>
+
         <!-- ✅ Bouton "Banque de projets" : avant, il réutilisait ButtonWithChevronStyle
              (un "▾" affiché à droite, comme pour un menu déroulant), ce qui n'a pas de sens
              ici puisque le clic ouvre directement une fenêtre (ProjectsWindow), pas un menu.
@@ -133,7 +163,7 @@
 
             <!-- ✅ Bordure extérieure du tableau : NOIR -->
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
 
             <Setter Property="Background" Value="White"/>
             <Setter Property="AlternatingRowBackground" Value="#F9FAFB"/>
@@ -200,7 +230,7 @@
                         <Setter Property="VerticalContentAlignment" Value="Center"/>
                         <Setter Property="HorizontalContentAlignment" Value="Center"/>
                         <Setter Property="Padding" Value="6,0"/>
-                        <Setter Property="BorderBrush" Value="#111827"/>
+                        <Setter Property="BorderBrush" Value="#D1D5DB"/>
                         <Setter Property="BorderThickness" Value="0,0,1,1"/>
                         <Setter Property="Foreground" Value="#111827"/>
                         <Setter Property="FontWeight" Value="Bold"/>
@@ -222,7 +252,7 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="Padding" Value="6,0"/>
-            <Setter Property="BorderBrush" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
         </Style>
 
@@ -245,7 +275,7 @@
         <Style x:Key="StatusHeaderWithRightSeparator"
                TargetType="DataGridColumnHeader"
                BasedOn="{StaticResource StatusHeaderNoVerticalSeparators}">
-            <Setter Property="BorderBrush" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
             <Setter Property="BorderThickness" Value="0,0,1,1"/>
         </Style>
 
@@ -356,7 +386,7 @@
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="13"
+                                CornerRadius="6"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -366,9 +396,10 @@
         </Style>
 
         <Style x:Key="FilterChipActiveStyle" TargetType="Button" BasedOn="{StaticResource FilterChipStyle}">
-            <Setter Property="Background" Value="#2563EB"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#2563EB"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="BorderThickness" Value="2"/>
         </Style>
 
     </UserControl.Resources>
@@ -384,9 +415,10 @@
                 Background="White"
                 BorderBrush="#E5E7EB"
                 BorderThickness="1"
-                CornerRadius="10"
+                CornerRadius="12"
                 Padding="8"
-                Margin="0,0,0,8">
+                Margin="0,0,0,8"
+                Effect="{StaticResource CardShadowEffect}">
 
             <!-- ✅ Bannière "dirty" en haut -->
             <Grid>
@@ -412,237 +444,45 @@
                 </Border>
 
                 <Grid Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="1.1*"/>
-                        <ColumnDefinition Width="20"/>
-                        <ColumnDefinition Width="0.9*"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="122"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Logo compact -->
-                    <Border Grid.Column="0"
-                            Width="42"
-                            Height="42"
-                            BorderBrush="#D1D5DB"
-                            BorderThickness="1"
-                            CornerRadius="7"
-                            Background="#F9FAFB"
-                            VerticalAlignment="Center">
-                        <Grid>
-                            <Image x:Name="LogoImage" Stretch="Uniform" Margin="3"/>
-                            <TextBlock x:Name="LogoEmptyText"
-                                       Text="Logo"
-                                       FontSize="9"
-                                       Foreground="#9CA3AF"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Grid>
-                    </Border>
-
-                    <!-- Architecte compact (3 lignes) -->
-                    <Grid Grid.Column="2" VerticalAlignment="Center">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="55"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
-                            <ColumnDefinition Width="150"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Grid.Row="0"
-                                   Grid.Column="0"
-                                   Text="Bureau"
-                                   FontSize="11"
-                                   Foreground="#6B7280"
-                                   VerticalAlignment="Center"/>
-
-                        <TextBox x:Name="ArchitectNameTextBox"
-                                 Grid.Row="0"
-                                 Grid.Column="1"
-                                 IsReadOnly="True"
-                                 Style="{StaticResource InputStyle}"/>
-
-                        <TextBlock Grid.Row="1"
-                                   Grid.Column="0"
-                                   Text="Adresse"
-                                   FontSize="11"
-                                   Foreground="#6B7280"
-                                   VerticalAlignment="Center"
-                                   Margin="0,4,0,0"/>
-
-                        <TextBox x:Name="ArchitectAddressTextBox"
-                                 Grid.Row="1"
-                                 Grid.Column="1"
-                                 IsReadOnly="True"
-                                 Style="{StaticResource InputStyle}"
-                                 Margin="0,4,0,0"/>
-
-                        <TextBlock Grid.Row="2"
-                                   Grid.Column="0"
-                                   Text="NPA/Ville"
-                                   FontSize="11"
-                                   Foreground="#6B7280"
-                                   VerticalAlignment="Center"
-                                   Margin="0,4,0,0"/>
-
-                        <TextBox x:Name="ArchitectZipCityTextBox"
-                                 Grid.Row="2"
-                                 Grid.Column="1"
-                                 IsReadOnly="True"
-                                 Style="{StaticResource InputStyle}"
-                                 Margin="0,4,0,0"/>
-                    </Grid>
-
-                    <!-- Projet (lecture seule sur Dashboard) -->
-                    <Grid Grid.Column="4" VerticalAlignment="Center">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="55"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="130"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Grid.Row="0" Grid.Column="0"
-                                   Text="Nom"
-                                   FontSize="11"
-                                   Foreground="#6B7280"
-                                   VerticalAlignment="Center"/>
-
-                        <!-- ✅ Lecture seule -->
-                        <TextBox x:Name="ProjectNameEditTextBox"
-                             Grid.Row="0"
-                             Grid.Column="1"
-                             Style="{StaticResource InputStyle}"
-                             IsReadOnly="True"
-                             IsTabStop="False"
-                             Focusable="False"
-                             Background="#F9FAFB"/>
-
-                        <!-- ✅ Choix du projet autorisé (hidden, remplacé par bandeau coloré) -->
-                        <ComboBox x:Name="ProjectComboBox"
-                              Grid.Row="0"
-                              Grid.Column="2"
-                              Height="26"
-                              Width="110"
-                              FontSize="12"
-                              DisplayMemberPath="Name"
-                              SelectedValuePath="Id"
-                              SelectionChanged="ProjectComboBox_SelectionChanged"
-                              Margin="6,0,0,0"
-                              Visibility="Collapsed"/>
-
-                        <TextBlock Grid.Row="1" Grid.Column="0"
-                               Text="Adresse"
-                               FontSize="11"
-                               Foreground="#6B7280"
-                               VerticalAlignment="Center"
-                               Margin="0,4,0,0"/>
-
-                        <!-- ✅ Lecture seule -->
-                        <TextBox x:Name="ProjectAddressEditTextBox"
-                             Grid.Row="1"
-                             Grid.Column="1"
-                             Style="{StaticResource InputStyle}"
-                             Margin="0,4,0,0"
-                             IsReadOnly="True"
-                             IsTabStop="False"
-                             Focusable="False"
-                             Background="#F9FAFB"/>
-
-                        <TextBlock Grid.Row="2" Grid.Column="0"
-                               Text="NPA/Ville"
-                               FontSize="11"
-                               Foreground="#6B7280"
-                               VerticalAlignment="Center"
-                               Margin="0,4,0,0"/>
-
-                        <!-- ✅ Lecture seule -->
-                        <TextBox x:Name="ProjectZipCityEditTextBox"
-                             Grid.Row="2"
-                             Grid.Column="1"
-                             Style="{StaticResource InputStyle}"
-                             Margin="0,4,0,0"
-                             IsReadOnly="True"
-                             IsTabStop="False"
-                             Focusable="False"
-                             Background="#F9FAFB"/>
-
-                        <!-- ✅ Accès Banque de projets : icône + texte sur 2 lignes si besoin,
-                             plus de chevron trompeur, fond bleu cohérent avec PrimaryButtonStyle. -->
-                        <Button x:Name="ManageProjectsButton"
-                            Grid.Row="1"
-                            Grid.Column="2"
-                            Grid.RowSpan="2"
-                            Width="122"
-                            Height="48"
-                            Style="{StaticResource ProjectBankButtonStyle}"
-                            Click="ManageProjects_Click"
-                            VerticalAlignment="Top"
-                            Margin="4,4,0,0"
-                            ToolTip="Ouvrir la banque de projets">
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                                <TextBlock Text="🗂"
-                                           FontSize="16"
-                                           HorizontalAlignment="Center"
-                                           Margin="0,0,0,2"/>
-                                <TextBlock Text="Banque de projets"
-                                           FontSize="12"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap"
-                                           TextAlignment="Center"
-                                           HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-                </Grid>
-            </Grid>
-        </Border>
-
-        <!-- TABLEAU DE BORD -->
-        <Border Grid.Row="1"
-                Background="White"
-                BorderBrush="#E5E7EB"
-                BorderThickness="1"
-                CornerRadius="10"
-                Padding="10">
-
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <!-- Titre gauche + aperçu descriptif (60% / 40%) => aperçu réduit de 20% -->
-                <Grid Grid.Row="0" Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1.3*"/>
-                        <ColumnDefinition Width="0.7*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                    <!-- Ligne 1 : Bons actifs + actions ... Nom, Adresse -->
+                    <!-- ✅ La largeur de "+ Nouveau bon" est calculée en code-behind (AlignNewWorkOrderButtonWidth)
+                         pour que son bord droit tombe exactement sur celui de "Validé" (ligne 2). Un
+                         SharedSizeGroup+ColumnSpan WPF ne fonctionne pas de façon fiable ici : un élément qui
+                         s'étend sur plusieurs colonnes à taille partagée n'est pas pris en compte pour calculer
+                         la taille de chaque groupe, ce qui faisait déborder le bouton bien au-delà de "Validé". -->
+                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="Bons actifs"
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="#111827"
                                    Margin="0,0,10,0"/>
 
+                        <Button x:Name="NewWorkOrderTopButton"
+                                Content="+ Nouveau bon"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Click="NewWorkOrder_Click"
+                                VerticalContentAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                Padding="10,0"
+                                Margin="0,0,6,0"/>
+
                         <Button x:Name="ArchiveSelectionButton"
                                 Content="Archiver sélection"
-                                Style="{StaticResource SmallButtonStyle}"
+                                Style="{StaticResource ArchiveSmallButtonStyle}"
                                 Click="ArchiveSelection_Click"
                                 IsEnabled="False"
                                 Margin="0,0,6,0"/>
@@ -657,23 +497,97 @@
                         <Button x:Name="RefreshTopButton"
                                 Content="Rafraîchir"
                                 Style="{StaticResource SmallButtonStyle}"
-                                Click="Refresh_Click"
-                                Margin="0,0,6,0"/>
-
-                        <Button x:Name="NewWorkOrderTopButton"
-                                Content="+ Nouveau bon"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                Click="NewWorkOrder_Click"
-                                VerticalContentAlignment="Center"
-                                HorizontalContentAlignment="Center"
-                                Padding="10,0"/>
+                                Click="Refresh_Click"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1"
+                    <!-- ✅ Dossier, sur une seule colonne, disposé comme dans les bons/PDF -->
+                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="2" VerticalAlignment="Top">
+                        <TextBlock x:Name="ProjectNameEditTextBox"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="#111827"
+                                   TextWrapping="Wrap"/>
+
+                        <TextBlock x:Name="ProjectAddressEditTextBox"
+                                   FontSize="12"
+                                   Foreground="#4B5563"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0"/>
+
+                        <TextBlock x:Name="ProjectZipCityEditTextBox"
+                                   FontSize="12"
+                                   Foreground="#4B5563"
+                                   TextWrapping="Wrap"/>
+
+                        <TextBlock x:Name="ProjectManagerLineTextBox"
+                                   FontSize="12"
+                                   Foreground="#4B5563"
+                                   TextWrapping="Wrap"
+                                   Margin="0,12,0,0"/>
+                    </StackPanel>
+
+                    <!-- Ligne de séparation verticale entre boutons/filtres et infos dossier -->
+                    <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
+                            Width="1"
+                            Background="Black"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Stretch"
+                            Margin="0,2,0,2"/>
+
+                    <!-- Ligne 2 : filtres + recherche ... NPA, Ville, Géré par -->
+                    <Grid Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button x:Name="FilterAllButton"        Grid.Column="0" Content="Tous"           Click="FilterAll_Click"        Style="{StaticResource FilterChipActiveStyle}" Margin="0,0,6,0"/>
+                        <Button x:Name="FilterInProgressButton" Grid.Column="1" Content="En cours"       Click="FilterInProgress_Click" Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                        <Button x:Name="FilterExpiredButton"    Grid.Column="2" Content="⚠ Lien expiré" Click="FilterExpired_Click"    Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                        <Button x:Name="FilterValidatedButton"  Grid.Column="3" Content="Validé"         Click="FilterValidated_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
+                        <Button x:Name="FilterRefusedButton"    Grid.Column="4" Content="Refusé / Annulé" Click="FilterRefused_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,10,0"/>
+
+                        <Border Grid.Column="5"
+                                BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6"
+                                Padding="8,0" Background="White" VerticalAlignment="Center" Height="26"
+                                HorizontalAlignment="Stretch">
+                            <!-- ✅ Grid (pas StackPanel) : un StackPanel Horizontal ne force jamais ses
+                                 enfants à s'étirer, même avec HorizontalAlignment="Stretch" — le TextBox
+                                 se retrouvait avec une largeur quasi nulle et devenait impossible à cliquer. -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Path Grid.Column="0"
+                                      Data="{StaticResource IconSearchGeometry}"
+                                      Width="11" Height="11" Stretch="Uniform"
+                                      Fill="Transparent" StrokeThickness="1.6" StrokeLineJoin="Round"
+                                      Stroke="#9CA3AF"
+                                      VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBox x:Name="WorkOrderSearchBox"
+                                         Grid.Column="1"
+                                         BorderThickness="0"
+                                         VerticalAlignment="Center"
+                                         HorizontalAlignment="Stretch"
+                                         FontSize="12"
+                                         Foreground="#374151"
+                                         Background="Transparent"
+                                         TextChanged="WorkOrderSearchBox_TextChanged"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- Ligne 3 : Résumé demande (limité à la largeur de la colonne boutons/filtres) -->
+                    <StackPanel Grid.Row="2" Grid.Column="0"
                                 Orientation="Vertical"
                                 HorizontalAlignment="Stretch"
-                                VerticalAlignment="Center"
-                                Margin="12,0,0,0">
+                                Margin="0,8,0,0">
 
                         <TextBlock Text="Résumé demande"
                                    FontSize="11"
@@ -687,47 +601,67 @@
                                 BorderThickness="1"
                                 CornerRadius="6"
                                 Background="#F9FAFB"
-                                Padding="10,6">
+                                Padding="10,4">
                             <TextBlock x:Name="SelectedWorkOrderDescriptionPreviewTextBlock"
                                        Text=""
                                        Foreground="#374151"
                                        FontSize="12"
                                        TextAlignment="Left"
-                                       TextWrapping="Wrap"
-                                       MaxHeight="44"
-                                       TextTrimming="CharacterEllipsis"/>
+                                       TextWrapping="Wrap"/>
                         </Border>
                     </StackPanel>
-                </Grid>
 
-                <!-- Barre de filtre : chips statut + recherche texte -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
-                    <Button x:Name="FilterAllButton"        Content="Tous"           Click="FilterAll_Click"        Style="{StaticResource FilterChipActiveStyle}" Margin="0,0,6,0"/>
-                    <Button x:Name="FilterInProgressButton" Content="En cours"       Click="FilterInProgress_Click" Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
-                    <Button x:Name="FilterExpiredButton"    Content="⚠ Lien expiré" Click="FilterExpired_Click"    Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
-                    <Button x:Name="FilterValidatedButton"  Content="Validé"         Click="FilterValidated_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
-                    <Button x:Name="FilterRefusedButton"    Content="Refusé / Annulé" Click="FilterRefused_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,16,0"/>
+                    <!-- ✅ Choix du projet autorisé (hidden, remplacé par bandeau coloré) -->
+                    <ComboBox x:Name="ProjectComboBox"
+                          Grid.Row="0"
+                          Grid.Column="0"
+                          Height="26"
+                          Width="110"
+                          FontSize="12"
+                          DisplayMemberPath="Name"
+                          SelectedValuePath="Id"
+                          SelectionChanged="ProjectComboBox_SelectionChanged"
+                          Visibility="Collapsed"/>
 
-                    <!-- Recherche texte libre -->
-                    <Border BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6"
-                            Padding="8,0" Background="White" VerticalAlignment="Center" Height="26">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="🔍" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="#9CA3AF"/>
-                            <TextBox x:Name="WorkOrderSearchBox"
-                                     Width="180"
-                                     BorderThickness="0"
-                                     VerticalAlignment="Center"
-                                     FontSize="12"
-                                     Foreground="#374151"
-                                     Background="Transparent"
-                                     TextChanged="WorkOrderSearchBox_TextChanged"/>
+                    <!-- ✅ Accès Banque de projets : en haut à droite -->
+                    <Button x:Name="ManageProjectsButton"
+                        Grid.Row="0"
+                        Grid.Column="4"
+                        Width="122"
+                        Height="48"
+                        Style="{StaticResource ProjectBankButtonStyle}"
+                        Click="ManageProjects_Click"
+                        VerticalAlignment="Top"
+                        ToolTip="Ouvrir la banque de dossiers">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <TextBlock Text="🗂"
+                                       FontSize="16"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,2"/>
+                            <TextBlock Text="Banque de dossiers"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"/>
                         </StackPanel>
-                    </Border>
-                </StackPanel>
+                    </Button>
+                </Grid>
+            </Grid>
+        </Border>
 
+        <!-- TABLEAU DE BORD -->
+        <Border Grid.Row="1"
+                Background="White"
+                BorderBrush="#E5E7EB"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="10"
+                Effect="{StaticResource CardShadowEffect}">
+
+            <Grid>
                 <!-- ✅ Grille principale -->
                 <DataGrid x:Name="WorkOrdersGrid"
-                          Grid.Row="2"
                           Style="{StaticResource GridStyle}"
                           ColumnWidth="SizeToCells"
                           MouseDoubleClick="WorkOrdersGrid_MouseDoubleClick"
@@ -904,7 +838,7 @@
                                                     <!-- ⚠ Lien entreprise expiré : orange (prioritaire car placé après jaune) -->
                                                     <DataTrigger Binding="{Binding IsCompanyLinkExpired}" Value="True">
                                                         <Setter Property="Background" Value="#FED7AA"/>
-                                                        <Setter Property="ToolTip" Value="Lien entreprise expiré (> 15 jours) — Regénérer dans la fiche"/>
+                                                        <Setter Property="ToolTip" Value="Lien entreprise expiré (> 9 jours) — Regénérer dans la fiche"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -1037,7 +971,7 @@
                                                     <!-- ⚠ Lien signataire expiré : orange (prioritaire car placé après jaune) -->
                                                     <DataTrigger Binding="{Binding IsSignerLinkExpired}" Value="True">
                                                         <Setter Property="Background" Value="#FED7AA"/>
-                                                        <Setter Property="ToolTip" Value="Lien signataire expiré (> 7 jours) — Regénérer dans la fiche"/>
+                                                        <Setter Property="ToolTip" Value="Lien signataire expiré (> 9 jours) — Regénérer dans la fiche"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -1165,20 +1099,31 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="✎"
-                                                ToolTip="Modifier"
+                                        <Button ToolTip="Modifier"
                                                 Style="{StaticResource SmallButtonStyle}"
                                                 Click="EditWorkOrder_Click"
-                                                Margin="0,0,4,0"/>
-                                        <Button Content="📦"
-                                                ToolTip="Archiver"
+                                                Margin="0,0,4,0">
+                                            <Path Data="{StaticResource IconEditGeometry}"
+                                                  Width="12" Height="12" Stretch="Uniform"
+                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                        </Button>
+                                        <Button ToolTip="Archiver"
                                                 Style="{StaticResource SmallButtonStyle}"
                                                 Click="ArchiveWorkOrder_Click"
-                                                Margin="0,0,4,0"/>
-                                        <Button Content="🗑"
-                                                ToolTip="Corbeille"
+                                                Margin="0,0,4,0">
+                                            <Path Data="{StaticResource IconArchiveGeometry}"
+                                                  Width="12" Height="12" Stretch="Uniform"
+                                                  Fill="Transparent" StrokeThickness="1.3" StrokeLineJoin="Round"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                        </Button>
+                                        <Button ToolTip="Corbeille"
                                                 Style="{StaticResource DangerSmallButtonStyle}"
-                                                Click="TrashWorkOrder_Click"/>
+                                                Click="TrashWorkOrder_Click">
+                                            <Path Data="{StaticResource IconTrashGeometry}"
+                                                  Width="12" Height="12" Stretch="Uniform"
+                                                  Fill="Transparent" StrokeThickness="1.3" StrokeLineJoin="Round"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                        </Button>
                                     </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -1189,7 +1134,6 @@
 
                 <!-- ✅ Archives (même zone que WorkOrdersGrid) -->
                 <DataGrid x:Name="ArchivedGrid"
-                          Grid.Row="1"
                           Visibility="Collapsed"
                           Style="{StaticResource GridStyle}"
                           ColumnWidth="SizeToCells"
@@ -1197,7 +1141,6 @@
 
                 <!-- ✅ Corbeille (même zone que WorkOrdersGrid) -->
                 <DataGrid x:Name="TrashedGrid"
-                          Grid.Row="1"
                           Visibility="Collapsed"
                           Style="{StaticResource GridStyle}"
                           ColumnWidth="SizeToCells"

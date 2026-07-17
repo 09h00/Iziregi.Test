@@ -30,6 +30,8 @@ public partial class ArchitectIdentityWindow : Window
     private void LoadFromDb()
     {
         ArchitectNameTextBox.Text = Db.GetArchitectName();
+        ArchitectRefTextBox.Text = Db.GetArchitectRef();
+        ArchitectRef2TextBox.Text = Db.GetArchitectRef2();
 
         var fullAddress = (Db.GetArchitectAddress() ?? "").Replace("\r\n", "\n");
         var parts = fullAddress.Split('\n');
@@ -104,6 +106,8 @@ public partial class ArchitectIdentityWindow : Window
         try
         {
             var name        = (ArchitectNameTextBox.Text    ?? "").Trim();
+            var reference   = (ArchitectRefTextBox.Text     ?? "").Trim();
+            var reference2  = (ArchitectRef2TextBox.Text    ?? "").Trim();
             var addressLine = (ArchitectAddressTextBox.Text ?? "").Trim();
             var zipCity     = (ArchitectZipCityTextBox.Text ?? "").Trim();
             var logo        = (_logoPath ?? "").Trim();
@@ -111,27 +115,32 @@ public partial class ArchitectIdentityWindow : Window
             var address = string.Join("\n", new[] { addressLine, zipCity }.Where(p => p.Length > 0));
 
             Db.SetArchitectName(name);
+            Db.SetArchitectRef(reference);
+            Db.SetArchitectRef2(reference2);
             Db.SetArchitectAddress(address);
             Db.SetArchitectLogoPath(logo);
 
             StatusTextBlock.Text = "Enregistré localement…";
 
             if (!string.IsNullOrWhiteSpace(_serverBaseUrl) && !string.IsNullOrWhiteSpace(_serverApiKey))
-                await SyncToServerAsync(name, address, logo);
+                await SyncToServerAsync(name, reference, reference2, address, logo);
             else
-                StatusTextBlock.Text = "Identité architecte enregistrée (serveur non configuré).";
+                StatusTextBlock.Text = "Identité Société enregistrée (serveur non configuré).";
+
+            // ✅ Retour direct au Dashboard après enregistrement (plus besoin de cliquer "Fermer").
+            Close();
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(
-                $"Impossible d’enregistrer l’identité architecte.\n\n{ex.Message}",
-                "Identité architecte",
+                $"Impossible d’enregistrer l’identité société.\n\n{ex.Message}",
+                "Identité Société",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
     }
 
-    private async System.Threading.Tasks.Task SyncToServerAsync(string name, string address, string logoPath)
+    private async System.Threading.Tasks.Task SyncToServerAsync(string name, string refField, string refField2, string address, string logoPath)
     {
         try
         {
@@ -148,6 +157,8 @@ public partial class ArchitectIdentityWindow : Window
             var payload = new
             {
                 name,
+                refField,
+                refField2,
                 address,
                 logoBase64      = logoBytes != null ? Convert.ToBase64String(logoBytes) : (string?)null,
                 logoContentType = contentType
@@ -169,7 +180,7 @@ public partial class ArchitectIdentityWindow : Window
             var resp = await client.PostAsync(url, content);
             resp.EnsureSuccessStatusCode();
 
-            StatusTextBlock.Text = "✓ Identité architecte enregistrée et synchronisée avec le serveur.";
+            StatusTextBlock.Text = "✓ Identité Société enregistrée et synchronisée avec le serveur.";
         }
         catch (Exception ex)
         {

@@ -248,9 +248,9 @@ public partial class ProjectsWindow : Window
 
         var input = Interaction.InputBox(
             $"Dernière sécurité avant suppression.\n\n" +
-            $"Projet : {projectName}\n\n" +
+            $"Dossier : {projectName}\n\n" +
             $"Recopie exactement ce code : {code}",
-            "Suppression projet — code obligatoire",
+            "Suppression dossier — code obligatoire",
             "");
 
         return string.Equals((input ?? "").Trim(), code, StringComparison.OrdinalIgnoreCase);
@@ -296,7 +296,7 @@ public partial class ProjectsWindow : Window
             return;
 
         _selectedProject = project;
-        StatusTextBlock.Text = $"Projet sélectionné : {project.Name} (clique sur Modifier)";
+        StatusTextBlock.Text = $"Dossier sélectionné : {project.Name} (clique sur Modifier)";
     }
 
     // Bouton XAML: Click="EditProject_Click"
@@ -305,8 +305,8 @@ public partial class ProjectsWindow : Window
         if (_selectedProject == null || _selectedProject.Id <= 0)
         {
             WpfMessageBox.Show(
-                "Sélectionne d’abord un projet dans la liste.",
-                "Projet",
+                "Sélectionne d’abord un dossier dans la liste.",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -318,6 +318,9 @@ public partial class ProjectsWindow : Window
         ProjectAddressLineTextBox.Text = addrLine;
         ProjectZipTextBox.Text = zip;
         ProjectCityTextBox.Text = city;
+
+        ProjectManagerNameTextBox.Text = _selectedProject.ManagerName ?? "";
+        ProjectManagerContactTextBox.Text = _selectedProject.ManagerContact ?? "";
 
         ProjectIsActiveCheckBox.IsChecked = _selectedProject.IsActive;
 
@@ -339,6 +342,9 @@ public partial class ProjectsWindow : Window
         ProjectZipTextBox.Text = "";
         ProjectCityTextBox.Text = "";
 
+        ProjectManagerNameTextBox.Text = "";
+        ProjectManagerContactTextBox.Text = "";
+
         ProjectIsActiveCheckBox.IsChecked = true;
 
         ProjectColorHexTextBox.Text = "#111827";
@@ -346,7 +352,7 @@ public partial class ProjectsWindow : Window
 
         ProjectsGrid.SelectedItem = null;
 
-        StatusTextBlock.Text = "Nouveau projet.";
+        StatusTextBlock.Text = "Nouveau dossier.";
         ProjectNameTextBox.Focus();
     }
 
@@ -368,7 +374,7 @@ public partial class ProjectsWindow : Window
         {
             WpfMessageBox.Show(
                 "Le code postal doit contenir exactement 4 chiffres (ex: 1208).",
-                "Projet",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
 
@@ -378,14 +384,17 @@ public partial class ProjectsWindow : Window
 
         var address = JoinAddress(addressLine, zip, city);
 
+        var managerName = (ProjectManagerNameTextBox.Text ?? "").Trim();
+        var managerContact = (ProjectManagerContactTextBox.Text ?? "").Trim();
+
         var isActive = ProjectIsActiveCheckBox.IsChecked == true;
         var colorHex = NormalizeHex(ProjectColorHexTextBox.Text);
 
         if (string.IsNullOrWhiteSpace(name))
         {
             WpfMessageBox.Show(
-                "Indique le nom du projet.",
-                "Projet",
+                "Indique le nom du dossier.",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
 
@@ -397,7 +406,7 @@ public partial class ProjectsWindow : Window
         {
             WpfMessageBox.Show(
                 "Indique au minimum l’adresse (ligne).",
-                "Projet",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
 
@@ -419,7 +428,7 @@ public partial class ProjectsWindow : Window
 
                 Db.SetCurrentProjectId(newId);
 
-                StatusTextBlock.Text = $"Projet créé : {name}";
+                StatusTextBlock.Text = $"Dossier créé : {name}";
             }
             else
             {
@@ -435,11 +444,12 @@ public partial class ProjectsWindow : Window
                 if (isActive)
                     Db.SetCurrentProjectId(_selectedProject.Id);
 
-                StatusTextBlock.Text = $"Projet mis à jour : {name}";
+                StatusTextBlock.Text = $"Dossier mis à jour : {name}";
             }
 
             // force la couleur via requête dédiée
             Db.SetProjectColorHex(idToUpdateColor, colorHex);
+            Db.SetProjectManager(idToUpdateColor, managerName, managerContact);
 
             LoadProjects();
             SelectProjectByName(name);
@@ -463,8 +473,8 @@ public partial class ProjectsWindow : Window
         catch (Exception ex)
         {
             WpfMessageBox.Show(
-                $"Impossible d’enregistrer le projet.\n\n{ex.Message}",
-                "Projet",
+                $"Impossible d’enregistrer le dossier.\n\n{ex.Message}",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -496,8 +506,8 @@ public partial class ProjectsWindow : Window
         if (_selectedProject == null || _selectedProject.Id <= 0)
         {
             WpfMessageBox.Show(
-                "Sélectionne d’abord un projet.",
-                "Projet",
+                "Sélectionne d’abord un dossier.",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -507,7 +517,7 @@ public partial class ProjectsWindow : Window
         {
             Db.SetProjectActive(_selectedProject.Id, false);
 
-            StatusTextBlock.Text = $"Projet désactivé : {_selectedProject.Name}";
+            StatusTextBlock.Text = $"Dossier désactivé : {_selectedProject.Name}";
 
             LoadProjects();
             ClearForm();
@@ -515,8 +525,8 @@ public partial class ProjectsWindow : Window
         catch (Exception ex)
         {
             WpfMessageBox.Show(
-                $"Impossible de désactiver le projet.\n\n{ex.Message}",
-                "Projet",
+                $"Impossible de désactiver le dossier.\n\n{ex.Message}",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -527,8 +537,8 @@ public partial class ProjectsWindow : Window
         if (_selectedProject == null || _selectedProject.Id <= 0)
         {
             WpfMessageBox.Show(
-                "Sélectionne d’abord un projet.",
-                "Projet",
+                "Sélectionne d’abord un dossier.",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -539,7 +549,7 @@ public partial class ProjectsWindow : Window
             Db.SetProjectActive(_selectedProject.Id, true);
             Db.SetCurrentProjectId(_selectedProject.Id);
 
-            StatusTextBlock.Text = $"Projet réactivé : {_selectedProject.Name}";
+            StatusTextBlock.Text = $"Dossier réactivé : {_selectedProject.Name}";
 
             LoadProjects();
             SelectProjectByName(_selectedProject.Name ?? "");
@@ -547,8 +557,8 @@ public partial class ProjectsWindow : Window
         catch (Exception ex)
         {
             WpfMessageBox.Show(
-                $"Impossible de réactiver le projet.\n\n{ex.Message}",
-                "Projet",
+                $"Impossible de réactiver le dossier.\n\n{ex.Message}",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -562,8 +572,8 @@ public partial class ProjectsWindow : Window
         if (_selectedProject == null || _selectedProject.Id <= 0)
         {
             WpfMessageBox.Show(
-                "Sélectionne d’abord un projet.",
-                "Projet",
+                "Sélectionne d’abord un dossier.",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
@@ -574,14 +584,14 @@ public partial class ProjectsWindow : Window
             var count = Db.GetWorkOrderCountForProject(_selectedProject.Id);
 
             var msg1 =
-                $"Tu es sur le point de supprimer le projet :\n\n" +
+                $"Tu es sur le point de supprimer le dossier :\n\n" +
                 $"{_selectedProject.Name}\n\n" +
-                $"Conséquence : ce projet ET tous les bons de régie associés seront supprimés.\n\n" +
+                $"Conséquence : ce dossier ET tous les bons d'intervention associés seront supprimés.\n\n" +
                 $"Bons liés : {count}";
 
             var ok1 = WpfMessageBox.Show(
                 msg1,
-                "Suppression projet — avertissement 1/2",
+                "Suppression dossier — avertissement 1/2",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
 
@@ -591,13 +601,13 @@ public partial class ProjectsWindow : Window
             var msg2 =
                 $"CONFIRMATION FINALE\n\n" +
                 $"Supprimer définitivement :\n" +
-                $"- Projet : {_selectedProject.Name}\n" +
-                $"- {count} bon(s) de régie + leurs lignes\n\n" +
+                $"- Dossier : {_selectedProject.Name}\n" +
+                $"- {count} bon(s) d'intervention + leurs lignes\n\n" +
                 $"Cette action est irréversible.";
 
             var ok2 = WpfMessageBox.Show(
                 msg2,
-                "Suppression projet — avertissement 2/2",
+                "Suppression dossier — avertissement 2/2",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Error);
 
@@ -608,7 +618,7 @@ public partial class ProjectsWindow : Window
             {
                 WpfMessageBox.Show(
                     "Code incorrect. Suppression annulée.",
-                    "Projet",
+                    "Dossier",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
@@ -616,15 +626,15 @@ public partial class ProjectsWindow : Window
 
             Db.DeleteProjectAndWorkOrders(_selectedProject.Id);
 
-            StatusTextBlock.Text = $"Projet supprimé (et {count} bon(s)) : {_selectedProject.Name}";
+            StatusTextBlock.Text = $"Dossier supprimé (et {count} bon(s)) : {_selectedProject.Name}";
             LoadProjects();
             ClearForm();
         }
         catch (Exception ex)
         {
             WpfMessageBox.Show(
-                $"Impossible de supprimer le projet.\n\n{ex.Message}",
-                "Projet",
+                $"Impossible de supprimer le dossier.\n\n{ex.Message}",
+                "Dossier",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
