@@ -1,6 +1,10 @@
 // ConfigSetupWindow.cs
 // Fenêtre de configuration initiale : affichée au 1er lancement si iziregi-config.json est absent
 // ou si la clé API est vide. Construction 100% code (pas de XAML associé).
+//
+// ✅ Restructurée en onglets (17.07.2026, demande de Joe) : "Connexion" (serveur/clé,
+// inchangé), "Vos données" (export complet, séparé du reste) et "Éthique & confidentialité"
+// (nouvelle page, texte fourni par Joe — hébergement suisse, nLPD, portabilité des données).
 
 using System.Net.Http;
 using System.Windows;
@@ -12,6 +16,8 @@ using WpfColor       = System.Windows.Media.Color;
 using WpfMessageBox  = System.Windows.MessageBox;
 using WpfOrientation = System.Windows.Controls.Orientation;
 using WpfTextBox     = System.Windows.Controls.TextBox;
+using WpfTabControl  = System.Windows.Controls.TabControl;
+using WpfTabItem     = System.Windows.Controls.TabItem;
 
 namespace Iziregi.Test;
 
@@ -23,21 +29,41 @@ internal class ConfigSetupWindow : Window
     public ConfigSetupWindow()
     {
         Title = "Configuration Iziregi";
-        Width  = 500;
-        Height = 380;
+        Width  = 540;
+        Height = 480;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         ResizeMode = ResizeMode.NoResize;
         Background = new SolidColorBrush(WpfColor.FromRgb(245, 245, 245));
 
-        var grid = new Grid { Margin = new Thickness(24, 20, 24, 20) };
+        var tabs = new WpfTabControl { Margin = new Thickness(12) };
+
+        var connectionTab = new WpfTabItem { Header = "Connexion" };
+        connectionTab.Content = BuildConnectionTabContent(out _urlBox, out _keyBox);
+        tabs.Items.Add(connectionTab);
+
+        var dataTab = new WpfTabItem { Header = "Vos données" };
+        dataTab.Content = BuildDataTabContent();
+        tabs.Items.Add(dataTab);
+
+        var ethicsTab = new WpfTabItem { Header = "Éthique & confidentialité" };
+        ethicsTab.Content = BuildEthicsTabContent();
+        tabs.Items.Add(ethicsTab);
+
+        Content = tabs;
+    }
+
+    // =========================
+    // Onglet "Connexion" (inchangé, juste déplacé dans son propre onglet)
+    // =========================
+    private FrameworkElement BuildConnectionTabContent(out WpfTextBox urlBox, out WpfTextBox keyBox)
+    {
+        var grid = new Grid { Margin = new Thickness(16, 20, 16, 16) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // ✅ row 6 : séparateur (17.07.2026)
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // ✅ row 7 : export complet des données
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(145) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -63,14 +89,14 @@ internal class ConfigSetupWindow : Window
         grid.Children.Add(urlLabel);
 
         var existingUrl = IziregiConfigService.Current.ServerBaseUrl;
-        _urlBox = new WpfTextBox
+        urlBox = new WpfTextBox
         {
             Text = string.IsNullOrWhiteSpace(existingUrl) ? "https://iziregi.com" : existingUrl,
             Padding = new Thickness(5, 3, 5, 3),
             Margin = new Thickness(0, 0, 0, 8)
         };
-        Grid.SetRow(_urlBox, 1); Grid.SetColumn(_urlBox, 1);
-        grid.Children.Add(_urlBox);
+        Grid.SetRow(urlBox, 1); Grid.SetColumn(urlBox, 1);
+        grid.Children.Add(urlBox);
 
         // Clé API
         var keyLabel = new TextBlock
@@ -82,14 +108,14 @@ internal class ConfigSetupWindow : Window
         Grid.SetRow(keyLabel, 2); Grid.SetColumn(keyLabel, 0);
         grid.Children.Add(keyLabel);
 
-        _keyBox = new WpfTextBox
+        keyBox = new WpfTextBox
         {
             Text = IziregiConfigService.Current.ServerApiKey,
             Padding = new Thickness(5, 3, 5, 3),
             Margin = new Thickness(0, 0, 0, 8)
         };
-        Grid.SetRow(_keyBox, 2); Grid.SetColumn(_keyBox, 1);
-        grid.Children.Add(_keyBox);
+        Grid.SetRow(keyBox, 2); Grid.SetColumn(keyBox, 1);
+        grid.Children.Add(keyBox);
 
         // Aide
         var help = new TextBlock
@@ -102,7 +128,7 @@ internal class ConfigSetupWindow : Window
         Grid.SetRow(help, 4); Grid.SetColumnSpan(help, 2);
         grid.Children.Add(help);
 
-        // Bouton Enregistrer
+        // Boutons Tester / Enregistrer
         var btnPanel = new StackPanel
         {
             Orientation = WpfOrientation.Horizontal,
@@ -120,57 +146,116 @@ internal class ConfigSetupWindow : Window
         btnPanel.Children.Add(btnSave);
         grid.Children.Add(btnPanel);
 
-        // ✅ Séparateur visuel avant la section "Vos données" (17.07.2026)
-        var separator = new System.Windows.Controls.Separator
-        {
-            Margin = new Thickness(0, 16, 0, 12),
-            Background = new SolidColorBrush(WpfColor.FromRgb(220, 220, 220))
-        };
-        Grid.SetRow(separator, 6); Grid.SetColumnSpan(separator, 2);
-        grid.Children.Add(separator);
+        return grid;
+    }
 
-        // ✅ Export complet des données (17.07.2026, demande de Joe) : contrepartie concrète
-        // à la promesse de portabilité des données dans les futures CGV — permet à
-        // l'utilisateur de récupérer l'intégralité de ses données (tous projets, tous bons,
-        // listes, comptabilité) dans un format ouvert (CSV dans un zip), utilisable même sans
-        // Iziregi installé. Voir ExportService.ExportAllData (introspection dynamique du
-        // schéma, donc toujours à jour même si de nouvelles colonnes sont ajoutées plus tard).
-        var dataPanel = new StackPanel();
+    // =========================
+    // Onglet "Vos données" (17.07.2026, demande de Joe) : contrepartie concrète à la
+    // promesse de portabilité des données dans les futures CGV — permet à l'utilisateur de
+    // récupérer l'intégralité de ses données (tous projets, tous bons, listes, comptabilité)
+    // dans un format ouvert (CSV dans un zip), utilisable même sans Iziregi installé. Voir
+    // ExportService.ExportAllData (introspection dynamique du schéma, donc toujours à jour
+    // même si de nouvelles colonnes sont ajoutées plus tard).
+    // =========================
+    private FrameworkElement BuildDataTabContent()
+    {
+        var panel = new StackPanel { Margin = new Thickness(16, 20, 16, 16) };
 
         var dataTitle = new TextBlock
         {
             Text = "Vos données",
-            FontSize = 12,
+            FontSize = 14,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(WpfColor.FromRgb(17, 24, 39)),
-            Margin = new Thickness(0, 0, 0, 4)
+            Margin = new Thickness(0, 0, 0, 10)
         };
-        dataPanel.Children.Add(dataTitle);
+        panel.Children.Add(dataTitle);
 
         var dataDesc = new TextBlock
         {
             Text = "Exportez l'intégralité de vos données (projets, bons, listes, comptabilité) dans des fichiers CSV, lisibles avec Excel ou tout tableur, même sans Iziregi.",
-            FontSize = 11,
+            FontSize = 12,
             Foreground = new SolidColorBrush(Colors.Gray),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 14)
         };
-        dataPanel.Children.Add(dataDesc);
+        panel.Children.Add(dataDesc);
 
         var btnExportAll = new WpfButton
         {
             Content = "Exporter toutes mes données…",
-            Height = 30,
+            Height = 32,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
-            Padding = new Thickness(12, 0, 12, 0)
+            Padding = new Thickness(14, 0, 14, 0)
         };
         btnExportAll.Click += (_, _) => ExportAllData();
-        dataPanel.Children.Add(btnExportAll);
+        panel.Children.Add(btnExportAll);
 
-        Grid.SetRow(dataPanel, 7); Grid.SetColumnSpan(dataPanel, 2);
-        grid.Children.Add(dataPanel);
+        return panel;
+    }
 
-        Content = grid;
+    // =========================
+    // Onglet "Éthique & confidentialité" (17.07.2026, demande de Joe) : texte fourni tel
+    // quel par Joe — présentation de l'hébergement suisse (Infomaniak, ISO 27001, Swiss
+    // Hosting/Swiss Made Software), non-revente des données, portabilité, conformité nLPD.
+    // =========================
+    private FrameworkElement BuildEthicsTabContent()
+    {
+        var panel = new StackPanel { Margin = new Thickness(16, 20, 16, 16) };
+
+        var ethicsTitle = new TextBlock
+        {
+            Text = "Vos données, en toute confiance",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        panel.Children.Add(ethicsTitle);
+
+        var ethicsIntro = new TextBlock
+        {
+            Text = "Iziregi est hébergé exclusivement en Suisse, chez Infomaniak — hébergeur suisse indépendant (fondé à Genève en 1994), certifié ISO 27001 (sécurité de l'information) et labellisé Swiss Hosting / Swiss Made Software. Vos données ne quittent jamais le territoire suisse.",
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        panel.Children.Add(ethicsIntro);
+
+        AddEthicsBullet(panel, "Hébergement 100% souverain, sur des serveurs suisses gérés par un hébergeur suisse certifié");
+        AddEthicsBullet(panel, "Aucune donnée n'est partagée, revendue ou exploitée à des fins commerciales ou publicitaires");
+        AddEthicsBullet(panel, "Vous pouvez à tout moment exporter l'intégralité de vos données dans un format ouvert (Excel, tableur), sans dépendre d'Iziregi pour les consulter");
+        AddEthicsBullet(panel, "Conforme à la législation suisse sur la protection des données (nLPD)");
+
+        return panel;
+    }
+
+    private static void AddEthicsBullet(StackPanel panel, string text)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var check = new TextBlock
+        {
+            Text = "✓",
+            FontSize = 13,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129)), // #10B981
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        Grid.SetColumn(check, 0);
+        row.Children.Add(check);
+
+        var label = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap
+        };
+        Grid.SetColumn(label, 1);
+        row.Children.Add(label);
+
+        panel.Children.Add(row);
     }
 
     private void ExportAllData()
