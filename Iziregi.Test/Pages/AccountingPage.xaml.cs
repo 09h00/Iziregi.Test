@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 using System.Windows;
 using System.Windows.Controls;
@@ -69,6 +70,10 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             UpdateChartScaleFromActualWidth();
             RenderTotalsTableAndChart();
         };
+
+        // ✅ Graphique "Tâches par catégorie" (17.07.2026) : recalcule sa propre échelle au
+        // resize, indépendamment du graphique par entreprise ci-dessus.
+        CategoryChartItems.SizeChanged += (_, __) => RenderTaskCategoryChart();
     }
 
     // =========================
@@ -94,6 +99,22 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         public double TotalTtc { get; set; }
         public double BarWidth { get; set; }
         public MediaBrush BarBrush { get; set; } = MediaBrushes.SteelBlue;
+    }
+
+    // ✅ Graphique "Tâches par catégorie" (17.07.2026, demande de Joe).
+    private class TaskCategoryChartRow
+    {
+        public string Category { get; set; } = "";
+        public int Count { get; set; }
+        public double BarWidth { get; set; }
+    }
+
+    // ✅ Ne reprend que le champ nécessaire (Category) : les tâches sont stockées en JSON
+    // (voir PlanningPage.xaml.cs, TaskRowState, non réutilisable ici car classe privée) --
+    // les autres propriétés du fichier sont simplement ignorées par le désérialiseur.
+    private class TaskCategoryJsonRow
+    {
+        public string Category { get; set; } = "";
     }
 
     private class WorkOrderAccountingRow
@@ -171,6 +192,10 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
     // =========================
     public void Reload()
     {
+        // ✅ Indépendant du reste (pas de notion de date/entreprise) : recalculé à chaque
+        // Reload(), y compris quand il n'y a pas de bons de régie (bonne pratique = 0/vide).
+        RenderTaskCategoryChart();
+
         var projectIdNullable = Db.GetCurrentProjectId();
         if (!projectIdNullable.HasValue || projectIdNullable.Value <= 0)
         {
@@ -471,6 +496,59 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         ChartItems.ItemsSource = chart;
         ChartItems.Items.Refresh();
+    }
+
+    // ✅ Graphique "Tâches par catégorie" (17.07.2026, demande de Joe) : compte les valeurs
+    // de la colonne Catégorie du tableau des Tâches (page Planning) pour le projet courant.
+    // Indépendant des filtres date/entreprise ci-dessus (les tâches n'ont pas de date) --
+    // recalculé à chaque Reload() de la page (donc à chaque changement de projet).
+    private void RenderTaskCategoryChart()
+    {
+        var counts = new List<TaskCategoryChartRow>();
+        var projectId = Db.GetCurrentProjectId();
+
+        if (projectId.HasValue && projectId.Value > 0)
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Iziregi", "Planning");
+            var filePath = Path.Combine(dir, $"planning-tasks-{projectId.Value}.json");
+
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(filePath);
+                    var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var rows = JsonSerializer.Deserialize<List<TaskCategoryJsonRow>>(json, opts) ?? new();
+
+                    counts = rows
+                        .GroupBy(r => string.IsNullOrWhiteSpace(r.Category) ? "Sans catégorie" : r.Category.Trim())
+                        .Select(g => new TaskCategoryChartRow { Category = g.Key, Count = g.Count() })
+                        .OrderByDescending(r => r.Count)
+                        .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
+                catch
+                {
+                    // Fichier illisible/corrompu : graphique vide plutôt que de faire planter la page.
+                }
+            }
+        }
+
+        var w = CategoryChartItems.ActualWidth;
+        var usable = w - (140 + 4 + 70 + 30);
+        var maxBarPx = Math.Max(140, usable);
+
+        double max = counts.Count == 0 ? 0 : counts.Max(r => r.Count);
+        foreach (var r in counts)
+            r.BarWidth = (max <= 0) ? 0 : Math.Round((r.Count / (double)max) * maxBarPx, 0);
+
+        if (CategoryChartTotalTextBlock != null)
+            CategoryChartTotalTextBlock.Text = counts.Sum(r => r.Count).ToString();
+
+        CategoryChartItems.ItemsSource = counts;
+        CategoryChartItems.Items.Refresh();
     }
 
     private void ChartSort_Changed(object sender, SelectionChangedEventArgs e)
