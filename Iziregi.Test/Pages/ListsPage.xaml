@@ -366,6 +366,22 @@
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultTaskCategoryComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}"/>
 
+                    <!-- ✅ Boutons couleur (17.07.2026, demande de Joe) : indépendant des couleurs
+                         d'entreprises, même bloc en miroir. -->
+                    <Border DockPanel.Dock="Top"
+						BorderBrush="#E2E2E2"
+						BorderThickness="1"
+						CornerRadius="6"
+						Padding="8"
+						Background="#FFFFFF"
+						Margin="0,0,0,10">
+                        <WrapPanel VerticalAlignment="Center">
+                            <Border x:Name="SelectedTaskCategoryColorPreview" Width="24" Height="24" Background="Transparent" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="3" Margin="0,0,8,0"/>
+                            <Button Content="Couleur..." Height="24" Width="80" Margin="0,0,8,0" Click="PickTaskCategoryColor_Click" Style="{StaticResource SmallButtonStyle}"/>
+                            <Button Content="✕" Height="24" Width="24" ToolTip="Effacer" Click="ClearTaskCategoryColor_Click" Style="{StaticResource SmallButtonStyle}"/>
+                        </WrapPanel>
+                    </Border>
+
                     <Border x:Name="TaskCategoriesListBorder"
 						Background="Transparent"
 						BorderThickness="2"
@@ -374,7 +390,16 @@
 						PreviewMouseLeftButtonDown="TaskCategoriesListBorder_PreviewMouseLeftButtonDown">
                         <ListBox x:Name="TaskCategoriesListBox"
 							GotFocus="TaskCategoriesListBox_GotFocus"
-							SelectionChanged="AnyListBox_SelectionChanged"/>
+							SelectionChanged="TaskCategoriesListBox_SelectionChanged">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="10" Height="10" CornerRadius="5" BorderThickness="1" BorderBrush="#666" Background="{Binding ColorBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </Border>
                 </DockPanel>
             </GroupBox>

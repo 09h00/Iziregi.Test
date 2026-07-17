@@ -546,7 +546,7 @@
                                                             <Border Width="{Binding BarWidth}"
                                                                     Height="16"
                                                                     CornerRadius="2"
-                                                                    Background="#2563EB"
+                                                                    Background="{Binding BarBrush}"
                                                                     BorderBrush="#D1D5DB"
                                                                     BorderThickness="1"
                                                                     HorizontalAlignment="Left"/>

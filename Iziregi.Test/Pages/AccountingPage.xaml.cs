@@ -107,6 +107,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         public string Category { get; set; } = "";
         public int Count { get; set; }
         public double BarWidth { get; set; }
+        public MediaBrush BarBrush { get; set; } = MediaBrushes.SteelBlue;
     }
 
     // ✅ Ne reprend que le champ nécessaire (Category) : les tâches sont stockées en JSON
@@ -522,9 +523,21 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
                     var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                     var rows = JsonSerializer.Deserialize<List<TaskCategoryJsonRow>>(json, opts) ?? new();
 
+                    // ✅ Couleurs (17.07.2026, demande de Joe) : mêmes règles que le graphique
+                    // entreprise -- pas de couleur définie (ou "Sans catégorie") -> SteelBlue.
+                    var colorMap = Db.GetTaskCategoryColorMap(projectId.Value);
+
                     counts = rows
                         .GroupBy(r => string.IsNullOrWhiteSpace(r.Category) ? "Sans catégorie" : r.Category.Trim())
-                        .Select(g => new TaskCategoryChartRow { Category = g.Key, Count = g.Count() })
+                        .Select(g =>
+                        {
+                            colorMap.TryGetValue(g.Key, out var hex);
+                            var barBrush = BrushFromHexOrDefault(hex, MediaBrushes.Transparent);
+                            if (barBrush == null || barBrush == MediaBrushes.Transparent)
+                                barBrush = MediaBrushes.SteelBlue;
+
+                            return new TaskCategoryChartRow { Category = g.Key, Count = g.Count(), BarBrush = barBrush };
+                        })
                         .OrderByDescending(r => r.Count)
                         .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)
                         .ToList();

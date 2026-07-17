@@ -113,6 +113,17 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         return CompaniesListBox.SelectedItem as string;
     }
 
+    // ✅ Couleurs Catégories (17.07.2026) : TaskCategoriesListBox est maintenant lié à des
+    // TaskCategoryListItem (comme CompaniesListBox), pas de simples chaînes -- même
+    // mécanisme de secours que GetSelectedCompanyName ci-dessus.
+    private string? GetSelectedTaskCategoryName()
+    {
+        if (TaskCategoriesListBox.SelectedItem is TaskCategoryListItem tci)
+            return tci.Name;
+
+        return TaskCategoriesListBox.SelectedItem as string;
+    }
+
     private string? GetActiveSelectedItemText()
     {
         return _activeList switch
@@ -123,7 +134,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             ActiveListKind.Places => PlacesListBox?.SelectedItem as string,
             ActiveListKind.Etages => EtagesListBox?.SelectedItem as string,
             ActiveListKind.PlanningTextZones => PlanningTextZonesListBox?.SelectedItem as string,
-            ActiveListKind.TaskCategories => TaskCategoriesListBox?.SelectedItem as string,
+            ActiveListKind.TaskCategories => GetSelectedTaskCategoryName(),
             ActiveListKind.TaskUrgencies => TaskUrgenciesListBox?.SelectedItem as string,
             _ => null
         };
@@ -192,6 +203,9 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     {
         public List<string> Items { get; } = new();
         public Dictionary<string, string> CompanyColorMap { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // ✅ Couleurs Catégories (17.07.2026) : même principe que CompanyColorMap ci-dessus,
+        // pour que copier/coller une liste "Cat." (dans le même projet) conserve ses couleurs.
+        public Dictionary<string, string> TaskCategoryColorMap { get; } = new(StringComparer.OrdinalIgnoreCase);
         public ActiveListKind Kind { get; set; }
         public long SourceProjectId { get; set; }
     }
@@ -207,6 +221,23 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         public System.Windows.Media.Brush ColorBrush { get; }
 
         public CompanyListItem(string name, System.Windows.Media.Brush colorBrush)
+        {
+            Name = name;
+            ColorBrush = colorBrush;
+        }
+
+        public override string ToString() => Name;
+    }
+
+    // =========================
+    // Item Catégorie (pastille + nom) — indépendant des entreprises, 17.07.2026.
+    // =========================
+    private sealed class TaskCategoryListItem
+    {
+        public string Name { get; }
+        public System.Windows.Media.Brush ColorBrush { get; }
+
+        public TaskCategoryListItem(string name, System.Windows.Media.Brush colorBrush)
         {
             Name = name;
             ColorBrush = colorBrush;
@@ -306,7 +337,11 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         PlacesListBox.ItemsSource = places;
         EtagesListBox.ItemsSource = etages;
         PlanningTextZonesListBox.ItemsSource = planningTextZones;
-        TaskCategoriesListBox.ItemsSource = taskCategories;
+
+        TaskCategoriesListBox.ItemsSource = taskCategories
+            .Select(name => new TaskCategoryListItem(name, BuildTaskCategoryColorBrush(projectId, name)))
+            .ToList();
+
         TaskUrgenciesListBox.ItemsSource = taskUrgencies;
 
         var reserveDefaults = Db.WithEmptyOption(reserves);
@@ -371,6 +406,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         LabelTaskUrgencyTextBox.Text = Db.GetLabelTaskUrgency(projectId);
 
         RefreshSelectedCompanyColorPreview();
+        RefreshSelectedTaskCategoryColorPreview();
 
         RefreshCommonButtonsState();
         RefreshActiveListBorders();
@@ -390,6 +426,14 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
 
     private void AnyListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        RefreshCommonButtonsState();
+    }
+
+    // ✅ Couleurs Catégories (17.07.2026) : handler dédié (comme Companies) au lieu du
+    // générique AnyListBox_SelectionChanged, pour rafraîchir l'aperçu de couleur sélectionné.
+    private void TaskCategoriesListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        RefreshSelectedTaskCategoryColorPreview();
         RefreshCommonButtonsState();
     }
 
@@ -646,6 +690,17 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                         payload.CompanyColorMap[name] = hex;
                 }
             }
+            else if (_activeList == ActiveListKind.TaskCategories)
+            {
+                var colors = Db.GetTaskCategoryColorMap(projectId);
+                foreach (var kv in colors)
+                {
+                    var name = (kv.Key ?? "").Trim();
+                    var hex = (kv.Value ?? "").Trim();
+                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(hex))
+                        payload.TaskCategoryColorMap[name] = hex;
+                }
+            }
 
             _listClipboard = payload;
             RefreshCommonButtonsState();
@@ -717,7 +772,15 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                     case ActiveListKind.Places: Db.InsertPlace(targetProjectId, name); break;
                     case ActiveListKind.Etages: Db.InsertEtage(targetProjectId, name); break;
                     case ActiveListKind.PlanningTextZones: Db.InsertPlanningTextZone(targetProjectId, name); break;
-                    case ActiveListKind.TaskCategories: Db.InsertTaskCategory(targetProjectId, name); break;
+                    case ActiveListKind.TaskCategories:
+                        Db.InsertTaskCategory(targetProjectId, name);
+                        // N'applique la couleur copiée QUE si la source du clipboard est le même projet
+                        if (_listClipboard.SourceProjectId == targetProjectId)
+                        {
+                            if (_listClipboard.TaskCategoryColorMap.TryGetValue(name, out var catHex) && !string.IsNullOrWhiteSpace(catHex))
+                                Db.SetTaskCategoryColorHex(targetProjectId, name, catHex);
+                        }
+                        break;
                     case ActiveListKind.TaskUrgencies: Db.InsertTaskUrgency(targetProjectId, name); break;
                     default: continue;
                 }
@@ -892,6 +955,134 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 return;
 
             Db.DeleteCompanyColor(projectId, companyName);
+            // Forcer le reload de la page Planning pour prendre en compte la suppression
+            Reload();
+            try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur couleur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    // =========================
+    // ✅ Couleur Catégorie (17.07.2026) — miroir exact du bloc "Couleur Entreprise" ci-dessus,
+    // indépendant (table/UI séparées, voir TaskCategoryColors dans Db.cs).
+    // =========================
+    private void RefreshSelectedTaskCategoryColorPreview()
+    {
+        try
+        {
+            var projectId = Db.GetCurrentProjectId();
+            if (!projectId.HasValue || projectId.Value <= 0)
+            {
+                SetSelectedTaskCategoryColorPreview(null);
+                return;
+            }
+
+            var categoryName = GetSelectedTaskCategoryName();
+            if (string.IsNullOrWhiteSpace(categoryName))
+            {
+                SetSelectedTaskCategoryColorPreview(null);
+                return;
+            }
+
+            var hex = Db.GetTaskCategoryColorHex(projectId.Value, categoryName);
+            SetSelectedTaskCategoryColorPreview(hex);
+        }
+        catch
+        {
+            SetSelectedTaskCategoryColorPreview(null);
+        }
+    }
+
+    private System.Windows.Media.Brush BuildTaskCategoryColorBrush(long projectId, string categoryName)
+    {
+        try
+        {
+            var hex = Db.GetTaskCategoryColorHex(projectId, categoryName);
+            if (string.IsNullOrWhiteSpace(hex))
+                return MediaBrushes.Transparent;
+
+            return (System.Windows.Media.SolidColorBrush)(
+                new System.Windows.Media.BrushConverter().ConvertFrom(hex) ?? MediaBrushes.Transparent);
+        }
+        catch
+        {
+            return MediaBrushes.Transparent;
+        }
+    }
+
+    private void SetSelectedTaskCategoryColorPreview(string? colorHex)
+    {
+        if (SelectedTaskCategoryColorPreview == null) return;
+
+        if (string.IsNullOrWhiteSpace(colorHex))
+        {
+            SelectedTaskCategoryColorPreview.Background = MediaBrushes.Transparent;
+            return;
+        }
+
+        try
+        {
+            var brush = (System.Windows.Media.SolidColorBrush)(
+                new System.Windows.Media.BrushConverter().ConvertFrom(colorHex) ?? MediaBrushes.Transparent);
+
+            SelectedTaskCategoryColorPreview.Background = brush;
+        }
+        catch
+        {
+            SelectedTaskCategoryColorPreview.Background = MediaBrushes.Transparent;
+        }
+    }
+
+    private void PickTaskCategoryColor_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+
+            var categoryName = GetSelectedTaskCategoryName();
+            if (string.IsNullOrWhiteSpace(categoryName))
+                return;
+
+            var currentHex = Db.GetTaskCategoryColorHex(projectId, categoryName);
+
+            var dlg = new Forms.ColorDialog { FullOpen = true };
+            if (!string.IsNullOrWhiteSpace(currentHex))
+            {
+                try { dlg.Color = System.Drawing.ColorTranslator.FromHtml(currentHex); }
+                catch { }
+            }
+
+            if (dlg.ShowDialog() != Forms.DialogResult.OK)
+                return;
+
+            var c = dlg.Color;
+            var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            Db.SetTaskCategoryColorHex(projectId, categoryName, hex);
+
+            // Forcer le reload de la page Planning pour prendre en compte la nouvelle couleur
+            Reload();
+            try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur couleur", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ClearTaskCategoryColor_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+
+            var categoryName = GetSelectedTaskCategoryName();
+            if (string.IsNullOrWhiteSpace(categoryName))
+                return;
+
+            Db.DeleteTaskCategoryColor(projectId, categoryName);
             // Forcer le reload de la page Planning pour prendre en compte la suppression
             Reload();
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }

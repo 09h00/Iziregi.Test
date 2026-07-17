@@ -125,6 +125,17 @@ public static class Db
             );
         """);
 
+        // ✅ NOUVEAU : Couleurs des catégories de tâches (par projet) — indépendant des
+        // couleurs d'entreprises (demande de Joe, 17.07.2026), même schéma en miroir.
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS TaskCategoryColors (
+                ProjectId INTEGER NOT NULL,
+                CategoryName TEXT NOT NULL,
+                ColorHex TEXT NOT NULL,
+                PRIMARY KEY (ProjectId, CategoryName)
+            );
+        """);
+
         // ✅ NOUVEAU : Liste "Zone de texte planning" (par projet)
         con.Execute("""
             CREATE TABLE IF NOT EXISTS PlanningTextZones (
@@ -805,6 +816,9 @@ public static class Db
             "DELETE FROM TaskCategories WHERE ProjectId=@ProjectId AND Name=@Name;",
             new { ProjectId = projectId, Name = name }
         );
+
+        // ✅ supprime aussi la couleur associée
+        DeleteTaskCategoryColor(projectId, name);
     }
 
     public static void RenameTaskCategory(long projectId, string oldName, string newName)
@@ -833,6 +847,9 @@ public static class Db
         );
 
         tx.Commit();
+
+        // ✅ renommer aussi la couleur associée
+        RenameTaskCategoryColor(projectId, oldName, newName);
     }
 
     // =========================
@@ -1004,6 +1021,115 @@ public static class Db
         foreach (var r in rows)
         {
             var name = (r.CompanyName ?? "").Trim();
+            var hex = (r.ColorHex ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(hex))
+                dict[name] = hex;
+        }
+
+        return dict;
+    }
+
+    // =========================
+    // ✅ Couleurs Catégories de tâches — par projet (indépendant des couleurs
+    // d'entreprises, demande de Joe, 17.07.2026 : même mécanisme, en miroir exact).
+    // =========================
+    public static string? GetTaskCategoryColorHex(long projectId, string categoryName)
+    {
+        categoryName = (categoryName ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(categoryName))
+            return null;
+
+        using var con = Open();
+        con.Open();
+
+        return con.ExecuteScalar<string?>(
+            "SELECT ColorHex FROM TaskCategoryColors WHERE ProjectId=@ProjectId AND CategoryName=@CategoryName;",
+            new { ProjectId = projectId, CategoryName = categoryName }
+        );
+    }
+
+    public static void SetTaskCategoryColorHex(long projectId, string categoryName, string colorHex)
+    {
+        categoryName = (categoryName ?? "").Trim();
+        colorHex = (colorHex ?? "").Trim();
+
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(categoryName) || string.IsNullOrWhiteSpace(colorHex))
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute("""
+            INSERT INTO TaskCategoryColors(ProjectId, CategoryName, ColorHex)
+            VALUES (@ProjectId, @CategoryName, @ColorHex)
+            ON CONFLICT(ProjectId, CategoryName) DO UPDATE SET ColorHex=excluded.ColorHex;
+        """, new { ProjectId = projectId, CategoryName = categoryName, ColorHex = colorHex });
+    }
+
+    public static void DeleteTaskCategoryColor(long projectId, string categoryName)
+    {
+        categoryName = (categoryName ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(categoryName))
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute(
+            "DELETE FROM TaskCategoryColors WHERE ProjectId=@ProjectId AND CategoryName=@CategoryName;",
+            new { ProjectId = projectId, CategoryName = categoryName }
+        );
+    }
+
+    public static void RenameTaskCategoryColor(long projectId, string oldName, string newName)
+    {
+        oldName = (oldName ?? "").Trim();
+        newName = (newName ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName)
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        // si une couleur existe déjà pour le nouveau nom, on supprime l'ancienne
+        var existsNew = con.ExecuteScalar<long>(
+            "SELECT COUNT(1) FROM TaskCategoryColors WHERE ProjectId=@ProjectId AND CategoryName=@CategoryName;",
+            new { ProjectId = projectId, CategoryName = newName }
+        );
+
+        if (existsNew > 0)
+        {
+            con.Execute(
+                "DELETE FROM TaskCategoryColors WHERE ProjectId=@ProjectId AND CategoryName=@OldName;",
+                new { ProjectId = projectId, OldName = oldName }
+            );
+            return;
+        }
+
+        con.Execute("""
+            UPDATE TaskCategoryColors
+            SET CategoryName=@NewName
+            WHERE ProjectId=@ProjectId AND CategoryName=@OldName;
+        """, new { ProjectId = projectId, OldName = oldName, NewName = newName });
+    }
+
+    public static Dictionary<string, string> GetTaskCategoryColorMap(long projectId)
+    {
+        if (projectId <= 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        using var con = Open();
+        con.Open();
+
+        var rows = con.Query<(string CategoryName, string ColorHex)>(
+            "SELECT CategoryName, ColorHex FROM TaskCategoryColors WHERE ProjectId=@ProjectId;",
+            new { ProjectId = projectId }
+        ).ToList();
+
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var name = (r.CategoryName ?? "").Trim();
             var hex = (r.ColorHex ?? "").Trim();
             if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(hex))
                 dict[name] = hex;
