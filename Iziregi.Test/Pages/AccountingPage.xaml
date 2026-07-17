@@ -368,8 +368,16 @@
 
                             </Grid>
 
-                            <!-- Graphique -->
-                            <Border Grid.Column="2"
+                            <!-- Graphiques : entreprise + catégorie, empilés, même largeur/hauteur
+                                 (demande de Joe, 17.07.2026 : "même grandeur", "placé sous l'autre"). -->
+                            <Grid Grid.Column="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="12"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0"
                                     BorderBrush="#D1D5DB"
                                     BorderThickness="1"
                                     CornerRadius="10"
@@ -463,104 +471,108 @@
                                 </DockPanel>
                             </Border>
 
-                        </Grid>
-                    </Grid>
+                            <!-- ✅ Tâches par catégorie (demande de Joe, 17.07.2026) : indépendant des
+                                 filtres date/entreprise ci-dessus (ceux-ci portent sur les bons de
+                                 régie ; la catégorie est un champ du tableau des Tâches de la page
+                                 Planning, sans notion de date) — reflète le projet courant dans son
+                                 intégralité. -->
+                            <Border Grid.Row="2"
+                                    BorderBrush="#D1D5DB"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="12"
+                                    Background="White"
+                                    Effect="{StaticResource CardShadowEffect}">
+                                <DockPanel>
 
-                    <!-- ✅ Tâches par catégorie (demande de Joe, 17.07.2026) : indépendant des
-                         filtres date/entreprise ci-dessus (ceux-ci portent sur les bons de
-                         régie ; la catégorie est un champ du tableau des Tâches de la page
-                         Planning, sans notion de date) — reflète le projet courant dans son
-                         intégralité. Même style de graphique en barres que celui d'entreprise
-                         ci-dessus, réutilisé tel quel pour rester cohérent. -->
-                    <Border BorderBrush="#D1D5DB"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="12"
-                            Background="White"
-                            Margin="0,12,0,0"
-                            Effect="{StaticResource CardShadowEffect}">
-                        <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top"
+                                               Text="Tâches par catégorie"
+                                               FontWeight="Bold"
+                                               Margin="0,0,0,6"/>
 
-                            <TextBlock DockPanel.Dock="Top"
-                                       Text="Tâches par catégorie"
-                                       FontWeight="Bold"
-                                       Margin="0,0,0,6"/>
+                                    <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
 
-                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Total tâches"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"/>
 
-                                <TextBlock Grid.Column="0"
-                                           Text="Total tâches"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="CategoryChartTotalTextBlock"
+                                                   Grid.Column="1"
+                                                   Text="0"
+                                                   FontWeight="SemiBold"
+                                                   TextAlignment="Right"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
 
-                                <TextBlock x:Name="CategoryChartTotalTextBlock"
-                                           Grid.Column="1"
-                                           Text="0"
-                                           FontWeight="SemiBold"
-                                           TextAlignment="Right"
-                                           VerticalAlignment="Center"/>
+                                    <Border DockPanel.Dock="Top"
+                                            BorderBrush="#D1D5DB"
+                                            BorderThickness="0,0,0,1"
+                                            Margin="0,4,0,20"/>
+
+                                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl x:Name="CategoryChartItems">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Vertical"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,0,0,6">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="140"/>
+                                                            <ColumnDefinition Width="4"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="70"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Category}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextWrapping="Wrap"
+                                                                   VerticalAlignment="Center"/>
+
+                                                        <Border Grid.Column="2"
+                                                                Height="16"
+                                                                CornerRadius="3"
+                                                                Background="#FFFFFF">
+                                                            <Border Width="{Binding BarWidth}"
+                                                                    Height="16"
+                                                                    CornerRadius="2"
+                                                                    Background="#2563EB"
+                                                                    BorderBrush="#D1D5DB"
+                                                                    BorderThickness="1"
+                                                                    HorizontalAlignment="Left"/>
+                                                        </Border>
+
+                                                        <TextBlock Grid.Column="3"
+                                                                   Width="70"
+                                                                   Margin="6,0,0,4"
+                                                                   TextAlignment="Right"
+                                                                   Text="{Binding Count}"
+                                                                   FontWeight="SemiBold"
+                                                                   HorizontalAlignment="Right"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                </DockPanel>
+                            </Border>
+
                             </Grid>
 
-                            <Border DockPanel.Dock="Top"
-                                    BorderBrush="#D1D5DB"
-                                    BorderThickness="0,0,0,1"
-                                    Margin="0,4,0,20"/>
-
-                            <ItemsControl x:Name="CategoryChartItems">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Vertical"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,0,0,6">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="140"/>
-                                                <ColumnDefinition Width="4"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="70"/>
-                                            </Grid.ColumnDefinitions>
-
-                                            <TextBlock Grid.Column="0"
-                                                       Text="{Binding Category}"
-                                                       FontWeight="SemiBold"
-                                                       TextWrapping="Wrap"
-                                                       VerticalAlignment="Center"/>
-
-                                            <Border Grid.Column="2"
-                                                    Height="16"
-                                                    CornerRadius="3"
-                                                    Background="#FFFFFF">
-                                                <Border Width="{Binding BarWidth}"
-                                                        Height="16"
-                                                        CornerRadius="2"
-                                                        Background="#2563EB"
-                                                        BorderBrush="#D1D5DB"
-                                                        BorderThickness="1"
-                                                        HorizontalAlignment="Left"/>
-                                            </Border>
-
-                                            <TextBlock Grid.Column="3"
-                                                       Width="70"
-                                                       Margin="6,0,0,4"
-                                                       TextAlignment="Right"
-                                                       Text="{Binding Count}"
-                                                       FontWeight="SemiBold"
-                                                       HorizontalAlignment="Right"
-                                                       VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                        </DockPanel>
-                    </Border>
+                        </Grid>
+                    </Grid>
 
                 </StackPanel>
             </Border>
