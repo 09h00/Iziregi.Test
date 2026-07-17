@@ -24,7 +24,7 @@ internal class ConfigSetupWindow : Window
     {
         Title = "Configuration Iziregi";
         Width  = 500;
-        Height = 260;
+        Height = 380;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         ResizeMode = ResizeMode.NoResize;
         Background = new SolidColorBrush(WpfColor.FromRgb(245, 245, 245));
@@ -36,6 +36,8 @@ internal class ConfigSetupWindow : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // ✅ row 6 : séparateur (17.07.2026)
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // ✅ row 7 : export complet des données
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(145) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -118,7 +120,89 @@ internal class ConfigSetupWindow : Window
         btnPanel.Children.Add(btnSave);
         grid.Children.Add(btnPanel);
 
+        // ✅ Séparateur visuel avant la section "Vos données" (17.07.2026)
+        var separator = new System.Windows.Controls.Separator
+        {
+            Margin = new Thickness(0, 16, 0, 12),
+            Background = new SolidColorBrush(WpfColor.FromRgb(220, 220, 220))
+        };
+        Grid.SetRow(separator, 6); Grid.SetColumnSpan(separator, 2);
+        grid.Children.Add(separator);
+
+        // ✅ Export complet des données (17.07.2026, demande de Joe) : contrepartie concrète
+        // à la promesse de portabilité des données dans les futures CGV — permet à
+        // l'utilisateur de récupérer l'intégralité de ses données (tous projets, tous bons,
+        // listes, comptabilité) dans un format ouvert (CSV dans un zip), utilisable même sans
+        // Iziregi installé. Voir ExportService.ExportAllData (introspection dynamique du
+        // schéma, donc toujours à jour même si de nouvelles colonnes sont ajoutées plus tard).
+        var dataPanel = new StackPanel();
+
+        var dataTitle = new TextBlock
+        {
+            Text = "Vos données",
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(WpfColor.FromRgb(17, 24, 39)),
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        dataPanel.Children.Add(dataTitle);
+
+        var dataDesc = new TextBlock
+        {
+            Text = "Exportez l'intégralité de vos données (projets, bons, listes, comptabilité) dans des fichiers CSV, lisibles avec Excel ou tout tableur, même sans Iziregi.",
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Colors.Gray),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        dataPanel.Children.Add(dataDesc);
+
+        var btnExportAll = new WpfButton
+        {
+            Content = "Exporter toutes mes données…",
+            Height = 30,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            Padding = new Thickness(12, 0, 12, 0)
+        };
+        btnExportAll.Click += (_, _) => ExportAllData();
+        dataPanel.Children.Add(btnExportAll);
+
+        Grid.SetRow(dataPanel, 7); Grid.SetColumnSpan(dataPanel, 2);
+        grid.Children.Add(dataPanel);
+
         Content = grid;
+    }
+
+    private void ExportAllData()
+    {
+        var sfd = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Exporter toutes les données",
+            Filter = "Archive ZIP (*.zip)|*.zip",
+            FileName = $"iziregi-export-complet-{DateTime.Now:yyyyMMdd-HHmm}.zip",
+            DefaultExt = ".zip"
+        };
+
+        if (sfd.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            Iziregi.Test.Services.ExportService.ExportAllData(sfd.FileName);
+            WpfMessageBox.Show(
+                "Export terminé. Toutes vos données ont été enregistrées dans le fichier zip choisi.",
+                "Export",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            WpfMessageBox.Show(
+                $"L'export a échoué : {ex.Message}",
+                "Export",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private async void TestConnection()
