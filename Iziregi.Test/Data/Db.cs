@@ -607,6 +607,23 @@ public static class Db
     public static void SetDefaultTaskCategory(long projectId, string value) =>
         SetSetting(MakeProjectKey("DefaultTaskCategory", projectId), (value ?? "").Trim());
 
+    // ✅ NOUVEAU (18.07.2026, demande de Joe) : affichage Samedi et Dimanche par défaut,
+    // indépendamment l'un de l'autre (par projet) — un utilisateur peut travailler tous les
+    // samedis mais jamais les dimanches. S'applique aux nouvelles semaines du planning
+    // hebdomadaire ET, quand la case est cochée, immédiatement à toutes les semaines déjà
+    // sauvegardées (voir PlanningPage.xaml.cs, WeekendSaturdayDefault_Changed/WeekendSundayDefault_Changed).
+    public static bool GetDefaultShowSaturday(long projectId) =>
+        GetSetting(MakeProjectKey("DefaultShowSaturday", projectId)) == "1";
+
+    public static void SetDefaultShowSaturday(long projectId, bool value) =>
+        SetSetting(MakeProjectKey("DefaultShowSaturday", projectId), value ? "1" : "0");
+
+    public static bool GetDefaultShowSunday(long projectId) =>
+        GetSetting(MakeProjectKey("DefaultShowSunday", projectId)) == "1";
+
+    public static void SetDefaultShowSunday(long projectId, bool value) =>
+        SetSetting(MakeProjectKey("DefaultShowSunday", projectId), value ? "1" : "0");
+
     public static string GetDefaultTaskUrgency(long projectId) =>
         GetSetting(MakeProjectKey("DefaultTaskUrgency", projectId)) ?? "";
 

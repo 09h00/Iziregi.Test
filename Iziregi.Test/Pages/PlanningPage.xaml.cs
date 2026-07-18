@@ -638,6 +638,13 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // Font toolbar (inutile dans PDF)
         HideElementForCapture(TextZoneFontToolbar, restore);
 
+        // ✅ Police/hauteurs de ligne agrandies UNIQUEMENT pendant la capture PDF (18.07.2026,
+        // demande de Joe) : la taille normale à l'écran (voir PlanningGridStyle) reste
+        // inchangée -- ce n'est que l'image capturée pour le PDF qui doit avoir une police
+        // plus lisible une fois imprimée.
+        EnlargeGridForCapture(TasksDataGrid, restore, fontSize: 18, rowHeight: 34, columnHeaderHeight: 38);
+        EnlargeGridForCapture(PlanningDataGrid, restore, fontSize: 18, rowHeight: 34, columnHeaderHeight: 38);
+
         // Appliquer immédiatement
         this.UpdateLayout();
     }
@@ -649,6 +656,24 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var old = el.Visibility;
         restore.Add(() => el.Visibility = old);
         el.Visibility = Visibility.Collapsed;
+    }
+
+    private static void EnlargeGridForCapture(DataGrid? grid, List<Action> restore, double fontSize, double rowHeight, double columnHeaderHeight)
+    {
+        if (grid == null) return;
+
+        // ✅ ClearValue (pas de réassigner l'ancienne valeur) : revient proprement à la valeur
+        // du style (PlanningGridStyle) plutôt que de figer une valeur locale en dur.
+        restore.Add(() =>
+        {
+            grid.ClearValue(DataGrid.FontSizeProperty);
+            grid.ClearValue(DataGrid.RowHeightProperty);
+            grid.ClearValue(DataGrid.ColumnHeaderHeightProperty);
+        });
+
+        grid.FontSize = fontSize;
+        grid.RowHeight = rowHeight;
+        grid.ColumnHeaderHeight = columnHeaderHeight;
     }
 
     private static byte[] CaptureScrollViewerContentToPngBytes(ScrollViewer sv)
@@ -1791,8 +1816,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     // ✅ Samedi et Dimanche sont deux cases à cocher indépendantes (même mécanisme que
     // le bouton "Colonnes" du tableau des Tâches) : on peut afficher l'un, l'autre, les
-    // deux ou aucun. Contrairement aux colonnes des Tâches, ce choix n'est PAS mémorisé
-    // d'une semaine à l'autre — Reload() remet toujours les deux à masqué/décoché.
+    // deux ou aucun. Ce choix est mémorisé PAR SEMAINE (voir BuildCurrentWeekStateForKey/
+    // LoadWeekState) ; une semaine jamais visitée démarre avec les défauts par projet
+    // (18.07.2026, voir WeekendSaturdayDefaultCheckBox/WeekendSundayDefaultCheckBox ci-dessous).
     private void WeekendColumnsButton_Click(object sender, RoutedEventArgs e)
     {
         WeekendColumnsPopup.IsOpen = !WeekendColumnsPopup.IsOpen;
@@ -1806,6 +1832,71 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             SundayColumn.Visibility = WeekendShowSundayCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
         PlanningDataGrid?.UpdateLayout();
+    }
+
+    // ✅ Défauts Samedi/Dimanche indépendants par projet (18.07.2026, demande de Joe) : un
+    // utilisateur peut travailler tous les samedis mais jamais les dimanches (ou l'inverse),
+    // donc deux cases séparées plutôt qu'un seul défaut "weekend" combiné (1er essai,
+    // corrigé après retour de Joe).
+    // ✅ Cocher OU décocher applique IMMÉDIATEMENT le jour concerné à toutes les semaines
+    // déjà sauvegardées du projet, en plus de devenir le défaut pour les semaines futures.
+    // Comportement symétrique (18.07.2026, corrigé après test de Joe) : un 1er essai où
+    // seul "cocher" agissait rétroactivement laissait des réglages incohérents -- ex.
+    // Dimanche resté affiché partout après un test précédent, alors que la case Dimanche
+    // était pourtant décochée.
+    private void WeekendSaturdayDefault_Changed(object sender, RoutedEventArgs e)
+    {
+        var pid = Db.GetCurrentProjectId();
+        if (!pid.HasValue || pid.Value <= 0) return;
+
+        var isChecked = WeekendSaturdayDefaultCheckBox.IsChecked == true;
+        Db.SetDefaultShowSaturday(pid.Value, isChecked);
+        ApplyShowWeekendDayToAllSavedWeeks(pid.Value, isSaturday: true, show: isChecked);
+
+        if (WeekendShowSaturdayCheckBox != null) WeekendShowSaturdayCheckBox.IsChecked = isChecked;
+        if (SaturdayColumn != null) SaturdayColumn.Visibility = isChecked ? Visibility.Visible : Visibility.Collapsed;
+        PlanningDataGrid?.UpdateLayout();
+    }
+
+    private void WeekendSundayDefault_Changed(object sender, RoutedEventArgs e)
+    {
+        var pid = Db.GetCurrentProjectId();
+        if (!pid.HasValue || pid.Value <= 0) return;
+
+        var isChecked = WeekendSundayDefaultCheckBox.IsChecked == true;
+        Db.SetDefaultShowSunday(pid.Value, isChecked);
+        ApplyShowWeekendDayToAllSavedWeeks(pid.Value, isSaturday: false, show: isChecked);
+
+        if (WeekendShowSundayCheckBox != null) WeekendShowSundayCheckBox.IsChecked = isChecked;
+        if (SundayColumn != null) SundayColumn.Visibility = isChecked ? Visibility.Visible : Visibility.Collapsed;
+        PlanningDataGrid?.UpdateLayout();
+    }
+
+    private void ApplyShowWeekendDayToAllSavedWeeks(long projectId, bool isSaturday, bool show)
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Iziregi", "Planning");
+
+        if (!Directory.Exists(dir)) return;
+
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, WriteIndented = true };
+
+        foreach (var filePath in Directory.EnumerateFiles(dir, $"planning-week-{projectId}-*.json"))
+        {
+            try
+            {
+                var json = File.ReadAllText(filePath);
+                var state = JsonSerializer.Deserialize<WeekStateFile>(json, opts);
+                if (state == null) continue;
+
+                if (isSaturday) state.ShowSaturday = show;
+                else state.ShowSunday = show;
+
+                File.WriteAllText(filePath, JsonSerializer.Serialize(state, opts));
+            }
+            catch { /* fichier illisible : ignoré, non bloquant */ }
+        }
     }
 
     // ✅ Choix jour de départ (combo) - affichage FR via options Label/Value
@@ -2175,10 +2266,13 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         PlacedStickers.Clear();
         PlacedPlanImages.Clear();
 
-        // ✅ Samedi/Dimanche : figé par semaine (voir BuildCurrentWeekStateForKey) — par
-        // défaut masqué/décoché pour une semaine sans fichier (jamais visitée/sauvegardée).
-        bool showSaturday = false;
-        bool showSunday = false;
+        // ✅ Samedi/Dimanche : figé par semaine (voir BuildCurrentWeekStateForKey). Pour une
+        // semaine sans fichier (jamais visitée/sauvegardée), le point de départ est le défaut
+        // par projet et par jour (18.07.2026, demande de Joe — voir Db.GetDefaultShowSaturday/
+        // GetDefaultShowSunday), plutôt qu'un masquage systématique.
+        var pid = Db.GetCurrentProjectId();
+        bool showSaturday = pid.HasValue && pid.Value > 0 && Db.GetDefaultShowSaturday(pid.Value);
+        bool showSunday = pid.HasValue && pid.Value > 0 && Db.GetDefaultShowSunday(pid.Value);
 
         if (File.Exists(filePath))
         {
@@ -2376,12 +2470,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         return d;
     }
 
+    // ✅ Format "Lundi 18 juil." (mois abrégé) pour toutes les semaines — 18.07.2026, demande
+    // de Joe. La distinction avec le mois complet pour les semaines "à 5 jours" a été retirée
+    // : ce cas n'existe pas en pratique (minimum 6 jours), le format abrégé convient à toutes.
     private static string HeaderForDay(DateTime d)
     {
         var fr = CultureInfo.GetCultureInfo("fr-CH");
         var name = fr.DateTimeFormat.GetDayName(d.DayOfWeek);
         name = char.ToUpper(name[0]) + name.Substring(1);
-        return $"{name} {d.ToString("d MMMM", fr)}";
+        return $"{name} {d.ToString("d MMM", fr)}";
     }
 
     public void Reload()
@@ -2394,6 +2491,19 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             StartDatePicker.SelectedDate = start;
 
         _startDay = SnapToStartOfWeek(StartDatePicker.SelectedDate ?? start, _weekStartDay);
+
+        // ✅ Défauts Samedi/Dimanche pour les nouvelles semaines (18.07.2026, demande de Joe) :
+        // reflètent le réglage du projet courant dans les cases à cocher du menu "Weekend".
+        {
+            var pidForDefault = Db.GetCurrentProjectId();
+            var hasProjectForDefault = pidForDefault.HasValue && pidForDefault.Value > 0;
+
+            if (WeekendSaturdayDefaultCheckBox != null)
+                WeekendSaturdayDefaultCheckBox.IsChecked = hasProjectForDefault && Db.GetDefaultShowSaturday(pidForDefault!.Value);
+
+            if (WeekendSundayDefaultCheckBox != null)
+                WeekendSundayDefaultCheckBox.IsChecked = hasProjectForDefault && Db.GetDefaultShowSunday(pidForDefault!.Value);
+        }
 
         LoadLists();
         EnsureStickerBankLoadedOrInitialized();

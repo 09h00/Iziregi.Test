@@ -181,12 +181,13 @@
             <Setter Property="VerticalGridLinesBrush" Value="#E5E7EB"/>
             <Setter Property="HorizontalGridLinesBrush" Value="#E5E7EB"/>
             <Setter Property="HeadersVisibility" Value="Column"/>
-            <!-- ✅ Agrandi (demande de Joe, 16.07.2026) : le PDF Planning capture ces grilles
-                 telles qu'affichées à l'écran (voir PlanningPage.xaml.cs, CaptureScrollViewerContentToPngBytes),
-                 donc la police y était trop petite aussi. -->
-            <Setter Property="RowHeight" Value="28"/>
-            <Setter Property="ColumnHeaderHeight" Value="32"/>
-            <Setter Property="FontSize" Value="15"/>
+            <!-- ✅ Taille normale à l'écran (18.07.2026, retour à l'original : Joe ne veut pas
+                 que l'agrandissement demandé pour le PDF change l'affichage à l'écran). La
+                 police est agrandie UNIQUEMENT pendant la capture PDF, temporairement, voir
+                 PlanningPage.xaml.cs, PreparePdfCaptureUi / ExportPdfButton_Click. -->
+            <Setter Property="RowHeight" Value="24"/>
+            <Setter Property="ColumnHeaderHeight" Value="28"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="SelectionMode" Value="Extended"/>
             <Setter Property="SelectionUnit" Value="CellOrRowHeader"/>
 
@@ -1057,6 +1058,22 @@
                                     <TextBlock Text="Colonnes visibles" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
                                     <CheckBox x:Name="WeekendShowSaturdayCheckBox" Content="Samedi" Margin="0,2" Click="WeekendColumnVisibility_Changed"/>
                                     <CheckBox x:Name="WeekendShowSundayCheckBox" Content="Dimanche" Margin="0,2" Click="WeekendColumnVisibility_Changed"/>
+
+                                    <!-- ✅ Défauts Samedi/Dimanche indépendants (18.07.2026, demande de
+                                         Joe) : cocher applique immédiatement à toutes les semaines déjà
+                                         sauvegardées ET devient le défaut pour les nouvelles, voir
+                                         Db.GetDefaultShowSaturday/GetDefaultShowSunday. Un utilisateur
+                                         qui travaille tous les samedis mais jamais les dimanches ne coche
+                                         que la première. -->
+                                    <Border BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Margin="0,8,0,8"/>
+                                    <CheckBox x:Name="WeekendSaturdayDefaultCheckBox"
+                                              Content="Samedi par défaut"
+                                              Margin="0,2"
+                                              Click="WeekendSaturdayDefault_Changed"/>
+                                    <CheckBox x:Name="WeekendSundayDefaultCheckBox"
+                                              Content="Dimanche par défaut"
+                                              Margin="0,2"
+                                              Click="WeekendSundayDefault_Changed"/>
                                 </StackPanel>
                             </Border>
                         </Popup>
