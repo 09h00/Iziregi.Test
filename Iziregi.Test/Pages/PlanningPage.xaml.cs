@@ -96,6 +96,13 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     // ✅ jour de départ configurable (par l’utilisateur)
     private DayOfWeek _weekStartDay = DayOfWeek.Monday;
 
+    // ✅ Structure de la semaine : 5 ou 6 jours de base, + Samedi/Dimanche optionnels
+    // (19.07.2026, demande de Joe) — "6 à 8 jours" (actuel) ou "5 à 7 jours". Persisté par
+    // projet (Db.GetPlanningWeekDayCount/SetPlanningWeekDayCount) -- défaut 5 pour un projet
+    // jamais configuré (livraison aux nouveaux utilisateurs), puis mémorisé selon le choix
+    // fait. La valeur ici n'est qu'un repli avant le premier Reload().
+    private int _weekDayCount = 5;
+
     private DateTime _startDay = DateTime.Today;
     private bool _isSyncingDates = false;
     private bool _isWeekAnimating = false;
@@ -119,6 +126,10 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     // ✅ Images posées sur le plan (plusieurs)
     public ObservableCollection<PlacedPlanImageItem> PlacedPlanImages { get; } = new();
+
+    // ✅ Images favorites (19.07.2026, demande de Joe) : banque persistée par projet,
+    // pour replacer rapidement une image récurrente sans repasser par l'explorateur.
+    public ObservableCollection<ImageFavoriteItem> ImageFavorites { get; } = new();
 
     private const double StickerDropDefaultSize = 26;
     // ✅ Stickers rectangulaires (au lieu de ronds) pour accueillir jusqu'à 4 chiffres
@@ -317,6 +328,257 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     }
 
     // ============================================================
+    // ✅ Images favorites persistence (JSON) — même mécanisme que la banque stickers,
+    // mais les fichiers favoris sont copiés dans un sous-dossier "Favoris" séparé du
+    // dossier d'images normal, pour ne jamais être perdus quand une image est retirée
+    // du plan d'une semaine (Retirer image ne supprime que l'entrée PlacedPlanImages,
+    // jamais le fichier disque).
+    // ============================================================
+    private sealed class ImageFavoriteState
+    {
+        public string FilePath { get; set; } = "";
+    }
+
+    private sealed class ImageFavoritesBankState
+    {
+        public int Version { get; set; } = 1;
+        public List<ImageFavoriteState> Favorites { get; set; } = new();
+    }
+
+    private static string GetImageFavoritesDir(long? projectId)
+    {
+        var pid = (projectId.HasValue && projectId.Value > 0)
+            ? projectId.Value.ToString(CultureInfo.InvariantCulture) : "0";
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Iziregi", "Planning", "Images", pid, "Favoris");
+    }
+
+    private static string GetImageFavoritesFilePath(long? projectId)
+    {
+        var pid = (projectId.HasValue && projectId.Value > 0)
+            ? projectId.Value.ToString(CultureInfo.InvariantCulture) : "0";
+
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Iziregi",
+            "Planning");
+
+        return Path.Combine(dir, $"planning-image-favorites-{pid}.json");
+    }
+
+    private void EnsureImageFavoritesLoaded()
+    {
+        try
+        {
+            ImageFavorites.Clear();
+
+            var pid = Db.GetCurrentProjectId();
+            var filePath = GetImageFavoritesFilePath(pid);
+            if (!File.Exists(filePath)) return;
+
+            var json = File.ReadAllText(filePath);
+            var state = JsonSerializer.Deserialize<ImageFavoritesBankState>(json);
+            if (state?.Favorites == null) return;
+
+            foreach (var f in state.Favorites)
+            {
+                var path = (f?.FilePath ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
+
+                try
+                {
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.UriSource = new Uri(path, UriKind.Absolute);
+                    bmp.EndInit();
+                    bmp.Freeze();
+
+                    ImageFavorites.Add(new ImageFavoriteItem { FilePath = path, ImageSource = bmp });
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogPlanningError("EnsureImageFavoritesLoaded", ex);
+        }
+    }
+
+    private void SaveImageFavoritesToDisk()
+    {
+        try
+        {
+            var pid = Db.GetCurrentProjectId();
+            var filePath = GetImageFavoritesFilePath(pid);
+
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            var state = new ImageFavoritesBankState
+            {
+                Version = 1,
+                Favorites = ImageFavorites.Select(f => new ImageFavoriteState { FilePath = f?.FilePath ?? "" }).ToList()
+            };
+
+            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, json);
+        }
+        catch (Exception ex)
+        {
+            LogPlanningError("SaveImageFavoritesToDisk", ex);
+        }
+    }
+
+    // ✅ Capture une sous-région du plan (image + tout ce qui la superpose visuellement,
+    // notamment les stickers) en un seul bitmap figé. "Solution aplatir" retenue le
+    // 19.07.2026 (demande de Joe) car les stickers ne sont pas rattachés à une image en
+    // mémoire — pas de vrai lien à exploiter, donc on fige plutôt ce qui est affiché.
+    private static BitmapSource? CaptureCanvasRegionToBitmap(FrameworkElement canvas, Rect regionInCanvas)
+    {
+        if (canvas == null) return null;
+
+        canvas.UpdateLayout();
+
+        var dpi = VisualTreeHelper.GetDpi(canvas);
+        int fullW = (int)Math.Ceiling(canvas.ActualWidth * dpi.DpiScaleX);
+        int fullH = (int)Math.Ceiling(canvas.ActualHeight * dpi.DpiScaleY);
+        if (fullW <= 0 || fullH <= 0) return null;
+
+        var rtb = new RenderTargetBitmap(fullW, fullH, dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        rtb.Render(canvas);
+
+        int x = (int)Math.Max(0, Math.Round(regionInCanvas.X * dpi.DpiScaleX));
+        int y = (int)Math.Max(0, Math.Round(regionInCanvas.Y * dpi.DpiScaleY));
+        int w = (int)Math.Max(1, Math.Round(regionInCanvas.Width * dpi.DpiScaleX));
+        int h = (int)Math.Max(1, Math.Round(regionInCanvas.Height * dpi.DpiScaleY));
+
+        if (x >= fullW || y >= fullH) return null;
+        if (x + w > fullW) w = fullW - x;
+        if (y + h > fullH) h = fullH - y;
+        if (w <= 0 || h <= 0) return null;
+
+        var cropped = new CroppedBitmap(rtb, new Int32Rect(x, y, w, h));
+        cropped.Freeze();
+        return cropped;
+    }
+
+    // ✅ Ajoute l'image actuellement sélectionnée aux favoris, aplatie avec les stickers
+    // qui la superposent visuellement (voir CaptureCanvasRegionToBitmap).
+    private void AddSelectedImageToFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_selectedPlacedPlanImage == null)
+            {
+                System.Windows.MessageBox.Show(
+                    "Sélectionne d'abord une image sur le plan (clique dessus), puis réessaie.",
+                    "Ajouter aux favoris", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var it = _selectedPlacedPlanImage;
+
+            // ✅ Cache le contour bleu de sélection le temps de la capture, sinon il se
+            // retrouve figé dans le favori.
+            bool wasSelected = it.IsSelected;
+            it.IsSelected = false;
+            PlanCanvas.UpdateLayout();
+
+            BitmapSource? captured;
+            try
+            {
+                captured = CaptureCanvasRegionToBitmap(PlanCanvas, new Rect(it.X, it.Y, it.Width, it.Height));
+            }
+            finally
+            {
+                it.IsSelected = wasSelected;
+            }
+
+            if (captured == null) return;
+
+            var favDir = GetImageFavoritesDir(Db.GetCurrentProjectId());
+            Directory.CreateDirectory(favDir);
+            var destPath = Path.Combine(favDir, $"{Guid.NewGuid():N}.png");
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(captured));
+            using (var fs = new FileStream(destPath, FileMode.Create))
+                encoder.Save(fs);
+
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(destPath, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+
+            ImageFavorites.Add(new ImageFavoriteItem { FilePath = destPath, ImageSource = bmp });
+            SaveImageFavoritesToDisk();
+
+            // ✅ Popup de confirmation (19.07.2026, demande de Joe) — déclenché uniquement
+            // par un clic explicite sur le bouton, donc pas concerné par le piège des
+            // popups modales au démarrage (voir CLAUDE.md).
+            System.Windows.MessageBox.Show(
+                "Image enregistrée dans les favoris.",
+                "Favoris", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            LogPlanningError("AddSelectedImageToFavorites_Click", ex);
+        }
+    }
+
+    private void ImageFavoritesButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ImageFavoritesPopup != null)
+            ImageFavoritesPopup.IsOpen = !ImageFavoritesPopup.IsOpen;
+    }
+
+    // ✅ Clic sur une vignette favorite : ajoute cette image (déjà stockée de façon
+    // permanente) directement sur le plan, sans repasser par une nouvelle copie.
+    private void ImageFavoriteThumbnail_MouseLeftButtonUp(object sender, WpfMouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is ImageFavoriteItem fav)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(fav.FilePath) || !File.Exists(fav.FilePath)) return;
+
+                var it = new PlacedPlanImageItem
+                {
+                    FilePath = fav.FilePath,
+                    ImageSource = fav.ImageSource,
+                    X = 20 + (PlacedPlanImages.Count * 20),
+                    Y = 20 + (PlacedPlanImages.Count * 20),
+                    Width = 360,
+                    Height = 240
+                };
+
+                PlacedPlanImages.Add(it);
+                SelectPlacedPlanImage(it);
+            }
+            catch (Exception ex)
+            {
+                LogPlanningError("ImageFavoriteThumbnail_MouseLeftButtonUp", ex);
+            }
+        }
+
+        if (ImageFavoritesPopup != null)
+            ImageFavoritesPopup.IsOpen = false;
+    }
+
+    private void ImageFavoriteRemove_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is ImageFavoriteItem fav)
+        {
+            ImageFavorites.Remove(fav);
+            SaveImageFavoritesToDisk();
+        }
+    }
+
+    // ============================================================
     // ✅ Text zones persistence (JSON) — même mécanisme que la banque stickers.
     // Avant ce correctif, les 4 zones de texte riche n'étaient jamais persistées
     // nulle part : leur contenu se perdait à chaque changement de page ou
@@ -342,12 +604,6 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         }
     }
 
-    private sealed class TextZoneBankState
-    {
-        public int Version { get; set; } = 1;
-        public List<TextZoneState> Zones { get; set; } = new();
-    }
-
     private sealed class TextZoneState
     {
         public bool Visible { get; set; }
@@ -355,18 +611,35 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string DocumentXaml { get; set; } = "";
     }
 
-    private static string GetTextZonesFilePath(long? projectId)
+    // ✅ Compat migration (19.07.2026) : avant ce correctif, les 4 zones de texte étaient
+    // partagées pour tout le projet (fichier planning-textzones-{pid}.json). Une semaine
+    // qui n'a pas encore sa propre sauvegarde per-semaine (TextZoneStates absent du fichier
+    // de semaine) reprend une fois le contenu de cet ancien fichier, pour ne pas perdre ce
+    // qui avait déjà été saisi. Dès que la semaine est modifiée/sauvegardée, elle a son
+    // propre contenu et n'utilise plus ce fallback.
+    private sealed class LegacyProjectTextZoneBankState
     {
-        var pid = (projectId.HasValue && projectId.Value > 0)
-            ? projectId.Value.ToString(CultureInfo.InvariantCulture)
-            : "0";
+        public int Version { get; set; } = 1;
+        public List<TextZoneState> Zones { get; set; } = new();
+    }
 
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "Iziregi",
-            "Planning");
+    private static List<TextZoneState>? TryReadLegacyProjectTextZones(long? projectId)
+    {
+        try
+        {
+            var pid = (projectId.HasValue && projectId.Value > 0)
+                ? projectId.Value.ToString(CultureInfo.InvariantCulture) : "0";
+            var filePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Iziregi", "Planning", $"planning-textzones-{pid}.json");
 
-        return Path.Combine(dir, $"planning-textzones-{pid}.json");
+            if (!File.Exists(filePath)) return null;
+
+            var json = File.ReadAllText(filePath);
+            var state = JsonSerializer.Deserialize<LegacyProjectTextZoneBankState>(json);
+            return (state?.Zones != null && state.Zones.Count > 0) ? state.Zones : null;
+        }
+        catch { return null; }
     }
 
     private void AttachTextZoneAutoSaveHandlers()
@@ -383,62 +656,57 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (_isLoadingTextZones) return;
         if (!_isPageActive) return;
 
-        // Visible, Title ou DocumentXaml (saisie de texte) : on sauvegarde à chaque fois,
-        // comme pour la banque de stickers.
-        SaveTextZonesToDisk();
+        // ✅ Zones de texte indépendantes PAR SEMAINE (19.07.2026, demande de Joe — avant ce
+        // correctif elles étaient partagées par tout le projet, donc taper dans une zone
+        // modifiait la même zone sur toutes les semaines). On sauvegarde dans le fichier de
+        // la semaine affichée, à chaque frappe comme avant.
+        SaveCurrentWeekState();
     }
 
-    private void EnsureTextZonesLoadedOrInitialized()
+    // ✅ Recharge les 4 zones de texte pour la semaine affichée (appelé depuis
+    // LoadWeekState). `states` vient du fichier de la semaine (null si semaine jamais
+    // sauvegardée -> défaut : 2 premières zones visibles, vides).
+    private void LoadTextZonesForWeek(List<TextZoneState>? states)
     {
         _isLoadingTextZones = true;
         try
         {
-            var pid = Db.GetCurrentProjectId();
-            var filePath = GetTextZonesFilePath(pid);
+            TextZones.Clear();
 
-            if (File.Exists(filePath))
+            if (states != null && states.Count > 0)
             {
-                var json = File.ReadAllText(filePath);
-                var state = JsonSerializer.Deserialize<TextZoneBankState>(json);
-
-                if (state?.Zones != null && state.Zones.Count > 0)
-                {
-                    TextZones.Clear();
-
-                    foreach (var it in state.Zones)
+                foreach (var z in states)
+                    TextZones.Add(new TextZoneItem
                     {
-                        TextZones.Add(new TextZoneItem
-                        {
-                            Visible = it?.Visible ?? false,
-                            Title = it?.Title ?? "",
-                            DocumentXaml = it?.DocumentXaml ?? ""
-                        });
-                    }
-
-                    // Sécurité : toujours exactement 4 zones (Rtb0..Rtb3)
-                    while (TextZones.Count < 4)
-                        TextZones.Add(new TextZoneItem { Visible = false });
-
-                    while (TextZones.Count > 4)
-                        TextZones.RemoveAt(TextZones.Count - 1);
-
-                    return;
-                }
+                        Visible = z?.Visible ?? false,
+                        Title = z?.Title ?? "",
+                        DocumentXaml = z?.DocumentXaml ?? ""
+                    });
+            }
+            else
+            {
+                TextZones.Add(new TextZoneItem { Visible = true });
+                TextZones.Add(new TextZoneItem { Visible = true });
+                TextZones.Add(new TextZoneItem { Visible = false });
+                TextZones.Add(new TextZoneItem { Visible = false });
             }
 
-            // Sinon : init par défaut (2 premières zones visibles) + sauvegarde
-            TextZones.Clear();
-            TextZones.Add(new TextZoneItem { Visible = true });
-            TextZones.Add(new TextZoneItem { Visible = true });
-            TextZones.Add(new TextZoneItem { Visible = false });
-            TextZones.Add(new TextZoneItem { Visible = false });
+            // Sécurité : toujours exactement 4 zones (Rtb0..Rtb3)
+            while (TextZones.Count < 4)
+                TextZones.Add(new TextZoneItem { Visible = false });
+            while (TextZones.Count > 4)
+                TextZones.RemoveAt(TextZones.Count - 1);
 
-            SaveTextZonesToDisk();
+            RestoreZoneXamlToRtb(0, Rtb0);
+            RestoreZoneXamlToRtb(1, Rtb1);
+            RestoreZoneXamlToRtb(2, Rtb2);
+            RestoreZoneXamlToRtb(3, Rtb3);
+
+            SelectedTextZoneIndex = FindFirstVisibleTextZoneIndex();
         }
         catch (Exception ex)
         {
-            LogPlanningError("EnsureTextZonesLoadedOrInitialized", ex);
-            // Fallback sans crash
+            LogPlanningError("LoadTextZonesForWeek", ex);
             if (TextZones.Count == 0)
             {
                 TextZones.Add(new TextZoneItem { Visible = true });
@@ -451,37 +719,6 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         {
             _isLoadingTextZones = false;
             AttachTextZoneAutoSaveHandlers();
-        }
-    }
-
-    private void SaveTextZonesToDisk()
-    {
-        try
-        {
-            var pid = Db.GetCurrentProjectId();
-            var filePath = GetTextZonesFilePath(pid);
-
-            var dir = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrWhiteSpace(dir))
-                Directory.CreateDirectory(dir);
-
-            var state = new TextZoneBankState
-            {
-                Version = 1,
-                Zones = TextZones.Select(z => new TextZoneState
-                {
-                    Visible = z?.Visible ?? false,
-                    Title = z?.Title ?? "",
-                    DocumentXaml = z?.DocumentXaml ?? ""
-                }).ToList()
-            };
-
-            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(filePath, json);
-        }
-        catch (Exception ex)
-        {
-            LogPlanningError("SaveTextZonesToDisk", ex);
         }
     }
 
@@ -619,7 +856,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // ---- Section Planning hebdomadaire : cacher boutons Ajouter/Supprimer + samedi
         HideElementForCapture(AddPlanningRowButton, restore);
         HideElementForCapture(RemovePlanningRowButton, restore);
-        HideElementForCapture(WeekendColumnsButton, restore);
+        HideElementForCapture(WeekStructureButton, restore);
 
         // ---- Section Image : cacher boutons Ajouter/Retirer/Reset
         HideElementForCapture(PlanAddButton, restore);
@@ -1194,8 +1431,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         if (_selectedPlacedPlanImage != null)
         {
-            PlacedPlanImages.Remove(_selectedPlacedPlanImage);
-            _selectedPlacedPlanImage = null;
+            var it = _selectedPlacedPlanImage;
+            SelectPlacedPlanImage(null);
+            PlacedPlanImages.Remove(it);
             return;
         }
 
@@ -1269,7 +1507,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             };
 
             PlacedPlanImages.Add(it);
-            _selectedPlacedPlanImage = it;
+            SelectPlacedPlanImage(it);
         }
         catch { }
     }
@@ -1280,6 +1518,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private void PlanCanvas_PreviewMouseLeftButtonDown(object sender, WpfMouseButtonEventArgs e)
     {
+        // ✅ Clic sur le fond du canvas (ou sur une image, qui reste tunnelé après ce
+        // gestionnaire car il est déclaré sur un enfant) : désélectionne d'abord ; un clic
+        // réel sur une image la resélectionnera juste après via
+        // PlacedPlanImage_PreviewMouseLeftButtonDown.
+        SelectPlacedPlanImage(null);
+
         if (_bankDragSticker != null)
         {
             var pos = e.GetPosition(PlanCanvas);
@@ -1447,6 +1691,16 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private PlacedPlanImageItem? _selectedPlacedPlanImage;
 
+    // ✅ Sélectionne (ou désélectionne si null) une image posée, en tenant l'unique
+    // source de vérité (_selectedPlacedPlanImage) synchronisée avec IsSelected sur
+    // chaque item, pour que le contour bleu suive toujours la sélection réelle.
+    private void SelectPlacedPlanImage(PlacedPlanImageItem? item)
+    {
+        _selectedPlacedPlanImage = item;
+        foreach (var img in PlacedPlanImages)
+            img.IsSelected = ReferenceEquals(img, item);
+    }
+
     private void PlacedPlanImage_PreviewMouseLeftButtonDown(object sender, WpfMouseButtonEventArgs e)
     {
         if (!_isPageActive) return;
@@ -1455,7 +1709,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         if (sender is FrameworkElement fe && fe.DataContext is PlacedPlanImageItem it)
         {
-            _selectedPlacedPlanImage = it;
+            SelectPlacedPlanImage(it);
 
             _placedPlanImageIsDragging = true;
             _placedPlanImageDraggingItem = it;
@@ -1523,7 +1777,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         if (sender is FrameworkElement fe && fe.DataContext is PlacedPlanImageItem it)
         {
-            if (_selectedPlacedPlanImage == it) _selectedPlacedPlanImage = null;
+            if (_selectedPlacedPlanImage == it) SelectPlacedPlanImage(null);
             PlacedPlanImages.Remove(it);
         }
     }
@@ -1590,6 +1844,27 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private void TextZoneAdd_Click(object sender, RoutedEventArgs e) => ActivateAllTextZones();
     private void TextZoneRemove_Click(object sender, RoutedEventArgs e) => RemoveSelectedTextZone();
+
+    // ✅ Sélectionner tout / Copier / Coller (19.07.2026, demande de Joe) : pour copier le
+    // texte d'une zone entière et le coller dans une zone de texte d'une autre semaine.
+    // _activeRtb = zone de texte ayant reçu le focus en dernier (voir SetActiveRichTextBox).
+    private void TextZoneSelectAll_Click(object sender, RoutedEventArgs e)
+    {
+        _activeRtb?.SelectAll();
+        _activeRtb?.Focus();
+    }
+
+    private void TextZoneCopy_Click(object sender, RoutedEventArgs e)
+    {
+        _activeRtb?.Copy();
+    }
+
+    private void TextZonePaste_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeRtb == null) return;
+        _activeRtb.Focus();
+        _activeRtb.Paste();
+    }
 
     private void TextZone_Focus0(object sender, RoutedEventArgs e) => SelectTextZone(0);
     private void TextZone_Focus1(object sender, RoutedEventArgs e) => SelectTextZone(1);
@@ -1814,14 +2089,28 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             _planningRows.Add(new PlanningRow());
     }
 
-    // ✅ Samedi et Dimanche sont deux cases à cocher indépendantes (même mécanisme que
-    // le bouton "Colonnes" du tableau des Tâches) : on peut afficher l'un, l'autre, les
-    // deux ou aucun. Ce choix est mémorisé PAR SEMAINE (voir BuildCurrentWeekStateForKey/
-    // LoadWeekState) ; une semaine jamais visitée démarre avec les défauts par projet
-    // (18.07.2026, voir WeekendSaturdayDefaultCheckBox/WeekendSundayDefaultCheckBox ci-dessous).
-    private void WeekendColumnsButton_Click(object sender, RoutedEventArgs e)
+    // ✅ Toutes les options de structure de la semaine regroupées sous un seul bouton
+    // (19.07.2026, demande de Joe : auparavant deux boutons séparés). Contient : structure
+    // 5/6 jours (_weekDayCount, en mémoire pour la session), Samedi/Dimanche visibles
+    // (mémorisés PAR SEMAINE, voir LoadWeekState), et leurs défauts par projet (voir
+    // WeekendSaturdayDefaultCheckBox/WeekendSundayDefaultCheckBox ci-dessous).
+    private void WeekStructureButton_Click(object sender, RoutedEventArgs e)
     {
-        WeekendColumnsPopup.IsOpen = !WeekendColumnsPopup.IsOpen;
+        WeekStructurePopup.IsOpen = !WeekStructurePopup.IsOpen;
+    }
+
+    private void WeekDayCount_Changed(object sender, RoutedEventArgs e)
+    {
+        _weekDayCount = WeekDayCount5RadioButton.IsChecked == true ? 5 : 6;
+
+        // ✅ Mémorisé par projet (19.07.2026, demande de Joe) : une fois l'utilisateur choisi,
+        // l'app rouvrira dans ce mode -- plus seulement le défaut "5 jours" de livraison.
+        var pid = Db.GetCurrentProjectId();
+        if (pid.HasValue && pid.Value > 0)
+            Db.SetPlanningWeekDayCount(pid.Value, _weekDayCount);
+
+        ApplyPlanningHeadersAndSyncDatePickers();
+        PlanningDataGrid?.UpdateLayout();
     }
 
     private void WeekendColumnVisibility_Changed(object sender, RoutedEventArgs e)
@@ -1831,6 +2120,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (SundayColumn != null)
             SundayColumn.Visibility = WeekendShowSundayCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
+        // ✅ Correctif (19.07.2026, demande de Joe) : la date de fin en haut de page ne se
+        // mettait pas à jour quand on affichait/masquait Samedi/Dimanche via ces cases --
+        // voir ApplyPlanningHeadersAndSyncDatePickers, qui recalcule maintenant la date de
+        // fin en tenant compte de la visibilité Samedi/Dimanche.
+        ApplyPlanningHeadersAndSyncDatePickers();
         PlanningDataGrid?.UpdateLayout();
     }
 
@@ -2076,6 +2370,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Y = i.Y,
                 Width = i.Width,
                 Height = i.Height
+            }).ToList(),
+            TextZoneStates = TextZones.Select(z => new TextZoneState
+            {
+                Visible = z.Visible,
+                Title = z.Title,
+                DocumentXaml = z.DocumentXaml
             }).ToList()
         };
     }
@@ -2265,6 +2565,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         _planningRows.Clear();
         PlacedStickers.Clear();
         PlacedPlanImages.Clear();
+        _selectedPlacedPlanImage = null;
 
         // ✅ Samedi/Dimanche : figé par semaine (voir BuildCurrentWeekStateForKey). Pour une
         // semaine sans fichier (jamais visitée/sauvegardée), le point de départ est le défaut
@@ -2273,6 +2574,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var pid = Db.GetCurrentProjectId();
         bool showSaturday = pid.HasValue && pid.Value > 0 && Db.GetDefaultShowSaturday(pid.Value);
         bool showSunday = pid.HasValue && pid.Value > 0 && Db.GetDefaultShowSunday(pid.Value);
+        List<TextZoneState>? textZoneStates = null;
 
         if (File.Exists(filePath))
         {
@@ -2286,6 +2588,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 {
                     showSaturday = state.ShowSaturday;
                     showSunday = state.ShowSunday;
+                    textZoneStates = state.TextZoneStates;
 
                     // ✅ state.TaskRows n'est plus utilisé (voir LoadProjectTasks) — laissé
                     // dans le fichier/la classe uniquement pour compatibilité de lecture des
@@ -2346,6 +2649,13 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         }
 
         EnsureDefaultRows();
+
+        // ✅ Migration : semaine sans zones de texte propres -> reprend une fois l'ancien
+        // contenu partagé par projet, s'il existe (voir TryReadLegacyProjectTextZones).
+        if (textZoneStates == null || textZoneStates.Count == 0)
+            textZoneStates = TryReadLegacyProjectTextZones(pid);
+
+        LoadTextZonesForWeek(textZoneStates);
 
         // ✅ Samedi/Dimanche : applique le choix figé pour CETTE semaine (voir plus haut),
         // que ce soit au premier affichage (Reload) ou en changeant de semaine (◀ ▶), qui
@@ -2412,12 +2722,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // 5 = D5 (vendredi)
         // 6 = Samedi (SaturdayColumn)
         // 7 = Dimanche (SundayColumn)
-        // 8 = D6 (lundi suivant)
+        // 8 = D6 (lundi suivant) -- masquée en mode 5 jours (Day6Column, _weekDayCount)
         if (PlanningDataGrid.Columns.Count < 9)
             return;
 
         var start = SnapToStartOfWeek(_startDay, _weekStartDay);
-        var businessDays = BuildSixBusinessDays(start);
+        var businessDays = BuildBusinessDays(start, _weekDayCount);
 
         PlanningDataGrid.Columns[1].Header = HeaderForDay(businessDays[0]);
         PlanningDataGrid.Columns[2].Header = HeaderForDay(businessDays[1]);
@@ -2429,13 +2739,31 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         SaturdayColumn.Header = HeaderForDay(saturdayDate);
         SundayColumn.Header = HeaderForDay(saturdayDate.AddDays(1));
 
-        PlanningDataGrid.Columns[8].Header = HeaderForDay(businessDays[5]);
+        // ✅ Mode 5 jours (19.07.2026, demande de Joe) : colonne "Jour 6" masquée, businessDays
+        // ne contient alors que 5 entrées -- les données déjà saisies dans D6 restent en
+        // mémoire (non effacées), simplement pas affichées, comme Samedi/Dimanche masqués.
+        if (Day6Column != null)
+            Day6Column.Visibility = _weekDayCount >= 6 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (_weekDayCount >= 6)
+            PlanningDataGrid.Columns[8].Header = HeaderForDay(businessDays[5]);
+
+        var lastDay = businessDays[_weekDayCount - 1];
+
+        // ✅ Correctif (19.07.2026, demande de Joe) : la date de fin restait sur le dernier
+        // jour ouvré (ex. vendredi) même quand Samedi/Dimanche sont affichés dans la grille,
+        // alors que ce sont alors les vraies dernières colonnes visibles. Sans effet en mode
+        // 6 jours : "Jour 6" (lundi suivant) est toujours après le dimanche.
+        if (SundayColumn.Visibility == Visibility.Visible && saturdayDate.AddDays(1) > lastDay)
+            lastDay = saturdayDate.AddDays(1);
+        else if (SaturdayColumn.Visibility == Visibility.Visible && saturdayDate > lastDay)
+            lastDay = saturdayDate;
 
         _isSyncingDates = true;
         try
         {
             StartDatePicker.SelectedDate = businessDays[0];
-            EndDatePicker.SelectedDate = businessDays[5];
+            EndDatePicker.SelectedDate = lastDay;
         }
         finally { _isSyncingDates = false; }
 
@@ -2450,11 +2778,14 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         return d;
     }
 
-    private static List<DateTime> BuildSixBusinessDays(DateTime start)
+    // ✅ Généralisée à 5 ou 6 jours (19.07.2026, demande de Joe -- avant : toujours 6,
+    // BuildSixBusinessDays). "Jours ouvrés" au sens large ici : compte simplement les jours
+    // qui ne sont ni Samedi ni Dimanche, peu importe le jour de départ choisi.
+    private static List<DateTime> BuildBusinessDays(DateTime start, int count)
     {
-        var res = new List<DateTime>(6);
+        var res = new List<DateTime>(count);
         var d = start.Date;
-        while (res.Count < 6)
+        while (res.Count < count)
         {
             if (d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday)
                 res.Add(d);
@@ -2503,10 +2834,21 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
             if (WeekendSundayDefaultCheckBox != null)
                 WeekendSundayDefaultCheckBox.IsChecked = hasProjectForDefault && Db.GetDefaultShowSunday(pidForDefault!.Value);
+
+            // ✅ Structure de la semaine (19.07.2026, demande de Joe) : 5 jours par défaut pour
+            // un projet jamais configuré, puis mémorisé par projet selon le choix de
+            // l'utilisateur (voir Db.GetPlanningWeekDayCount).
+            _weekDayCount = hasProjectForDefault ? Db.GetPlanningWeekDayCount(pidForDefault!.Value) : 5;
+            if (WeekDayCount6RadioButton != null && WeekDayCount5RadioButton != null)
+            {
+                WeekDayCount6RadioButton.IsChecked = _weekDayCount == 6;
+                WeekDayCount5RadioButton.IsChecked = _weekDayCount == 5;
+            }
         }
 
         LoadLists();
         EnsureStickerBankLoadedOrInitialized();
+        EnsureImageFavoritesLoaded();
 
         // ✅ Tâches : indépendantes de la semaine, chargées une seule fois par instance de
         // page (voir LoadProjectTasks) — jamais réinitialisées lors de la navigation entre
@@ -2961,6 +3303,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         DataContext = this;
 
+        // ✅ Culture explicite (19.07.2026) : cohérente avec le format personnalisé posé sur
+        // StartDatePicker.Text/EndDatePicker.Text dans ApplyPlanningHeadersAndSyncDatePickers.
+        var frCH = System.Windows.Markup.XmlLanguage.GetLanguage("fr-CH");
+        StartDatePicker.Language = frCH;
+        EndDatePicker.Language = frCH;
+
         // ✅ Guard page active/inactive (évite COMException quand on change de page)
         Loaded += (_, __) =>
         {
@@ -3016,11 +3364,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // ✅ charge / init la banque stickers persistée (JSON)
         EnsureStickerBankLoadedOrInitialized();
 
-        // ✅ charge / init les zones de texte persistées (JSON) — avant ce correctif,
-        // elles étaient réinitialisées vides à chaque navigation vers cette page.
-        EnsureTextZonesLoadedOrInitialized();
+        // ✅ charge la banque d'images favorites persistée (JSON) — par projet.
+        EnsureImageFavoritesLoaded();
 
-        SelectedTextZoneIndex = FindFirstVisibleTextZoneIndex();
+        // ✅ Zones de texte : chargées PAR SEMAINE via LoadWeekState (voir
+        // LoadTextZonesForWeek), appelé plus bas par Reload() -- pas ici.
 
         // ✅ init combo jour de départ (FR)
         if (StartWeekdayCombo != null)
@@ -3036,12 +3384,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             StartWeekdayCombo.SelectedValue = _weekStartDay;
         }
 
-        InitTextFormattingToolbar();
+        // ✅ Structure de la semaine (5/6 jours) : chargée par projet dans Reload() (voir
+        // Db.GetPlanningWeekDayCount), pas ici -- une seule fois au constructeur ne suffirait
+        // pas si l'utilisateur change de projet en cours de session.
 
-        RestoreZoneXamlToRtb(0, Rtb0);
-        RestoreZoneXamlToRtb(1, Rtb1);
-        RestoreZoneXamlToRtb(2, Rtb2);
-        RestoreZoneXamlToRtb(3, Rtb3);
+        InitTextFormattingToolbar();
 
         Reload();
     }
@@ -3158,6 +3505,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         private double _y;
         private double _width = 360;
         private double _height = 240;
+        private bool _isSelected;
 
         public string FilePath { get => _filePath; set => SetField(ref _filePath, value); }
         public ImageSource? ImageSource { get => _imageSource; set => SetField(ref _imageSource, value); }
@@ -3166,6 +3514,32 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public double Y { get => _y; set => SetField(ref _y, value); }
         public double Width { get => _width; set => SetField(ref _width, value); }
         public double Height { get => _height; set => SetField(ref _height, value); }
+
+        // ✅ Contour visuel (19.07.2026, demande de Joe) : indique quelle image est
+        // sélectionnée pour "Retirer image" / "Ajouter aux favoris".
+        public bool IsSelected { get => _isSelected; set => SetField(ref _isSelected, value); }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+            field = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+    }
+
+    public sealed class ImageFavoriteItem : INotifyPropertyChanged
+    {
+        private string _filePath = "";
+        private ImageSource? _imageSource;
+
+        public string FilePath { get => _filePath; set => SetField(ref _filePath, value); }
+        public ImageSource? ImageSource { get => _imageSource; set => SetField(ref _imageSource, value); }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -3310,6 +3684,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public List<PlacedImageState> PlacedImageStates { get; set; } = new();
         public bool ShowSaturday { get; set; }
         public bool ShowSunday { get; set; }
+
+        // ✅ Zones de texte, indépendantes par semaine (19.07.2026, demande de Joe).
+        public List<TextZoneState> TextZoneStates { get; set; } = new();
     }
 
     private sealed class TaskRowState

@@ -166,6 +166,10 @@
         </Style>
 
         <Style x:Key="PlanningDatePickerStyle" TargetType="DatePicker">
+            <!-- ✅ Retour au format court "13.07.2026" (19.07.2026) : le format long
+                 ("lundi, 13 juillet 2026") essayé juste avant prenait trop de place dans
+                 l'en-tête "Planning hebdomadaire" (le bouton "Ajouter" sortait de l'écran),
+                 Joe a préféré revenir au format court plutôt que complexifier davantage. -->
             <Setter Property="SelectedDateFormat" Value="Short"/>
             <Setter Property="Width" Value="130"/>
             <Setter Property="Height" Value="24"/>
@@ -511,42 +515,23 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <!-- ✅ Sélection de semaine + dates déplacées ici (19.07.2026, 2e demande de Joe) :
+             cette Row="0" est HORS du ScrollViewer (voir MainScrollViewer, Row="1") -> zone
+             figée, toujours visible au scroll, même ligne que "Générer PDF". -->
         <Grid Grid.Row="0" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="18"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="18"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="18"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- ✅ Titre "Planning" supprimé -->
-
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button x:Name="DuplicatePrevButton"
-                        Content="⊕◀"
-                        Tag="prev"
-                        Click="DuplicateCurrentWeekTo_Click"
-                        Width="34" Height="24"
-                        Margin="0,0,4,0"
-                        Padding="0"
-                        FontSize="11"
-                        ToolTip="Copier cette semaine vers la semaine précédente"
-                        Style="{StaticResource SmallBlueButtonStyle}"/>
+            <StackPanel Grid.Column="0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
                 <Button x:Name="PrevWeekButton"
                         Content="◀"
                         Click="PrevWeekButton_Click"
-                        Width="24" Height="24"
+                        Width="22" Height="24"
                         Margin="0,0,6,0"
                         Padding="0"
                         Style="{StaticResource SmallBlackButtonStyle}"/>
@@ -559,55 +544,34 @@
                 <Button x:Name="NextWeekButton"
                         Content="▶"
                         Click="NextWeekButton_Click"
-                        Width="24" Height="24"
+                        Width="22" Height="24"
                         Margin="0,0,4,0"
                         Padding="0"
                         Style="{StaticResource SmallBlackButtonStyle}"/>
-                <Button x:Name="DuplicateNextButton"
-                        Content="▶⊕"
-                        Tag="next"
-                        Click="DuplicateCurrentWeekTo_Click"
-                        Width="34" Height="24"
-                        Padding="0"
-                        FontSize="11"
-                        ToolTip="Copier cette semaine vers la semaine suivante"
-                        Style="{StaticResource SmallBlueButtonStyle}"/>
+
+                <!-- ✅ DuplicateNextButton retiré d'ici (3e demande de Joe, 19.07.2026) : reste
+                     dans la section "Planning hebdomadaire" (voir WeeklyHeaderToolbar). -->
+
+                <TextBlock Text="Début :"
+                           Foreground="#374151"
+                           VerticalAlignment="Center"
+                           Margin="14,0,4,0"/>
+                <DatePicker x:Name="StartDatePicker"
+                            Width="100"
+                            Height="24"
+                            Style="{StaticResource PlanningDatePickerStyle}"
+                            SelectedDateChanged="StartDatePicker_SelectedDateChanged"/>
+
+                <TextBlock Text="Fin :"
+                           Foreground="#374151"
+                           VerticalAlignment="Center"
+                           Margin="30,0,4,0"/>
+                <DatePicker x:Name="EndDatePicker"
+                            Width="100"
+                            Height="24"
+                            Style="{StaticResource PlanningDatePickerStyle}"
+                            SelectedDateChanged="EndDatePicker_SelectedDateChanged"/>
             </StackPanel>
-
-            <TextBlock Grid.Column="4"
-			           Text="Début semaine :"
-			           Foreground="#374151"
-			           VerticalAlignment="Center"/>
-
-            <ComboBox x:Name="StartWeekdayCombo"
-			          Grid.Column="6"
-			          Width="110"
-			          Height="24"
-			          VerticalContentAlignment="Center"
-			          Margin="0,0,0,0"
-			          DisplayMemberPath="Label"
-			          SelectedValuePath="Value"
-			          SelectionChanged="StartWeekdayCombo_SelectionChanged"/>
-
-            <TextBlock Grid.Column="8"
-			           Text="Date de départ :"
-			           Foreground="#374151"
-			           VerticalAlignment="Center"/>
-
-            <DatePicker x:Name="StartDatePicker"
-			            Grid.Column="10"
-			            Style="{StaticResource PlanningDatePickerStyle}"
-			            SelectedDateChanged="StartDatePicker_SelectedDateChanged"/>
-
-            <TextBlock Grid.Column="12"
-			           Text="Date de fin :"
-			           Foreground="#374151"
-			           VerticalAlignment="Center"/>
-
-            <DatePicker x:Name="EndDatePicker"
-			            Grid.Column="13"
-			            Style="{StaticResource PlanningDatePickerStyle}"
-			            SelectedDateChanged="EndDatePicker_SelectedDateChanged"/>
 
             <!-- ✅ Marge droite de 8 pour aligner le bord droit avec la pastille "Dossier" de
                  MainWindow : le conteneur de page (Border Padding="12") est inset de 4px de
@@ -615,7 +579,7 @@
                  marge droite de 12 dans son StackPanel — 12+8-12 = 8 de marge ici pour
                  compenser exactement l'écart. -->
             <Button x:Name="ExportPdfButton"
-                    Grid.Column="14"
+                    Grid.Column="2"
                     Content="Générer PDF"
                     Style="{StaticResource PdfButtonStyle}"
                     HorizontalAlignment="Right"
@@ -639,7 +603,7 @@
                 <!-- 1) Tâches -->
                 <Border x:Name="TaskSectionBorder"
                         Grid.Row="0"
-				        BorderBrush="#D1D5DB"
+				        BorderBrush="#6B7280"
 				        BorderThickness="1"
 				        CornerRadius="12"
 				        Padding="10"
@@ -996,7 +960,7 @@
                 <!-- 2) Planning hebdo -->
                 <Border x:Name="WeeklySectionBorder"
                         Grid.Row="1"
-				        BorderBrush="#D1D5DB"
+				        BorderBrush="#6B7280"
 				        BorderThickness="1"
 				        CornerRadius="12"
 				        Padding="10"
@@ -1016,18 +980,36 @@
 							           FontSize="14"
 							           FontWeight="SemiBold"
 							           Foreground="#111827"
+							           VerticalAlignment="Center"
 							           DockPanel.Dock="Left"/>
 
-                            <!-- ✅ Choix Samedi / Dimanche indépendants (même mécanisme que le
-                                 bouton "Colonnes" du tableau des Tâches) — PAS mémorisé d'une
-                                 semaine à l'autre : les deux reviennent décochés/masqués à
-                                 chaque nouvelle semaine (voir Reload()). -->
-                            <Button x:Name="WeekendColumnsButton"
-							        Content="Samedi/Dimanche ▾"
+                            <!-- ✅ Navigation de semaine + dates déplacées dans la zone figée en haut
+                                 de page (19.07.2026, 2e demande de Joe), même ligne que "Générer PDF"
+                                 -> toujours visibles au scroll. Voir Grid Grid.Row="0" (hors du
+                                 ScrollViewer). -->
+
+                            <!-- ✅ Toutes les options de structure de la semaine regroupées sous un
+                                 seul bouton (19.07.2026, demande de Joe : auparavant deux boutons
+                                 séparés "Samedi/Dimanche ▾" et "Jours : 6 ▾"). Choix Samedi/Dimanche
+                                 mémorisés PAR SEMAINE (voir LoadWeekState) ; structure 5/6 jours en
+                                 mémoire pour la session (voir _weekDayCount). -->
+                            <Button x:Name="WeekStructureButton"
+							        Content="Structurer la semaine ▾"
 							        Style="{StaticResource OutlineBlueButtonStyle}"
 							        DockPanel.Dock="Right"
 							        Margin="8,0,0,0"
-							        Click="WeekendColumnsButton_Click"/>
+							        Click="WeekStructureButton_Click"/>
+
+                            <!-- ✅ Entre "Supprimer" et "Structurer la semaine" (4e demande de Joe,
+                                 19.07.2026), avec libellé complet au lieu de l'icône seule. -->
+                            <Button x:Name="DuplicateNextButton"
+                                    Content="▶⧉ Copier semaine à la suivante"
+                                    Tag="next"
+                                    Click="DuplicateCurrentWeekTo_Click"
+                                    ToolTip="Copier cette semaine vers la semaine suivante"
+                                    DockPanel.Dock="Right"
+                                    Margin="8,0,0,0"
+                                    Style="{StaticResource SmallBlueButtonStyle}"/>
 
                             <Button x:Name="RemovePlanningRowButton"
 							        Content="Supprimer"
@@ -1043,8 +1025,8 @@
 							        Click="AddPlanningRowButton_Click"/>
                         </DockPanel>
 
-                        <Popup x:Name="WeekendColumnsPopup"
-                               PlacementTarget="{Binding ElementName=WeekendColumnsButton}"
+                        <Popup x:Name="WeekStructurePopup"
+                               PlacementTarget="{Binding ElementName=WeekStructureButton}"
                                Placement="Bottom"
                                StaysOpen="False"
                                AllowsTransparency="True">
@@ -1055,7 +1037,37 @@
                                     Padding="10"
                                     Effect="{StaticResource CardShadowEffect}">
                                 <StackPanel>
-                                    <TextBlock Text="Colonnes visibles" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Structure de la semaine" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                                    <!-- ✅ 5 jours en premier (19.07.2026, demande de Joe). -->
+                                    <RadioButton x:Name="WeekDayCount5RadioButton"
+                                                 GroupName="WeekDayCount"
+                                                 Content="5 jours (+ weekend)"
+                                                 Margin="0,2"
+                                                 Click="WeekDayCount_Changed"/>
+                                    <RadioButton x:Name="WeekDayCount6RadioButton"
+                                                 GroupName="WeekDayCount"
+                                                 Content="6 jours (+ weekend)"
+                                                 Margin="0,2"
+                                                 Click="WeekDayCount_Changed"/>
+
+                                    <!-- ✅ Déplacé depuis le haut de page (19.07.2026, demande de
+                                         Joe) : même ComboBox, même gestionnaire
+                                         (StartWeekdayCombo_SelectionChanged), juste regroupé ici.
+                                         "Structure" avant "Début" (19.07.2026, 2e demande de Joe). -->
+                                    <Border BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Margin="0,8,0,8"/>
+                                    <TextBlock Text="Début de semaine" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="StartWeekdayCombo"
+                                              Width="130"
+                                              Height="24"
+                                              HorizontalAlignment="Left"
+                                              VerticalContentAlignment="Center"
+                                              Margin="0,0,0,0"
+                                              DisplayMemberPath="Label"
+                                              SelectedValuePath="Value"
+                                              SelectionChanged="StartWeekdayCombo_SelectionChanged"/>
+
+                                    <Border BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Margin="0,8,0,8"/>
+                                    <TextBlock Text="Colonnes visibles par semaine individuelle" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
                                     <CheckBox x:Name="WeekendShowSaturdayCheckBox" Content="Samedi" Margin="0,2" Click="WeekendColumnVisibility_Changed"/>
                                     <CheckBox x:Name="WeekendShowSundayCheckBox" Content="Dimanche" Margin="0,2" Click="WeekendColumnVisibility_Changed"/>
 
@@ -1066,6 +1078,7 @@
                                          qui travaille tous les samedis mais jamais les dimanches ne coche
                                          que la première. -->
                                     <Border BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Margin="0,8,0,8"/>
+                                    <TextBlock Text="Colonnes visibles partout" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
                                     <CheckBox x:Name="WeekendSaturdayDefaultCheckBox"
                                               Content="Samedi par défaut"
                                               Margin="0,2"
@@ -1320,8 +1333,8 @@
 
                                 <!-- ✅ Dimanche : ajouté avec Samedi, DOIT rester avant "Jour 6"
                                      (lundi suivant). Visibilité pilotée indépendamment via la
-                                     case à cocher "Dimanche" du bouton "Samedi/Dimanche ▾"
-                                     (WeekendColumnsPopup) — masqué par défaut à chaque nouvelle
+                                     case à cocher "Dimanche" du bouton "Structurer la semaine ▾"
+                                     (WeekStructurePopup) — masqué par défaut à chaque nouvelle
                                      semaine, comme Samedi. -->
                                 <DataGridTemplateColumn x:Name="SundayColumn" Header="Dimanche" Width="*" Visibility="Collapsed">
                                     <DataGridTemplateColumn.CellTemplate>
@@ -1354,7 +1367,11 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn Header="Jour 6" Width="*">
+                                <!-- ✅ Masquée en mode "5 jours" (18.07.2026, demande de Joe) : voir
+                                     WeekStructureButton/WeekStructurePopup et _weekDayCount. Les
+                                     données déjà saisies (D6) restent en mémoire même masquée, comme
+                                     Samedi/Dimanche. -->
+                                <DataGridTemplateColumn x:Name="Day6Column" Header="Jour 6" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border Padding="0">
@@ -1393,7 +1410,7 @@
                 <!-- 3) Image -->
                 <Border x:Name="PlanSectionBorder"
                         Grid.Row="2"
-				        BorderBrush="#D1D5DB"
+				        BorderBrush="#6B7280"
 				        BorderThickness="1"
 				        CornerRadius="12"
 				        Padding="10"
@@ -1422,12 +1439,31 @@
 							           Foreground="#111827"
 							           DockPanel.Dock="Left"/>
 
+                            <!-- ✅ Ordre gauche->droite (19.07.2026, demande de Joe) : Ajouter image >
+                                 Retirer image > Ajouter aux favoris > Favoris > Reset stickers. Dans un
+                                 DockPanel LastChildFill="False", le 1er élément Dock="Right" déclaré est
+                                 le plus à droite -> on déclare donc dans l'ordre inverse (droite vers
+                                 gauche). -->
                             <Button x:Name="ResetStickersButton"
                                     Content="Reset stickers"
 							        Style="{StaticResource SmallBlackButtonStyle}"
 							        DockPanel.Dock="Right"
 							        Margin="8,0,0,0"
 							        Click="ResetPlacedStickers_Click"/>
+
+                            <Button x:Name="ImageFavoritesButton"
+                                    Content="Favoris ▾"
+							        Style="{StaticResource OutlineBlueButtonStyle}"
+							        DockPanel.Dock="Right"
+							        Margin="8,0,0,0"
+							        Click="ImageFavoritesButton_Click"/>
+
+                            <Button x:Name="AddImageToFavoritesButton"
+                                    Content="☆ Ajouter aux favoris"
+							        Style="{StaticResource SmallBlueButtonStyle}"
+							        DockPanel.Dock="Right"
+							        Margin="8,0,0,0"
+							        Click="AddSelectedImageToFavorites_Click"/>
 
                             <Button x:Name="PlanRemoveButton"
                                     Content="Retirer image"
@@ -1440,8 +1476,60 @@
                                     Content="Ajouter image"
 							        Style="{StaticResource SmallBlueButtonStyle}"
 							        DockPanel.Dock="Right"
+							        Margin="8,0,0,0"
 							        Click="PlanAdd_Click"/>
                         </DockPanel>
+
+                        <Popup x:Name="ImageFavoritesPopup"
+                               PlacementTarget="{Binding ElementName=ImageFavoritesButton}"
+                               Placement="Bottom"
+                               StaysOpen="False"
+                               AllowsTransparency="True">
+                            <Border Background="White"
+                                    BorderBrush="#D1D5DB"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="10"
+                                    Effect="{StaticResource CardShadowEffect}">
+                                <StackPanel Width="230">
+                                    <TextBlock Text="Images favorites" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Clique une image pour l'ajouter au plan."
+                                               FontSize="10" Foreground="#6B7280" Margin="0,0,0,6"/>
+                                    <ItemsControl x:Name="ImageFavoritesItemsControl" ItemsSource="{Binding ImageFavorites}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="3" Width="56" Height="56">
+                                                    <Border BorderBrush="#D1D5DB"
+                                                            BorderThickness="1"
+                                                            CornerRadius="4"
+                                                            Background="#FAFAFA">
+                                                        <Image Source="{Binding ImageSource}"
+                                                               Stretch="UniformToFill"
+                                                               Cursor="Hand"
+                                                               MouseLeftButtonUp="ImageFavoriteThumbnail_MouseLeftButtonUp"/>
+                                                    </Border>
+                                                    <Button Content="✕"
+                                                            Width="16" Height="16"
+                                                            Padding="0"
+                                                            FontSize="9"
+                                                            ToolTip="Retirer des favoris"
+                                                            HorizontalAlignment="Right"
+                                                            VerticalAlignment="Top"
+                                                            Margin="0,-4,-4,0"
+                                                            Style="{StaticResource SmallBlackButtonStyle}"
+                                                            Click="ImageFavoriteRemove_Click"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
 
                         <Border Grid.Row="1" Grid.Column="0"
                                 MinHeight="380"
@@ -1475,14 +1563,26 @@
                                             <DataTemplate>
                                                 <Border Width="{Binding Width}"
 												        Height="{Binding Height}"
-												        BorderBrush="#D1D5DB"
-												        BorderThickness="1"
 												        Background="Transparent"
 												        PreviewMouseLeftButtonDown="PlacedPlanImage_PreviewMouseLeftButtonDown"
 												        PreviewMouseMove="PlacedPlanImage_PreviewMouseMove"
 												        PreviewMouseLeftButtonUp="PlacedPlanImage_PreviewMouseLeftButtonUp"
 												        PreviewMouseRightButtonDown="PlacedPlanImage_RightClick"
 												        ToolTip="Glisser : déplacer • Coin : redimensionner • Clic droit : supprimer">
+                                                    <!-- ✅ Contour visuel de sélection (19.07.2026, demande de Joe) : gris fin par
+                                                         défaut, bleu et plus épais quand IsSelected. -->
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+                                                            <Setter Property="BorderThickness" Value="1"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                                                                    <Setter Property="BorderThickness" Value="3"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Grid>
                                                         <Image Source="{Binding ImageSource}" Stretch="Fill"/>
                                                         <Thumb Width="14"
@@ -1652,8 +1752,9 @@
                 </Border>
 
                 <!-- 4) Zones de texte -->
-                <Border Grid.Row="3"
-				        BorderBrush="#D1D5DB"
+                <Border x:Name="TextZonesSectionBorder"
+                        Grid.Row="3"
+				        BorderBrush="#6B7280"
 				        BorderThickness="1"
 				        CornerRadius="12"
 				        Padding="10"
@@ -1677,6 +1778,9 @@
 							           DockPanel.Dock="Left"
 							           VerticalAlignment="Center"/>
 
+                            <!-- ✅ Sélectionner tout / Copier / Coller déplacés sur la ligne "Police"
+                                 (19.07.2026, 2e demande de Joe) : voir TextZoneFontToolbar. -->
+
                             <Button Content="Retirer zone de texte"
 							        Style="{StaticResource SmallBlackButtonStyle}"
 							        DockPanel.Dock="Right"
@@ -1686,6 +1790,7 @@
                             <Button Content="Ajouter zone de texte"
 							        Style="{StaticResource SmallBlueButtonStyle}"
 							        DockPanel.Dock="Right"
+							        Margin="8,0,0,0"
 							        Click="TextZoneAdd_Click"/>
                         </DockPanel>
 
@@ -1699,6 +1804,9 @@
 						        Margin="0,0,0,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -1790,6 +1898,30 @@
                                         <Border x:Name="FillColorSwatch" Height="3" Background="#FDE047" CornerRadius="2" Margin="0,1,0,0"/>
                                     </StackPanel>
                                 </Button>
+
+                                <!-- ✅ Sélectionner tout / Copier / Coller, déplacés sur la ligne
+                                     "Police" (19.07.2026, 2e demande de Joe), même look que les autres
+                                     boutons de cette barre (fond blanc, bordure grise, hauteur 28). -->
+                                <Button Grid.Column="9" Content="Sélectionner tout" Height="28"
+								        HorizontalAlignment="Left"
+								        Margin="16,0,8,0" Padding="10,0"
+								        Background="White" Foreground="#111827" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Click="TextZoneSelectAll_Click"
+								        ToolTip="Sélectionner tout le texte de la zone active"/>
+
+                                <Button Grid.Column="10" Content="Copier" Height="28"
+								        HorizontalAlignment="Left"
+								        Margin="0,0,8,0" Padding="10,0"
+								        Background="White" Foreground="#111827" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Click="TextZoneCopy_Click"
+								        ToolTip="Copier le texte sélectionné"/>
+
+                                <Button Grid.Column="11" Content="Coller" Height="28"
+								        HorizontalAlignment="Left"
+								        Padding="10,0"
+								        Background="White" Foreground="#111827" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Click="TextZonePaste_Click"
+								        ToolTip="Coller dans la zone active"/>
                             </Grid>
                         </Border>
 

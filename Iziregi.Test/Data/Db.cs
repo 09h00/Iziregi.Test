@@ -624,6 +624,16 @@ public static class Db
     public static void SetDefaultShowSunday(long projectId, bool value) =>
         SetSetting(MakeProjectKey("DefaultShowSunday", projectId), value ? "1" : "0");
 
+    // ✅ NOUVEAU (19.07.2026, demande de Joe) : structure de la semaine (5 ou 6 jours de
+    // base), persistée par projet. Défaut "5" pour un projet jamais configuré (livraison
+    // aux nouveaux utilisateurs) -- une fois que l'utilisateur a fait un choix, celui-ci est
+    // mémorisé pour les prochains lancements de l'app.
+    public static int GetPlanningWeekDayCount(long projectId) =>
+        GetSetting(MakeProjectKey("PlanningWeekDayCount", projectId)) == "6" ? 6 : 5;
+
+    public static void SetPlanningWeekDayCount(long projectId, int value) =>
+        SetSetting(MakeProjectKey("PlanningWeekDayCount", projectId), value == 6 ? "6" : "5");
+
     public static string GetDefaultTaskUrgency(long projectId) =>
         GetSetting(MakeProjectKey("DefaultTaskUrgency", projectId)) ?? "";
 
