@@ -156,6 +156,13 @@ public class WorkOrder
     public double ForfaitUnitPrice { get; set; }
 
     // =========================
+    // ✅ NOUVEAU (20.07.2026) : Forfait TTC saisi directement par l'utilisateur (montant lu sur
+    // le pdf annexé de l'entreprise). Remplace le principe qty*prix unitaire ci-dessus pour les
+    // nouveaux bons : HT et TVA sont recalculés à rebours à partir de ce montant TTC.
+    // =========================
+    public double ForfaitTtc { get; set; }
+
+    // =========================
     // ✅ NOUVEAU : PDF devis forfaitaire (lecture seule)
     // =========================
     public string ForfaitPdfFileName { get; set; } = "";

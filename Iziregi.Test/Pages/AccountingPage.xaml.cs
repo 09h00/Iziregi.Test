@@ -311,16 +311,34 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         var forfait = Math.Round(wo.ForfaitQty * wo.ForfaitUnitPrice, 2);
         var hasForfait = Math.Abs(forfait) > 0.0000000001;
 
-        var htBrut = Math.Round(material + labor + travel + (hasForfait ? forfait : 0), 2);
+        // ✅ BUG RÉEL (20.07.2026) : le nouveau champ "Forfait : Montant TTC" (WorkOrder.ForfaitTtc)
+        // n'était pas du tout pris en compte ici -> un devis fait en Forfait TTC ressortait à
+        // 0.00 partout en Comptabilité, alors qu'il a un vrai montant facturé. Contrairement à
+        // l'ancien Forfait (HT -> TVA -> TTC), celui-ci part du TTC saisi et recalcule HT/TVA à
+        // rebours, exactement comme WorkOrderWindow.RecomputeTotals.
+        var forfaitTtc = Math.Round(wo.ForfaitTtc, 2);
+        var hasForfaitTtc = Math.Abs(forfaitTtc) > 0.0000000001;
 
-        var discountRate = wo.DiscountRate;
-        if (double.IsNaN(discountRate) || double.IsInfinity(discountRate)) discountRate = 0;
-        discountRate = Math.Max(0, discountRate);
+        double htNet, tva, ttc;
 
-        var htNet = Math.Round(htBrut * (1.0 - (discountRate / 100.0)), 2);
+        if (hasForfaitTtc)
+        {
+            ttc = forfaitTtc;
+            htNet = Math.Round(ttc / (1.0 + (wo.TvaRate / 100.0)), 2);
+            tva = Math.Round(ttc - htNet, 2);
+        }
+        else
+        {
+            var htBrut = Math.Round(material + labor + travel + (hasForfait ? forfait : 0), 2);
 
-        var tva = Math.Round(htNet * (wo.TvaRate / 100.0), 2);
-        var ttc = Math.Round(htNet + tva, 2);
+            var discountRate = wo.DiscountRate;
+            if (double.IsNaN(discountRate) || double.IsInfinity(discountRate)) discountRate = 0;
+            discountRate = Math.Max(0, discountRate);
+
+            htNet = Math.Round(htBrut * (1.0 - (discountRate / 100.0)), 2);
+            tva = Math.Round(htNet * (wo.TvaRate / 100.0), 2);
+            ttc = Math.Round(htNet + tva, 2);
+        }
 
         var company = (wo.PerformedBy ?? "").Trim();
         if (string.IsNullOrWhiteSpace(company)) company = "(Non défini)";
@@ -335,10 +353,10 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             RequestedBy = wo.RequestedBy ?? "",
             Company = company,
 
-            // ✅ On ajoute le forfait au Matériel pour l'affichage/export (pas de colonne
-            // dédiée "Forfait" dans la grille/CSV) afin que Matériel+Main d'œuvre+
+            // ✅ On ajoute le forfait (HT ou TTC->HT) au Matériel pour l'affichage/export (pas de
+            // colonne dédiée "Forfait" dans la grille/CSV) afin que Matériel+Main d'œuvre+
             // Déplacements reste cohérent avec le HT total.
-            Material = Math.Round(material + (hasForfait ? forfait : 0), 2),
+            Material = Math.Round(hasForfaitTtc ? htNet : (material + (hasForfait ? forfait : 0)), 2),
             Labor = labor,
             Travel = travel,
 
@@ -755,6 +773,18 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         }
     }
 
+    // ✅ Afficher/Masquer le graphique des catégories (23.07.2026, demande de Joe).
+    private void ToggleCategoryChartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (CategoryChartBorder == null) return;
+
+        var nowHidden = CategoryChartBorder.Visibility == Visibility.Visible;
+        CategoryChartBorder.Visibility = nowHidden ? Visibility.Collapsed : Visibility.Visible;
+
+        if (ToggleCategoryChartButton != null)
+            ToggleCategoryChartButton.Content = nowHidden ? "Afficher graphique catégories" : "Masquer graphique catégories";
+    }
+
     // -------------------------
     // ✅ Export PDF (handler attendu par XAML : Click="ExportPdf_Click")
     // -------------------------
@@ -768,7 +798,15 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             AccountingPrintArea.UpdateLayout();
             Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
 
-            var png = RenderElementToPng(AccountingPrintArea, scale: 2.0);
+            const double scale = 2.0;
+            var png = RenderElementToPng(AccountingPrintArea, scale);
+
+            // ✅ Ne pas couper une section (carte) en 2 pages (23.07.2026, demande de Joe) : capture
+            // la position/hauteur de chaque carte visible dans le même espace pixel que le PNG
+            // (juste après le Measure/Arrange fait par RenderElementToPng, avant tout autre passage
+            // de layout) pour que le découpage en pages sache où NE PAS couper.
+            var sectionRanges = GetVisibleCardYRanges(scale,
+                FiltersCardBorder, TotalsCardBorder, DetailsCardBorder, ChartCardBorder, CategoryChartBorder);
 
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
@@ -783,7 +821,15 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             if (dlg.ShowDialog() != true)
                 return;
 
-            PdfService.GenerateAccountingPdfFromBitmapPng(dlg.FileName, png);
+            PdfService.GenerateAccountingPdfFromBitmapPng(dlg.FileName, png, sectionRanges);
+
+            // ✅ Ouvre automatiquement le PDF (23.07.2026, demande de Joe : tous les pdf générés
+            // dans l'app doivent s'ouvrir automatiquement).
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
+            }
+            catch { }
 
             WpfMessageBox.Show("PDF Comptabilité généré.", "PDF", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -830,6 +876,32 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         using var ms = new MemoryStream();
         encoder.Save(ms);
         return ms.ToArray();
+    }
+
+    // ✅ Bornes verticales (en pixels, même échelle que le PNG rendu) de chaque carte visible, pour
+    // que PdfService évite de couper une carte pile entre deux pages (23.07.2026, demande de Joe).
+    // Doit être appelé juste après RenderElementToPng (même passage de Measure/Arrange), avant tout
+    // autre événement qui pourrait redéclencher un layout (ex. l'ouverture d'un dialogue modal).
+    private List<(double Top, double Bottom)> GetVisibleCardYRanges(double scale, params Border?[] cards)
+    {
+        var ranges = new List<(double, double)>();
+
+        foreach (var card in cards)
+        {
+            if (card == null || card.Visibility != Visibility.Visible || card.ActualHeight <= 0)
+                continue;
+
+            try
+            {
+                var topLeft = card.TranslatePoint(new System.Windows.Point(0, 0), AccountingPrintArea);
+                var top = topLeft.Y * scale;
+                var bottom = (topLeft.Y + card.ActualHeight) * scale;
+                ranges.Add((top, bottom));
+            }
+            catch { }
+        }
+
+        return ranges;
     }
 
     // -------------------------

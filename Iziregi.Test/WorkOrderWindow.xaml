@@ -6,9 +6,9 @@ xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 mc:Ignorable="d"
 Title="Bon d'intervention"
 Height="586"
-Width="844"
+Width="1040"
 MinHeight="540"
-MinWidth="798"
+MinWidth="1000"
 WindowStartupLocation="CenterOwner"
 Background="#F6F7FB"
 FontFamily="Arial">
@@ -70,6 +70,21 @@ FontFamily="Arial">
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
+        <!-- ✅ Fond grise plus fonce en lecture seule (22.07.2026, demande de Joe), meme
+             principe que CompanyPdfUploadButtonStyle -->
+        <Style x:Key="ForfaitTtcInputStyle" TargetType="TextBox" BasedOn="{StaticResource InputStyle}">
+            <Style.Triggers>
+                <Trigger Property="IsReadOnly" Value="True">
+                    <Setter Property="Background" Value="#9CA3AF"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ✅ FontSize=13 (20.07.2026, correction "polices chaotiques") : meme taille que
+             RightAlignedCellTextStyle/TotalsAmountStyle, pour que les champs saisissables de la
+             boite totaux (Qt/Prix Main d'oeuvre, Deplacements, Rabais, TVA) matchent la taille
+             des libelles et des montants a cote, au lieu d'etre 1px plus petits. -->
         <Style x:Key="InlineMoneyInputStyle" TargetType="TextBox">
             <Setter Property="Height" Value="24"/>
             <Setter Property="Padding" Value="6,1"/>
@@ -81,18 +96,30 @@ FontFamily="Arial">
             <Setter Property="TextAlignment" Value="Right"/>
         </Style>
 
+        <!-- ✅ FontSize=13 explicite (20.07.2026, demande de Joe) : meme taille que
+             TotalsAmountStyle ci-dessous, pour que les montants du tableau Libellé/Matériel et
+             ceux de Total Matériel/Main d'oeuvre/etc paraissent de la meme grandeur. -->
+        <!-- ✅ Padding a droite retire (23.07.2026, demande de Joe) : la cellule du DataGrid
+             (LinesGridCellStyle) a deja 6px de padding a droite -> les deux cumules donnaient 12px,
+             desalignant verticalement les montants par rapport a Total Materiel/Main d'oeuvre en
+             dessous (6px seulement). -->
         <Style x:Key="RightAlignedCellTextStyle" TargetType="TextBlock">
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="Padding" Value="0,0,6,0"/>
+            <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
+        <!-- ✅ Corrige TextAlignment="Right" -> "Center" (23.07.2026, demande de Joe) : le nom du
+             style promettait un centrage jamais applique. Padding symetrique au lieu du padding
+             a droite (qui biaisait le centrage visuellement). -->
         <Style x:Key="CenterAlignedCellTextStyle" TargetType="TextBlock">
-            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="Padding" Value="0,0,6,0"/>
+            <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <Style x:Key="TotalsLabelStyle" TargetType="TextBlock">
@@ -104,8 +131,9 @@ FontFamily="Arial">
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <Style x:Key="ComboStyle" TargetType="ComboBox">
@@ -174,6 +202,82 @@ RecognizesAccessKey="True"/>
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
 
+        <!-- ✅ Boutons "Envoyer lien..." colorés selon leur section (22.07.2026, demande de Joe) :
+             fond+bordure Devis (bleu) / Validation (vert). Template minimal (comme PdfButtonStyle
+             dans App.xaml) pour que la bordure colorée s'affiche vraiment, le chrome Windows par
+             defaut d'un Button l'ignore parfois selon le theme. -->
+        <Style x:Key="DevisLinkButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Background" Value="#EAF2FF"/>
+            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="8">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ValidationLinkButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Background" Value="#E9FBEA"/>
+            <Setter Property="BorderBrush" Value="#15803D"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="8">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ "Reset validation" : juste la bordure verte (22.07.2026, demande de Joe),
+             fond blanc conservé (contrairement à ValidationLinkButtonStyle). -->
+        <Style x:Key="ValidationResetButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="BorderBrush" Value="#15803D"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="8">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ "Annuler" : coins arrondis (22.07.2026, demande de Joe), comme les autres boutons
+             de la barre qui ont déjà un template avec CornerRadius. -->
+        <Style x:Key="RoundedSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="8">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SmallButtonStyle" TargetType="Button">
             <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="10,0"/>
@@ -188,12 +292,56 @@ RecognizesAccessKey="True"/>
         <Style x:Key="SmallActionButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
             <Setter Property="BorderThickness" Value="2"/>
             <Setter Property="BorderBrush" Value="#94A3B8"/>
-            <Setter Property="Padding" Value="12,0"/>
+            <!-- ✅ Padding reduit de 12 a 8 (20.07.2026, demande de Joe) : "Supprimer ligne",
+                 "Supprimer" (pdf) et le champ Forfait TTC (largeur liee a "Supprimer") etaient
+                 coupes a droite. -->
+            <Setter Property="Padding" Value="8,0"/>
+        </Style>
+
+        <!-- ✅ Fond grise plus fonce quand desactive (22.07.2026, demande de Joe) : le template
+             Windows par defaut d'un Button ignore la propriete Background en etat Disabled (il
+             la remplace par son propre gris systeme, trop clair) -> ControlTemplate minimal
+             (Border+ContentPresenter) pour que le Trigger IsEnabled=False soit reellement visible. -->
+        <Style x:Key="CompanyPdfUploadButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallActionButtonStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#9CA3AF"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="BorderBrush" Value="#6B7280"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
             <Setter Property="Foreground" Value="#B91C1C"/>
             <Setter Property="BorderBrush" Value="#FCA5A5"/>
+        </Style>
+
+        <!-- ✅ "Modifier" : arrondi comme Annuler/Enregistrer (23.07.2026, demande de Joe), mais
+             reste visible (grisé, pas masqué) une fois le bon déjà déverrouillé — RoundedSecondaryButtonStyle
+             seul ne grise pas visuellement en IsEnabled=False (même piège que CompanyPdfUploadButtonStyle
+             ci-dessus : un ControlTemplate custom sans Trigger ignore l'état désactivé). -->
+        <Style x:Key="ModifyButtonStyle" TargetType="Button" BasedOn="{StaticResource RoundedSecondaryButtonStyle}">
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#F3F4F6"/>
+                    <Setter Property="Foreground" Value="#9CA3AF"/>
+                    <Setter Property="BorderBrush" Value="#D1D5DB"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -207,31 +355,35 @@ BorderThickness="2"
 CornerRadius="14"
 Padding="10"
 Margin="0,12,18,0">
-            <DockPanel LastChildFill="False">
+            <Grid>
                 <TextBlock x:Name="StatusTextBlock"
 Text=""
 Foreground="#6B7280"
 VerticalAlignment="Center"
-DockPanel.Dock="Left"/>
+HorizontalAlignment="Left"/>
 
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                    <Button x:Name="ExportQuoteRequestButton"
+                <!-- ✅ Série de boutons centrée sur la barre (22.07.2026, demande de Joe). -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,8,0">
+                        <Button x:Name="ExportQuoteRequestButton"
 Content="Envoyer lien pour devis"
-Style="{StaticResource SecondaryButtonStyle}"
+Style="{StaticResource DevisLinkButtonStyle}"
 Click="ExportQuoteRequestButton_Click"
 Margin="0,0,8,0"/>
 
-                    <Button x:Name="ExportSignatureRequestButton"
+                        <Button x:Name="ExportSignatureRequestButton"
 Content="Envoyer lien pour validation"
-Style="{StaticResource SecondaryButtonStyle}"
+Style="{StaticResource ValidationLinkButtonStyle}"
 Click="ExportSignatureRequestButton_Click"
 Margin="0,0,8,0"/>
 
-                    <Button x:Name="ResetValidationBottomButton"
+                        <!-- ✅ "Reset validation" à côté de "Envoyer lien pour validation" (22.07.2026,
+                             demande de Joe), même espacement (8px) que les autres boutons. -->
+                        <Button x:Name="ResetValidationBottomButton"
 Content="Reset validation"
-Style="{StaticResource SecondaryButtonStyle}"
-Click="ResetValidationBottomButton_Click"
-Margin="0,0,8,0"/>
+Style="{StaticResource ValidationResetButtonStyle}"
+Click="ResetValidationBottomButton_Click"/>
+                    </StackPanel>
 
                     <Button x:Name="PdfButton"
 Content="Générer PDF"
@@ -239,9 +391,19 @@ Style="{StaticResource PdfButtonStyle}"
 Click="PdfButton_Click"
 Margin="0,0,8,0"/>
 
+                    <!-- ✅ Lecture seule par défaut (23.07.2026, demande de Joe) : un bon déjà
+                         enregistré s'ouvre verrouillé ; ce bouton déverrouille explicitement
+                         pour éviter les modifications accidentelles. Masqué une fois cliqué. -->
+                    <Button x:Name="ModifyButton"
+Content="Modifier"
+Style="{StaticResource ModifyButtonStyle}"
+Click="ModifyButton_Click"
+ToolTip="Déverrouiller ce bon pour le modifier"
+Margin="0,0,8,0"/>
+
                     <Button x:Name="CancelButton"
 Content="Annuler"
-Style="{StaticResource SecondaryButtonStyle}"
+Style="{StaticResource RoundedSecondaryButtonStyle}"
 Click="CancelButton_Click"
 Margin="0,0,8,0"/>
 
@@ -250,7 +412,7 @@ Content="Enregistrer"
 Style="{StaticResource PrimaryButtonStyle}"
 Click="SaveButton_Click"/>
                 </StackPanel>
-            </DockPanel>
+            </Grid>
         </Border>
 
         <!-- ✅ A4 PORTRAIT : largeur de page utile calée sur le PDF (A4 - marges) -->
@@ -279,7 +441,7 @@ HorizontalScrollBarVisibility="Disabled">
                                 <ColumnDefinition Width="1*"/>
                             </Grid.ColumnDefinitions>
 
-                            <Grid Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Top">
+                            <Grid Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="78"/>
                                     <ColumnDefinition Width="*"/>
@@ -543,60 +705,101 @@ BorderThickness="1"/>
                         <StackPanel>
 
                             <Grid Margin="0,0,0,10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="16"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="6"/>
                                     <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0"
+                                <!-- ✅ Margin="0" explicite : le style SectionTitleStyle a un Margin bas
+                                     de 12 qui decalait "Devis" vers le haut par rapport a "Nom"/"Date du
+                                     devis" une fois centre verticalement (leur LabelStyle n'a que 4 de
+                                     marge basse). -->
+                                <TextBlock Grid.Row="0" Grid.Column="0"
 Text="Devis"
 Style="{StaticResource SectionTitleStyle}"
-Margin="0,0,0,0"/>
+Margin="0"
+VerticalAlignment="Center"/>
 
-                                <Button Grid.Column="2" x:Name="AddLineButton"
-Content="+ Ajouter ligne (15 max.)"
-Style="{StaticResource SmallActionButtonStyle}"
-Click="AddLineButton_Click"
-VerticalAlignment="Bottom"
-Margin="0,0,0,2"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Nom" Style="{StaticResource LabelStyle}" Margin="0" VerticalAlignment="Center"/>
+                                <TextBox Grid.Row="0" Grid.Column="4" x:Name="QuoteNameTextBox" Style="{StaticResource InputStyle}" Width="200" VerticalAlignment="Center"/>
 
-                                <Button Grid.Column="4" x:Name="DeleteLineButton"
-Content="Supprimer ligne"
-Style="{StaticResource SmallActionButtonStyle}"
-Click="DeleteLineButton_Click"
-VerticalAlignment="Bottom"
-Margin="0,0,0,2"/>
-
-                                <StackPanel Grid.Column="6">
-                                    <TextBlock Text="Nom" Style="{StaticResource LabelStyle}" Margin="0,0,0,2"/>
-                                    <TextBox x:Name="QuoteNameTextBox" Style="{StaticResource InputStyle}" Width="200"/>
+                                <!-- ✅ Label + champ regroupes dans un seul StackPanel aligne a droite
+                                     (20.07.2026, 2e correction demandee par Joe) : le premier essai
+                                     deplacait seulement le DatePicker vers le bord droit, laissant le
+                                     titre "Date du devis" orphelin a sa position d'origine. Avec les
+                                     deux dans le meme StackPanel, ils se deplacent ensemble et restent
+                                     colles l'un a l'autre, quel que soit l'endroit ou le bloc entier
+                                     est ancre. -->
+                                <StackPanel Grid.Row="0" Grid.Column="6"
+Orientation="Horizontal"
+HorizontalAlignment="Right"
+VerticalAlignment="Center">
+                                    <TextBlock Text="Date du devis" Style="{StaticResource LabelStyle}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <!-- ✅ VerticalContentAlignment="Center" (23.07.2026, demande de Joe :
+                                         date pas centree verticalement) : le DatePicker WPF ne centre pas
+                                         son texte interne par defaut, meme avec VerticalAlignment=Center
+                                         sur le controle lui-meme. -->
+                                    <DatePicker x:Name="QuoteDatePicker" Height="32" Width="140" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="8">
-                                    <TextBlock Text="Date du devis" Style="{StaticResource LabelStyle}" Margin="0,0,0,2"/>
-                                    <DatePicker x:Name="QuoteDatePicker" Height="32" Width="140"/>
+                                <!-- ✅ Boutons alignes a droite sur toute la largeur de la ligne
+                                     (20.07.2026, demande de Joe) : le bord droit de "Supprimer ligne"
+                                     coincide ainsi avec le bord droit de la grille Libellé/Matériel
+                                     juste en dessous (les deux occupant la meme largeur totale de
+                                     carte). Remplace l'alignement precedent sur la colonne Date. -->
+                                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="10"
+Orientation="Horizontal"
+HorizontalAlignment="Right"
+Margin="0,8,0,0">
+                                    <Button x:Name="AddLineButton"
+Content="+ Ajouter ligne (0 / 15 max.)"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="AddLineButton_Click"
+Margin="0,0,8,0"/>
+
+                                    <Button x:Name="DeleteLineButton"
+Content="Supprimer ligne"
+Style="{StaticResource SmallActionButtonStyle}"
+Click="DeleteLineButton_Click"/>
                                 </StackPanel>
                             </Grid>
 
+                            <!-- ✅ GridLinesVisibility="None" (20.07.2026, demande de Joe : separations
+                                 trop larges/doublees). DataGrid.CellStyle dessine deja sa propre
+                                 bordure par cellule (BorderThickness=0,1,1,1), combinee aux lignes
+                                 natives du DataGrid (VerticalGridLinesBrush/HorizontalGridLinesBrush) :
+                                 chaque separation etait dessinee deux fois cote a cote, doublant son
+                                 epaisseur apparente. -->
+                            <!-- ✅ VerticalScrollBarVisibility="Disabled" (20.07.2026, correction
+                                 "totaux pas alignes verticalement" demandee par Joe) : avec "Auto", le
+                                 DataGrid reservait de la place pour une barre de defilement meme non
+                                 visible, ce qui decalait sa colonne "Total" d'une quinzaine de pixels
+                                 vers la gauche par rapport a la boite des totaux juste en dessous.
+                                 Inoffensif ici : 15 lignes max. a 24px + entete 24px = 384px, toujours
+                                 sous le MaxHeight de 450 -> le defilement n'est jamais reellement
+                                 necessaire. -->
                             <DataGrid x:Name="LinesGrid"
 AutoGenerateColumns="False"
 CanUserAddRows="False"
 CanUserDeleteRows="False"
+CanUserSortColumns="False"
 HeadersVisibility="Column"
-GridLinesVisibility="All"
-VerticalGridLinesBrush="#94A3B8"
-HorizontalGridLinesBrush="#E5E7EB"
+GridLinesVisibility="None"
 RowHeight="24"
 ColumnHeaderHeight="24"
-BorderBrush="#E5E7EB"
-BorderThickness="1"
+BorderBrush="Black"
+BorderThickness="0,0,0,0.5"
+SnapsToDevicePixels="True"
 MinHeight="50"
 MaxHeight="450"
 VerticalAlignment="Top"
@@ -606,10 +809,123 @@ PreviewMouseLeftButtonDown="LinesGrid_PreviewMouseLeftButtonDown"
 PreviewMouseWheel="LinesGrid_PreviewMouseWheel"
 CurrentCellChanged="LinesGrid_CurrentCellChanged"
 RowEditEnding="LinesGrid_RowEditEnding"
-ScrollViewer.VerticalScrollBarVisibility="Auto"
+ScrollViewer.VerticalScrollBarVisibility="Disabled"
 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
 ScrollViewer.CanContentScroll="True"
 AlternationCount="1000000">
+
+                                <!-- ✅ ColumnHeaderStyle (20.07.2026, demande de Joe) : sans style
+                                     personnalise, l'entete "Libelle/Materiel, Qt, ..." gardait le chrome
+                                     Windows par defaut, qui devient bleu clair au survol de la souris.
+                                     Template minimal (juste Border+ContentPresenter) pour neutraliser
+                                     completement cet effet -> gris fixe, peu importe le survol. -->
+                                <DataGrid.Resources>
+                                    <!-- ✅ Fond gris #F3F4F6 (22.07.2026, demande de Joe), identique à
+                                         Total Matériel/Total HT/Total TTC (au lieu de #E5E7EB). -->
+                                    <!-- ✅ Bordures de colonnes noir fin (23.07.2026, demande de Joe) :
+                                         BorderBrush/BorderThickness liees via TemplateBinding (au lieu de
+                                         valeurs figees dans le template) pour que LinesGridLastHeaderStyle
+                                         puisse les surcharger juste pour la derniere colonne. -->
+                                    <Style x:Key="LinesGridColumnHeaderStyle" TargetType="DataGridColumnHeader">
+                                        <Setter Property="Background" Value="#F3F4F6"/>
+                                        <Setter Property="Foreground" Value="#111827"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="Padding" Value="6,0,6,0"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                        <Setter Property="BorderBrush" Value="Black"/>
+                                        <!-- ✅ Bordure basse retiree (23.07.2026, demande de Joe : la
+                                             bordure haute/basse de Total HT n'etait pas identique) : le
+                                             bas de l'entete doublait avec le haut de la 1ere ligne du
+                                             tableau, rendant cette jonction plus epaisse/foncee que les
+                                             autres. Seul le haut de chaque ligne separe desormais, jamais
+                                             les deux ; le bas du DataGrid ferme la derniere ligne. -->
+                                        <Setter Property="BorderThickness" Value="0,0.5,0.5,0"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="DataGridColumnHeader">
+                                                    <Border Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+Padding="{TemplateBinding Padding}"
+SnapsToDevicePixels="True">
+                                                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+
+                                    <Style x:Key="LinesGridLastHeaderStyle" TargetType="DataGridColumnHeader" BasedOn="{StaticResource LinesGridColumnHeaderStyle}">
+                                        <Setter Property="BorderThickness" Value="0,0.5,0,0"/>
+                                    </Style>
+
+                                    <!-- ✅ Fond bleu clair (22.07.2026, demande de Joe) : couleur par
+                                         defaut des cellules, meme fond que la carte Devis. Seule la
+                                         colonne "Total" l'utilise telle quelle ; Libellé/Qt/Prix ont leur
+                                         propre CellStyle sans couleur (LinesGridWhiteCellStyle). -->
+                                    <!-- ✅ Bordures laterales retirees, haut/bas en noir fin (23.07.2026,
+                                         demande de Joe) : uniquement des separations horizontales entre
+                                         les lignes, plus de separation verticale entre colonnes.
+                                         ControlTemplate minimal ajoute (meme raison que pour les boutons
+                                         ailleurs dans ce fichier) : le template DataGridCell par defaut
+                                         n'affichait pas du tout la bordure/le fond du Style -> le
+                                         changement etait invisible sur les lignes (seul l'entete, qui a
+                                         deja son propre template, se voyait). -->
+                                    <!-- ✅ Bordures de colonnes noir fin (23.07.2026, demande de Joe). -->
+                                    <!-- ✅ SnapsToDevicePixels (23.07.2026, demande de Joe : bordures
+                                         irregulieres) : a epaisseur fractionnaire (0.5px), le rendu
+                                         anti-aliase differemment selon l'alignement pixel exact de
+                                         chaque cellule, donnant des traits d'apparence inegale d'une
+                                         cellule a l'autre. Force un alignement pixel-parfait, rendu
+                                         uniforme partout. -->
+                                    <Style x:Key="LinesGridCellStyle" TargetType="DataGridCell">
+                                        <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                        <Setter Property="BorderBrush" Value="Black"/>
+                                        <!-- ✅ Bordure basse retiree (23.07.2026) : evite le doublage avec
+                                             le haut de la ligne suivante. Voir LinesGridColumnHeaderStyle. -->
+                                        <Setter Property="BorderThickness" Value="0,0.5,0.5,0"/>
+                                        <Setter Property="Padding" Value="6,0,6,0"/>
+                                        <Setter Property="Background" Value="#EAF2FF"/>
+                                        <Setter Property="Foreground" Value="#111827"/>
+                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="DataGridCell">
+                                                    <Border Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+Padding="{TemplateBinding Padding}"
+SnapsToDevicePixels="True">
+                                                        <ContentPresenter VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter Property="Foreground" Value="#111827"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEditing" Value="True">
+                                                <Setter Property="Background" Value="White"/>
+                                                <Setter Property="Foreground" Value="#111827"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+
+                                    <Style x:Key="LinesGridWhiteCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource LinesGridCellStyle}">
+                                        <Setter Property="Background" Value="White"/>
+                                    </Style>
+
+                                    <!-- ✅ Derniere colonne (Total) : pas de bordure a droite (bord
+                                         exterieur de la grille, pas une separation entre colonnes). -->
+                                    <Style x:Key="LinesGridLastCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource LinesGridCellStyle}">
+                                        <Setter Property="BorderThickness" Value="0,0.5,0,0"/>
+                                    </Style>
+                                </DataGrid.Resources>
+
+                                <DataGrid.ColumnHeaderStyle>
+                                    <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource LinesGridColumnHeaderStyle}"/>
+                                </DataGrid.ColumnHeaderStyle>
 
                                 <DataGrid.RowStyle>
                                     <Style TargetType="DataGridRow">
@@ -628,471 +944,564 @@ AlternationCount="1000000">
                                 </DataGrid.RowStyle>
 
                                 <DataGrid.CellStyle>
-                                    <Style TargetType="DataGridCell">
-                                        <Setter Property="BorderBrush" Value="#94A3B8"/>
-                                        <Setter Property="BorderThickness" Value="0,1,1,1"/>
-                                        <Setter Property="Padding" Value="6,0,6,0"/>
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Setter Property="Foreground" Value="#111827"/>
-                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsSelected" Value="True">
-                                                <Setter Property="Background" Value="Transparent"/>
-                                                <Setter Property="Foreground" Value="#111827"/>
-                                            </Trigger>
-                                            <Trigger Property="IsEditing" Value="True">
-                                                <Setter Property="Background" Value="White"/>
-                                                <Setter Property="Foreground" Value="#111827"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
+                                    <Style TargetType="DataGridCell" BasedOn="{StaticResource LinesGridCellStyle}"/>
                                 </DataGrid.CellStyle>
 
                                 <DataGrid.Columns>
+                                    <!-- ✅ Sans couleur (22.07.2026, demande de Joe) : Libellé/Qt/Prix ont leur
+                                         propre CellStyle blanc ; seule la colonne Total garde le fond bleu
+                                         par defaut de LinesGridCellStyle. -->
                                     <DataGridTextColumn Header="Libellé / Matériel"
 Binding="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
-Width="*">
-                                        <DataGridTextColumn.HeaderStyle>
-                                            <Style TargetType="DataGridColumnHeader">
-                                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                                            </Style>
-                                        </DataGridTextColumn.HeaderStyle>
-                                    </DataGridTextColumn>
+Width="*"
+CellStyle="{StaticResource LinesGridWhiteCellStyle}"/>
 
                                     <DataGridTextColumn Header="Qt"
 Binding="{Binding QtyDisplay, UpdateSourceTrigger=PropertyChanged}"
-Width="54"
-ElementStyle="{StaticResource CenterAlignedCellTextStyle}"/>
+Width="62"
+ElementStyle="{StaticResource CenterAlignedCellTextStyle}"
+CellStyle="{StaticResource LinesGridWhiteCellStyle}"/>
 
                                     <DataGridTextColumn Header="Prix/pc"
 Binding="{Binding UnitPriceDisplay, UpdateSourceTrigger=PropertyChanged}"
-Width="78"
-ElementStyle="{StaticResource RightAlignedCellTextStyle}"/>
+Width="86"
+ElementStyle="{StaticResource RightAlignedCellTextStyle}"
+CellStyle="{StaticResource LinesGridWhiteCellStyle}"/>
 
+                                    <!-- ✅ ConverterCulture=fr-FR (20.07.2026, demande de Joe) : sans
+                                         culture explicite, StringFormat utilisait le point "." au lieu
+                                         de la virgule ",". Seul montant de toute la carte Devis affiché
+                                         avec un séparateur différent des autres (qui passent tous par
+                                         ToString("0.00", CultureInfo fr-FR) côté code). -->
                                     <DataGridTextColumn Header="Total"
-Binding="{Binding LineTotal, StringFormat=0.00}"
+Binding="{Binding LineTotal, StringFormat=0.00, ConverterCulture=fr-FR}"
 IsReadOnly="True"
-Width="82"
-ElementStyle="{StaticResource RightAlignedCellTextStyle}"/>
+Width="90"
+ElementStyle="{StaticResource RightAlignedCellTextStyle}"
+CellStyle="{StaticResource LinesGridLastCellStyle}"
+HeaderStyle="{StaticResource LinesGridLastHeaderStyle}"/>
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <Grid Margin="0,12,0,0">
+                            <!-- ✅ Total Materiel colle a la derniere ligne du tableau (20.07.2026, 4e
+                                 demande de Joe) : Margin haut = 0. Memes proportions de colonnes
+                                 (1*, 7, 1.7*) que le split juste en dessous -> le champ tombe
+                                 exactement a l'aplomb de "Main d'oeuvre", sans avoir a deviner une
+                                 largeur fixe. -->
+                            <Grid Margin="0,0,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1*"/>
                                     <ColumnDefinition Width="7"/>
                                     <ColumnDefinition Width="1.7*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <Grid Grid.Column="0">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
+                                <!-- ✅ Titre "Note" deplace ici (20.07.2026, demande de Joe : 5 lignes
+                                     ET bas aligne sur le bas de Rabais en meme temps : les deux ne
+                                     rentraient pas ensemble si le titre restait DANS le budget de 79px
+                                     du champ). Colonne 0 de cette rangee "Total Materiel" est vide,
+                                     jamais utilisee -> le titre y prend sa place sans consommer une
+                                     miette de la hauteur du champ juste en dessous, qui peut alors
+                                     utiliser TOUT le 79px pour le texte. -->
+                                <TextBlock Grid.Column="0" Text="Note (5 lignes max.)" Style="{StaticResource LabelStyle}" Margin="0" VerticalAlignment="Center"/>
 
-                                    <StackPanel Grid.Row="0">
-                                        <TextBlock Text="Devis forfait (PDF)" Style="{StaticResource LabelStyle}" Margin="0,27,0,2" FontStyle="Italic" Foreground="RoyalBlue"/>
+                                <!-- ✅ Colonnes alignees sur le reste de la boite : cette grille (Total
+                                     Materiel) n'avait jamais ete mise a jour lors des elargissements
+                                     Qt/Prix precedents (54/78/82 d'origine). -->
+                                <Grid Grid.Column="2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="62"/>
+                                        <ColumnDefinition Width="86"/>
+                                        <ColumnDefinition Width="90"/>
+                                    </Grid.ColumnDefinitions>
 
-                                        <StackPanel Orientation="Horizontal">
-                                            <Button x:Name="CompanyPdfUploadButton"
+                                    <!-- ✅ Relook complet (20.07.2026, demande de Joe : "tout est moche").
+                                         Systeme de couleurs unifie sur toute la carte Devis : bordure
+                                         fine grise claire (#D1D5DB, la meme que Note/DataGrid) partout au
+                                         lieu du gris fonce epais introduit precedemment, et un fond
+                                         legerement teinte pour distinguer les lignes de sous-total au
+                                         lieu d'une bordure lourde. -->
+                                    <!-- ✅ BorderThickness sans le bas (20.07.2026, correction demandee
+                                         par Joe : "regarde les totaux") : cette Border a ses 4 cotes,
+                                         et la boite Main d'oeuvre juste en dessous a AUSSI ses 4 cotes
+                                         -> les deux bordures du bas/haut s'empilaient a la jonction,
+                                         donnant un trait deux fois plus epais que toutes les autres
+                                         separations de la boite. -->
+                                    <!-- ✅ Padding retire de la Border, remplace par un Margin gauche sur
+                                         le seul label (20.07.2026, 2e correction "totaux pas alignes") :
+                                         le Padding="10,0" precedent s'appliquait aussi a droite, ajoutant
+                                         10px d'inset en plus des 12px de TotalsAmountStyle sur le montant
+                                         -> 22px d'inset ici contre 12px pour Main d'oeuvre/Total HT/TVA
+                                         juste en dessous, qui n'ont pas de Padding sur leur Border. -->
+                                    <Border Grid.Column="0"
+Grid.ColumnSpan="4"
+Background="#F3F4F6"
+BorderBrush="Black" SnapsToDevicePixels="True"
+BorderThickness="0,0.5,0,0"
+CornerRadius="0"
+Height="26">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="62"/>
+                                                <ColumnDefinition Width="86"/>
+                                                <ColumnDefinition Width="90"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Column="0"
+Text="Total Matériel"
+FontWeight="SemiBold"
+FontSize="12"
+Foreground="#111827"
+Margin="10,0,0,0"
+VerticalAlignment="Center"/>
+
+                                            <TextBlock Grid.Column="3"
+x:Name="MaterialTotalTextBlock"
+Text="0.00"
+FontWeight="SemiBold"
+Style="{StaticResource TotalsAmountStyle}"/>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Grid>
+
+                            <!-- ✅ Grille UNIQUE avec lignes partagees entre les 2 colonnes (20.07.2026,
+                                 demande de Joe : le haut de la boite TVA/Total TTC doit s'aligner avec
+                                 le haut des boutons pdf). Auparavant, gauche et droite etaient 2 Grids
+                                 imbriquees independantes -> un alignement precis entre elles necessitait
+                                 de deviner des marges (fragile, jamais tout a fait juste). Avec des
+                                 RowDefinitions communes, Row 2 (boutons pdf | boite TVA/TTC) demarre
+                                 forcement a la meme hauteur des deux cotes. -->
+                            <Grid Margin="0,0,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="7"/>
+                                    <ColumnDefinition Width="1.7*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- ✅ 2 rangees seulement (20.07.2026, correction titre pdf coupe) :
+                                     auparavant 3 rangees avec RowSpan="2" sur le contenu pdf/TVA
+                                     -> hauteur ambigue, WPF ne reservait pas assez de place a la
+                                     rangee du haut et le titre "Devis forfait (PDF)" chevauchait le
+                                     bord de la boite bleue. Avec le contenu pdf ET la boite TVA en
+                                     Row 1 simple (pas de RowSpan), la hauteur de la rangee est
+                                     calculee normalement a partir du plus grand des deux contenus. -->
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- ✅ Titre retire d'ici (deplace dans la rangee "Total Materiel" au
+                                     dessus, colonne 0, vide jusque-la). Le champ seul occupe maintenant
+                                     tout le budget de 79px (= bas aligne sur le bas de Rabais), sans
+                                     rien perdre au profit d'un titre -> les 5 lignes rentrent a nouveau
+                                     (20.07.2026, demande de Joe). -->
+                                <Border Grid.Row="0" Grid.Column="0"
+Height="87"
+VerticalAlignment="Top"
+Background="White"
+BorderBrush="#9CA3AF"
+BorderThickness="2"
+Padding="10,6,10,6">
+                                    <TextBox
+x:Name="QuoteNotesTextBox"
+AcceptsReturn="True"
+TextWrapping="Wrap"
+VerticalScrollBarVisibility="Disabled"
+HorizontalScrollBarVisibility="Disabled"
+BorderThickness="0"
+Padding="0"
+VerticalAlignment="Stretch"/>
+                                </Border>
+
+                                <!-- ✅ Fond bleu moyen, bordure blanche. Meme largeur que "Note"
+                                     (20.07.2026, demande de Joe : plus de debordement gauche/droite,
+                                     Margin="0" au lieu de "-8". Les deux occupent maintenant exactement
+                                     la meme colonne 0 sans deborder). Arrondis reduits (8 vers 4).
+                                     Toujours en SIBLING (pas en parent) du StackPanel de contenu en
+                                     Row 1 Colonne 0 -> purement decoratif, n'affecte pas les calculs
+                                     de hauteur/alignement avec la boite TVA/TTC. -->
+                                <!-- ✅ Bleu encore plus fonce #1E3A8A (23.07.2026, demande de Joe). -->
+                                <Border Grid.Row="1" Grid.Column="0"
+Background="#1E3A8A"
+BorderBrush="White"
+BorderThickness="1"
+CornerRadius="4"
+Margin="0,-14,0,0"/>
+
+                                <!-- ✅ Contenu centre dans le rectangle bleu (20.07.2026, demande de
+                                     Joe) : titre + boutons + Forfait TTC regroupes dans un seul
+                                     StackPanel centre horizontalement ET verticalement (Grid.RowSpan=2,
+                                     meme empan que le rectangle bleu decoratif), au lieu d'etre plaques
+                                     en haut a gauche avec des petites marges. -->
+                                <StackPanel Grid.Row="1" Grid.Column="0"
+HorizontalAlignment="Center"
+VerticalAlignment="Center"
+Margin="0,-5,0,6">
+                                    <!-- ✅ Texte identique au serveur (23.07.2026, demande de Joe). -->
+                                    <TextBlock Text="Devis PDF"
+Style="{StaticResource LabelStyle}"
+FontStyle="Italic"
+Foreground="White"
+HorizontalAlignment="Left"
+Margin="0,0,0,4"/>
+
+                                    <!-- ✅ Boutons PDF + Forfait TTC dans une seule Grid a colonnes
+                                         partagees : le champ Forfait TTC (Row 1, Col 2) occupe la MEME
+                                         colonne que "Supprimer" (Row 0, Col 2) -> leurs bords coincident
+                                         exactement, le montant etant aligne a droite. Derniere colonne en
+                                         Auto (pas "*") pour que la Grid se dimensionne a son contenu et
+                                         puisse vraiment se centrer dans le StackPanel parent. -->
+                                    <Grid HorizontalAlignment="Center">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Button Grid.Row="0" Grid.Column="0"
+x:Name="CompanyPdfUploadButton"
 Content="Ajouter PDF"
-Style="{StaticResource SmallActionButtonStyle}"
+Style="{StaticResource CompanyPdfUploadButtonStyle}"
 Click="CompanyPdfUploadButton_Click"
 Margin="0,0,2,0"/>
 
-                                            <Button x:Name="CompanyPdfOpenButton"
+                                        <Button Grid.Row="0" Grid.Column="1"
+x:Name="CompanyPdfOpenButton"
 Content="Ouvrir"
 Style="{StaticResource SmallActionButtonStyle}"
 Click="CompanyPdfOpenButton_Click"
 Margin="0,0,2,0"/>
 
-                                            <Button x:Name="CompanyPdfRemoveButton"
+                                        <Button Grid.Row="0" Grid.Column="2"
+x:Name="CompanyPdfRemoveButton"
 Content="Supprimer"
 Style="{StaticResource SmallActionButtonStyle}"
 Click="CompanyPdfRemoveButton_Click"
 Margin="0,0,2,0"/>
 
-                                            <TextBlock x:Name="CompanyPdfFileNameTextBlock"
+                                        <!-- ✅ Nom du fichier PDF sur sa PROPRE rangee, entre les boutons
+                                             et "Forfait: Montant TTC" (20.07.2026, demande de Joe) : avant,
+                                             colle a droite des boutons sur la meme ligne, ca coupait vite
+                                             en largeur. Colonne 4, ColumnSpan sur toute la largeur pour
+                                             avoir de la place. -->
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4"
+x:Name="CompanyPdfFileNameTextBlock"
 Text=""
-Foreground="#6B7280"
+Foreground="White"
 VerticalAlignment="Center"
 TextTrimming="CharacterEllipsis"
-Margin="6,0,0,0"/>
-                                        </StackPanel>
-                                    </StackPanel>
+Margin="0,4,0,0"/>
 
-                                    <StackPanel Grid.Row="1" VerticalAlignment="Stretch" Margin="0,32,0,0">
-                                        <TextBlock Text="Note (9 lignes max.)" Style="{StaticResource LabelStyle}"/>
-                                        <TextBox x:Name="QuoteNotesTextBox"
-AcceptsReturn="True"
-TextWrapping="Wrap"
-VerticalScrollBarVisibility="Disabled"
-HorizontalScrollBarVisibility="Disabled"
-BorderBrush="#D1D5DB"
-BorderThickness="1"
-Padding="10"
-VerticalAlignment="Stretch"
-MinHeight="0"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <StackPanel Grid.Column="2">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="54"/>
-                                            <ColumnDefinition Width="78"/>
-                                            <ColumnDefinition Width="82"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <Border Grid.Column="0"
-Grid.ColumnSpan="4"
-Background="White"
-BorderBrush="#2563EB"
-BorderThickness="1"
-CornerRadius="10"
-Padding="8,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="54"/>
-                                                    <ColumnDefinition Width="78"/>
-                                                    <ColumnDefinition Width="82"/>
-                                                </Grid.ColumnDefinitions>
-
-                                                <TextBlock Grid.Column="0"
-Text="Total Matériel"
-Foreground="#111827"
+                                        <!-- ✅ Forfait TTC (20.07.2026, demande de Joe) : montant TTC lu
+                                             sur le pdf annexé, saisi directement (au lieu de HT via
+                                             qty*prix). HT et TVA sont recalculés à rebours à partir de
+                                             ce montant (voir RecomputeTotals). N'est modifiable que si
+                                             un pdf est déjà joint ET que tous les autres totaux sont à
+                                             0 (voir ApplyFieldPermissions), et devient obligatoire dès
+                                             qu'un pdf est joint (voir EnsureQuoteRequiredFieldsOrWarn). -->
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+Text="MONTANT TTC du pdf"
+Style="{StaticResource LabelStyle}"
+FontStyle="Italic"
+Foreground="White"
+Margin="0,8,6,0"
 VerticalAlignment="Center"/>
 
-                                                <TextBlock Grid.Column="3"
-x:Name="MaterialTotalTextBlock"
-Text="0.00"
+                                        <!-- ✅ Largeur identique au bouton "Supprimer" : le TextBox s'etire
+                                             (Stretch, comme le Button par defaut) pour remplir exactement
+                                             la meme colonne Auto. BorderThickness=2 : le bouton
+                                             "Supprimer" a lui-meme BorderThickness=2 (via
+                                             SmallActionButtonStyle). Avec 1 seulement ici, le champ
+                                             paraissait plus etroit malgre la meme largeur de colonne. -->
+                                        <TextBox Grid.Row="2" Grid.Column="2"
+x:Name="ForfaitTtcTextBox"
+Style="{StaticResource ForfaitTtcInputStyle}"
+BorderBrush="#D1D5DB"
+BorderThickness="2"
+TextAlignment="Right"
 FontWeight="SemiBold"
-Style="{StaticResource TotalsAmountStyle}"/>
-                                            </Grid>
-                                        </Border>
+Margin="0,8,0,0"
+GotFocus="ForfaitTtcTextBox_GotFocus"
+TextChanged="TotalsInput_TextChanged"
+PreviewLostKeyboardFocus="Money2Decimals_LostFocus"/>
                                     </Grid>
+                                </StackPanel>
 
-                                    <Border Height="1"
-Background="#94A3B8"
-Margin="0,10,0,10"/>
+                                <!-- ✅ Boite unifiee (une seule bordure exterieure), mais separateurs de
+                                     colonnes RESTAURES (20.07.2026, 2e demande de Joe) : meme gris/
+                                     epaisseur que les lignes de la grille Libellé/Matériel (#94A3B8,
+                                     1px, comme VerticalGridLinesBrush du DataGrid LinesGrid). Total HT
+                                     dans le MEME gris que Total Matériel (#F3F4F6) pour rester coherent
+                                     entre les deux. -->
+                                <!-- ✅ Fond bleu clair (22.07.2026, demande de Joe), meme couleur que la
+                                     carte Devis : Main d'oeuvre/Deplacements/Rabais s'appuient sur ce
+                                     fond ; Total HT garde son propre fond gris (#F3F4F6, Border interne
+                                     ci-dessous), qui recouvre celui-ci. -->
+                                <Border Grid.Row="0" Grid.Column="2"
+Background="#EAF2FF"
+BorderBrush="#D1D5DB"
+BorderThickness="0"
+CornerRadius="0">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="26"/>
+                                            <RowDefinition Height="26"/>
+                                            <RowDefinition Height="26"/>
+                                            <RowDefinition Height="28"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="62"/>
+                                            <ColumnDefinition Width="86"/>
+                                            <ColumnDefinition Width="90"/>
+                                        </Grid.ColumnDefinitions>
 
-                                    <Border Background="White"
-BorderBrush="#E5E7EB"
-BorderThickness="1"
-CornerRadius="0"
-Margin="0,0,0,0">
-                                        <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="24"/>
-                                                <RowDefinition Height="24"/>
-                                                <RowDefinition Height="24"/>
-                                                <RowDefinition Height="24"/>
-                                                <RowDefinition Height="24"/>
-                                            </Grid.RowDefinitions>
-
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="54"/>
-                                                <ColumnDefinition Width="78"/>
-                                                <ColumnDefinition Width="82"/>
-                                            </Grid.ColumnDefinitions>
-
-                                            <Border Grid.Row="0" Grid.Column="0"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="6,0">
-                                                <TextBlock Text="Main d’œuvre" VerticalAlignment="Center" Foreground="#111827"/>
-                                            </Border>
-
-                                            <Border Grid.Row="0" Grid.Column="1"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0">
-                                                <TextBox x:Name="LaborHoursTextBox"
+                                        <Border Grid.Row="0" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" Padding="10,0">
+                                            <TextBlock Text="Main d’œuvre" VerticalAlignment="Center" Foreground="#111827" FontSize="12"/>
+                                        </Border>
+                                        <!-- ✅ Qt/Prix sans couleur (22.07.2026, demande de Joe) : Background="White"
+                                             explicite pour recouvrir le fond bleu du conteneur parent. -->
+                                        <Border Grid.Row="0" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
+                                            <TextBox x:Name="LaborHoursTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 BorderThickness="0"
-Background="Transparent"
-VerticalContentAlignment="Center"/>
-                                            </Border>
-
-                                            <Border Grid.Row="0" Grid.Column="2"
 Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0">
-                                                <TextBox x:Name="LaborRateTextBox"
+TextAlignment="Center"
+VerticalContentAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Row="0" Grid.Column="2" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
+                                            <TextBox x:Name="LaborRateTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
 BorderThickness="0"
-Background="Transparent"
-VerticalContentAlignment="Center"/>
-                                            </Border>
-
-                                            <Border Grid.Row="0" Grid.Column="3"
 Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,0,1"
-Padding="8,0">
-                                                <TextBlock x:Name="LaborTotalTextBlock"
+VerticalContentAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Row="0" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
+                                            <TextBlock x:Name="LaborTotalTextBlock"
 Text="0.00"
 VerticalAlignment="Center"
 TextAlignment="Right"
-FontWeight="SemiBold"
+FontSize="12"
 Foreground="#111827"/>
-                                            </Border>
-                                            <Border Grid.Row="1" Grid.Column="0"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="6,0">
-                                                <TextBlock Text="Déplacements" VerticalAlignment="Center" Foreground="#111827"/>
-                                            </Border>
+                                        </Border>
 
-                                            <Border Grid.Row="1" Grid.Column="1"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0">
-                                                <TextBox x:Name="TravelQtyTextBox"
+                                        <Border Grid.Row="1" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" Padding="10,0">
+                                            <TextBlock Text="Déplacements" VerticalAlignment="Center" Foreground="#111827" FontSize="12"/>
+                                        </Border>
+                                        <Border Grid.Row="1" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
+                                            <TextBox x:Name="TravelQtyTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 BorderThickness="0"
-Background="Transparent"
-VerticalContentAlignment="Center"/>
-                                            </Border>
-
-                                            <Border Grid.Row="1" Grid.Column="2"
 Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0">
-                                                <TextBox x:Name="TravelRateTextBox"
+TextAlignment="Center"
+VerticalContentAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Row="1" Grid.Column="2" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
+                                            <TextBox x:Name="TravelRateTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
 BorderThickness="0"
-Background="Transparent"
-VerticalContentAlignment="Center"/>
-                                            </Border>
-
-                                            <Border Grid.Row="1" Grid.Column="3"
 Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,0,1"
-Padding="8,0">
-                                                <TextBlock x:Name="TravelTotalTextBlock"
+VerticalContentAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Row="1" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
+                                            <TextBlock x:Name="TravelTotalTextBlock"
 Text="0.00"
 VerticalAlignment="Center"
 TextAlignment="Right"
-FontWeight="SemiBold"
+FontSize="12"
 Foreground="#111827"/>
-                                            </Border>
+                                        </Border>
 
-                                            <Border Grid.Row="3" Grid.Column="0"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="6,0">
-                                                <TextBlock Text="Forfait HT, selon pdf annexé" VerticalAlignment="Center" FontStyle="Italic" Foreground="RoyalBlue"/>
-                                            </Border>
-
-                                            <Border Grid.Row="3" Grid.Column="1"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0">
-                                                <TextBox x:Name="ForfaitQtyTextBox"
-Style="{StaticResource InlineMoneyInputStyle}"
-TextChanged="TotalsInput_TextChanged"
-BorderThickness="0"
-Background="Transparent"
-VerticalContentAlignment="Center"/>
-                                            </Border>
-
-                                            <Border Grid.Row="3" Grid.Column="2"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0">
-                                                <TextBox x:Name="ForfaitUnitPriceTextBox"
-Style="{StaticResource InlineMoneyInputStyle}"
-TextChanged="TotalsInput_TextChanged"
-PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
-BorderThickness="0"
-Background="Transparent"
-VerticalContentAlignment="Center"/>
-                                            </Border>
-
-                                            <Border Grid.Row="3" Grid.Column="3"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,0,1"
-Padding="8,0">
-                                                <TextBlock x:Name="ForfaitTotalTextBlock"
-Text="0.00"
-VerticalAlignment="Center"
-TextAlignment="Right"
-FontWeight="SemiBold"
-Foreground="#111827"/>
-                                            </Border>
-
-                                            <Border Grid.Row="2" Grid.Column="0"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="6,0">
-                                                <TextBlock Text="Rabais (%)" VerticalAlignment="Center" Foreground="#111827"/>
-                                            </Border>
-
-                                            <Border Grid.Row="2" Grid.Column="1"
-Background="#F3F4F6"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0"
-IsHitTestVisible="False">
-                                                <TextBlock Text=""/>
-                                            </Border>
-
-                                            <Border Grid.Row="2" Grid.Column="2"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,1"
-Padding="1,0">
-                                                <TextBox x:Name="DiscountRateTextBox"
+                                        <Border Grid.Row="2" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" Padding="10,0">
+                                            <TextBlock Text="Rabais (%)" VerticalAlignment="Center" Foreground="#111827" FontSize="12"/>
+                                        </Border>
+                                        <!-- ✅ Montant du rabais deplace dans la colonne Qt (22.07.2026,
+                                             demande de Joe, remplace le positionnement Prix/pc precedent) :
+                                             sans couleur, comme le reste de la colonne Qt. La case Prix/pc
+                                             devient la case decorative (fond bleu de la section Devis). -->
+                                        <Border Grid.Row="2" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
+                                            <TextBox x:Name="DiscountRateTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 PreviewLostKeyboardFocus="PercentInt_LostFocus"
 PreviewMouseLeftButtonDown="DiscountRateTextBox_PreviewMouseLeftButtonDown"
 BorderThickness="0"
-Background="Transparent"
+Background="White"
+TextAlignment="Center"
 VerticalContentAlignment="Center"/>
-                                            </Border>
-
-                                            <Border Grid.Row="2" Grid.Column="3"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,0,1"
-Padding="8,0">
-                                                <TextBlock x:Name="DiscountAmountTextBlock"
+                                        </Border>
+                                        <Border Grid.Row="2" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" IsHitTestVisible="False"/>
+                                        <Border Grid.Row="2" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
+                                            <TextBlock x:Name="DiscountAmountTextBlock"
 Text="0.00"
 VerticalAlignment="Center"
 TextAlignment="Right"
+FontSize="12"
+Foreground="#111827"/>
+                                        </Border>
+
+                                        <!-- ✅ Total HT : meme gris que Total Matériel (#F3F4F6), pas de
+                                             separations de colonnes (comme Total Matériel), bordures
+                                             haut/bas noir fin (23.07.2026, demande de Joe). -->
+                                        <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="62"/>
+                                                    <ColumnDefinition Width="86"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Column="0" Text="Total HT" FontWeight="SemiBold" FontSize="12" Foreground="#111827" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3"
+x:Name="TotalHtTextBlock"
+Text="0.00"
 FontWeight="SemiBold"
-Foreground="#111827"/>
-                                            </Border>
-
-                                            <Border Grid.Row="4" Grid.Column="0"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,0"
-Padding="6,0">
-                                                <TextBlock Text="Total HT" VerticalAlignment="Center" Foreground="#111827" FontWeight="Bold"/>
-                                            </Border>
-
-                                            <Border Grid.Row="4" Grid.Column="1"
-Background="#F3F4F6"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,0"
-Padding="1,0"
-IsHitTestVisible="False">
-                                                <TextBlock Text=""/>
-                                            </Border>
-
-                                            <Border Grid.Row="4" Grid.Column="2"
-Background="#F3F4F6"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,1,0"
-Padding="1,0"
-IsHitTestVisible="False">
-                                                <TextBlock Text=""/>
-                                            </Border>
-
-                                            <Border Grid.Row="4" Grid.Column="3"
-Background="White"
-BorderBrush="#94A3B8"
-BorderThickness="0,0,0,0"
-Padding="8,0">
-                                                <TextBlock x:Name="TotalHtTextBlock"
-Text="0.00"
-VerticalAlignment="Center"
+FontSize="12"
 TextAlignment="Right"
-FontWeight="Bold"
-Foreground="#111827"/>
-                                            </Border>
-                                        </Grid>
-                                    </Border>
+Foreground="#111827"
+Margin="0,0,6,0"
+VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                    <Border Background="White"
-BorderBrush="#1D4ED8"
-BorderThickness="1"
-CornerRadius="10"
-Padding="0,7,0,7"
-Margin="0,10,0,0">
+                                    <!-- ✅ Meme systeme que la boite Main d'oeuvre/Total HT (20.07.2026,
+                                         "relook" demande de Joe) : bordure fine grise claire uniforme,
+                                         angles droits. "Total TTC" (le chiffre final du devis) mis en
+                                         evidence par un fond bleu tres clair + le bleu de la marque
+                                         (#1D4ED8, meme couleur que la bordure de la carte Devis) au lieu
+                                         du noir standard. Seul endroit de la carte a utiliser cet
+                                         accent, pour qu'il reste un vrai point focal. -->
+                                    <!-- ✅ RowSpan="2" + VerticalAlignment=Center (20.07.2026, correction
+                                         apres le centrage du contenu pdf) : la boite TVA/Total TTC est
+                                         desormais centree dans la meme bande Row1+Row2 que le contenu pdf
+                                         (titre+boutons+Forfait TTC), au lieu d'etre ancree en haut de la
+                                         Row2 seule -> les deux cotes "respirent" au meme niveau au lieu
+                                         de se desynchroniser quand l'un des deux cotes change de hauteur. -->
+                                    <!-- ✅ Fond bleu clair (22.07.2026, demande de Joe) : TVA s'appuie sur
+                                         ce fond ; Total TTC garde son propre fond gris (#F3F4F6 ci-dessous). -->
+                                    <!-- ✅ Ligne Total TTC reduite de 2mm (~8px) contre le bas (23.07.2026,
+                                         demande de Joe) : Height 52->44, + moitie (4px) ajoutee au
+                                         Margin haut de la boite pour compenser le recentrage
+                                         (VerticalAlignment=Center) et garder le bas de la boite fixe. -->
+                                    <!-- ✅ Ligne TVA agrandie de 18 a 26px (23.07.2026, demande de Joe) :
+                                         la vraie rangee TVA est Row 0 (le contenu est place en
+                                         Grid.Row="0" juste en dessous), pas Row 1 qui est une rangee
+                                         vide jamais utilisee -> les tentatives precedentes de
+                                         redimensionnement (sur Row 1) n'avaient donc aucun effet visible.
+                                         Row 1 remise a sa valeur d'origine (16, simple espacement).
+                                         Margin haut +4px (moitie de +8) pour compenser le recentrage
+                                         (VerticalAlignment=Center) et garder Total TTC ancre en bas. -->
+                                    <Border Grid.Row="1" Grid.Column="2"
+Background="#EAF2FF"
+BorderBrush="#D1D5DB"
+BorderThickness="0"
+CornerRadius="0"
+Margin="0,27,0,0"
+VerticalAlignment="Center">
                                         <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="54"/>
-                                                <ColumnDefinition Width="78"/>
-                                                <ColumnDefinition Width="82"/>
-                                            </Grid.ColumnDefinitions>
-
                                             <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="26"/>
+                                                <RowDefinition Height="16"/>
+                                                <RowDefinition Height="44"/>
                                             </Grid.RowDefinitions>
 
-                                            <TextBlock Grid.Row="0" Grid.Column="0"
-Text="TVA (%)"
-Foreground="#111827"
-Margin="7,0,0,6"
-Style="{StaticResource TotalsLabelStyle}"/>
-                                            <TextBox x:Name="TvaRateTextBox"
-Grid.Row="0"
-Grid.Column="1"
+                                            <Grid Grid.Row="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="62"/>
+                                                    <ColumnDefinition Width="86"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- ✅ Restructure pour englober chaque contenu dans un
+                                                     Border (23.07.2026, demande de Joe : bordures irregulieres)
+                                                     : les Border decoratives separees precedentes etaient
+                                                     recouvertes par le TextBox (dessine par-dessus, fond
+                                                     opaque), rendant la ligne invisible/irreguliere. Meme
+                                                     structure que Main d'oeuvre/Deplacements/Rabais. -->
+                                                <!-- ✅ Bordure basse ajoutee (23.07.2026, demande de Joe) :
+                                                     contrairement a Main d'oeuvre/Deplacements/Rabais (juxtaposees
+                                                     sans espace), TVA est isolee (espace vide avant Total TTC) ->
+                                                     sa bordure basse ne double avec rien, elle doit rester. -->
+                                                <Border Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5" Padding="10,0">
+                                                    <TextBlock Text="TVA (%)" Foreground="#111827" FontSize="12" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5">
+                                                    <TextBox x:Name="TvaRateTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
-VerticalAlignment="Center"
-Margin="0,0,0,6"/>
-                                            <TextBlock Grid.Row="0" Grid.Column="3"
+BorderThickness="0"
+Background="White"
+TextAlignment="Center"
+VerticalContentAlignment="Center"/>
+                                                </Border>
+                                                <Border Grid.Column="2" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5"/>
+                                                <Border Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                                    <TextBlock
 x:Name="TvaAmountTextBlock"
 Text="0.00"
-FontWeight="SemiBold"
 Style="{StaticResource TotalsAmountStyle}"
-Margin="0,0,7,6"/>
+Margin="0,0,6,0"/>
+                                                </Border>
+                                            </Grid>
 
-                                            <TextBlock Grid.Row="1" Grid.Column="0"
+                                            <!-- ✅ Fond gris clair #F3F4F6 (22.07.2026, demande de Joe),
+                                                 identique à Total Matériel/Total HT. -->
+                                            <!-- ✅ Derniere colonne elargie a 100 (au lieu de 82) : a
+                                                 16px/gras avec un vrai gros montant (ex: 2162346,14), le
+                                                 texte depassait la largeur de 82px prevue pour les autres
+                                                 lignes en 13px et se faisait tronquer (dernier chiffre
+                                                 coupe). Le "*" (colonne Total TTC label) absorbe la
+                                                 difference automatiquement -> le bord droit ne bouge pas,
+                                                 toujours aligne avec le reste de la boite. -->
+                                            <Border Grid.Row="2" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="62"/>
+                                                        <ColumnDefinition Width="86"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Column="0"
 Text="Total TTC"
 FontWeight="Bold"
-FontSize="15"
+FontSize="16"
 Foreground="#111827"
-Margin="7,0,18,2"
+Margin="10,0,0,0"
 VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="3"
+                                                    <TextBlock Grid.Column="3"
 x:Name="TotalTtcTextBlock"
 Text="0.00"
 FontWeight="Bold"
-FontSize="15"
+FontSize="16"
 Foreground="#111827"
-Style="{StaticResource TotalsAmountStyle}"
-Margin="0,0,7,2"/>
-
-                                            <Border Grid.Row="2"
-Grid.ColumnSpan="4"
-BorderBrush="#D1D5DB"
-BorderThickness="0,2,0,0"
-Margin="0,6,0,0"/>
+TextAlignment="Right"
+Margin="0,0,6,0"
+VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
                                         </Grid>
                                     </Border>
 
-                                </StackPanel>
                             </Grid>
                         </StackPanel>
                     </Border>

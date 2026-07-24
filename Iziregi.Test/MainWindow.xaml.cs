@@ -112,6 +112,7 @@ public partial class MainWindow : Window
     private TrashPage? _trashPage;
     private ListsPage? _listsPage;
     private PlanningPage? _planningPage;
+    private ArchitectIdentityPage? _architectIdentityPage;
 
     public MainWindow()
     {
@@ -997,6 +998,11 @@ public partial class MainWindow : Window
 
         public double ForfaitHt { get; set; }
 
+        // ✅ Forfait TTC (21.07.2026, réplique BDR razor) : montant TTC saisi directement par
+        // l'entreprise sur la page web, remplace ForfaitHt (qty*prix) pour les devis qui
+        // utilisent ce mode. Voir WorkOrder.ForfaitTtc / WorkOrderWindow.RecomputeTotals.
+        public double ForfaitTtc { get; set; }
+
         public double DiscountRate { get; set; }
         public double TvaRate { get; set; }
 
@@ -1130,9 +1136,14 @@ public partial class MainWindow : Window
                         wo.TravelQty = payload.TravelQty;
                         wo.TravelRate = payload.TravelRate;
 
-                        // forfait HT : qty=1, unitPrice=ForfaitHt
+                        // forfait HT (legacy) : qty=1, unitPrice=ForfaitHt
                         wo.ForfaitQty = payload.ForfaitHt != 0 ? 1 : 0;
                         wo.ForfaitUnitPrice = payload.ForfaitHt;
+
+                        // ✅ Forfait TTC (21.07.2026, réplique BDR razor) : appliqué tel quel, prime
+                        // sur le forfait HT legacy si l'entreprise a utilisé ce mode (les deux ne
+                        // sont normalement jamais non-zéro en même temps côté formulaire web).
+                        wo.ForfaitTtc = payload.ForfaitTtc;
 
                         wo.DiscountRate = payload.DiscountRate;
                         wo.TvaRate = payload.TvaRate;
@@ -1495,15 +1506,7 @@ public partial class MainWindow : Window
     private void NavTrash_Click(object sender, RoutedEventArgs e) => ShowTrash();
     private void NavLists_Click(object sender, RoutedEventArgs e) => ShowLists();
     private void NavPlanning_Click(object sender, RoutedEventArgs e) => ShowPlanning();
-    private void NavArchitectIdentity_Click(object sender, RoutedEventArgs e)
-    {
-        var win = new ArchitectIdentityWindow(ServerBaseUrl, ServerApiKey) { Owner = this };
-        win.ShowDialog();
-
-        // ✅ Rafraîchit automatiquement le Dashboard (Bureau/Réf./Adresse) après
-        // modification de l'identité architecte — évite d'avoir à cliquer "Rafraîchir".
-        _dashboardPage?.Reload();
-    }
+    private void NavArchitectIdentity_Click(object sender, RoutedEventArgs e) => ShowArchitectIdentity();
 
     private void NavSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -1551,7 +1554,7 @@ public partial class MainWindow : Window
         var all = new[]
         {
             NavDashboardButton, NavAccountingButton, NavArchivesButton,
-            NavTrashButton, NavListsButton, NavPlanningButton
+            NavTrashButton, NavListsButton, NavPlanningButton, NavArchitectIdentityButton
         };
 
         foreach (var b in all)
@@ -1560,7 +1563,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowDashboard()
+    internal void ShowDashboard()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
@@ -1627,6 +1630,20 @@ public partial class MainWindow : Window
         _planningPage = new PlanningPage(this);
         MainContent.Content = _planningPage;
         _planningPage.Reload();
+
+        UpdateProjectBadge(show: true);
+    }
+
+    // ✅ Convertie en page embarquée (23.07.2026, demande de Joe) : ouvrait auparavant une fenêtre
+    // modale maximisée (ArchitectIdentityWindow) qui masquait la barre de navigation.
+    internal void ShowArchitectIdentity()
+    {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
+        FlushPlanningIfActive();
+        SetActiveNavButton(NavArchitectIdentityButton);
+        _architectIdentityPage ??= new ArchitectIdentityPage(this, ServerBaseUrl, ServerApiKey);
+        MainContent.Content = _architectIdentityPage;
+        _architectIdentityPage.Reload();
 
         UpdateProjectBadge(show: true);
     }

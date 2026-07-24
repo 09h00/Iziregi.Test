@@ -27,7 +27,7 @@ public static class PdfService
     // =========================
     // ✅ PDF Comptabilité (PAYSAGE) + EN-TÊTE COMPLET (logo + coords architecte + coords projet)
     // =========================
-    public static void GenerateAccountingPdfFromBitmapPng(string filePath, byte[] pngBytes)
+    public static void GenerateAccountingPdfFromBitmapPng(string filePath, byte[] pngBytes, List<(double Top, double Bottom)>? avoidCutRanges = null)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Chemin PDF invalide.", nameof(filePath));
@@ -65,7 +65,7 @@ public static class PdfService
         var lineLight = Colors.Grey.Lighten2;
         var separatorBlack = Colors.Grey.Darken4;
 
-        var slices = SlicePngVerticallyIntoPages(pngBytes, pageSize);
+        var slices = SlicePngVerticallyIntoPages(pngBytes, pageSize, avoidCutRanges);
 
         Document.Create(container =>
         {
@@ -501,22 +501,41 @@ public static class PdfService
 
         double forfaitTotal = Math.Round(wo.ForfaitQty * wo.ForfaitUnitPrice, 2);
 
-        double htBrut = Math.Round(materialTotal + laborTotal + travelTotal + forfaitTotal, 2);
-
-        double discountRate = wo.DiscountRate;
-        if (double.IsNaN(discountRate) || double.IsInfinity(discountRate)) discountRate = 0;
-        discountRate = Math.Max(0, discountRate);
-
-        // ✅ Réplique serveur : montant du rabais toujours positif (magnitude), le "-" est
-        // ajouté littéralement à l'affichage — pas déduit d'une soustraction HT net/brut.
-        double discountAmount = Math.Round(htBrut * (discountRate / 100.0), 2);
-        double htNet = Math.Round(htBrut - discountAmount, 2);
-
         double tvaRate = wo.TvaRate;
         if (double.IsNaN(tvaRate) || double.IsInfinity(tvaRate)) tvaRate = 0;
 
-        double tvaAmount = Math.Round(htNet * (tvaRate / 100.0), 2);
-        double ttcTotal = Math.Round(htNet + tvaAmount, 2);
+        // ✅ BUG RÉEL (20.07.2026) : le champ "Forfait : Montant TTC" (WorkOrder.ForfaitTtc)
+        // n'était pas pris en compte ici -> le pdf d'un devis fait en Forfait TTC affichait
+        // 0.00 partout. Contrairement au forfait ci-dessus (HT -> TVA -> TTC), celui-ci part du
+        // TTC saisi et recalcule HT/TVA à rebours, comme WorkOrderWindow.RecomputeTotals.
+        double forfaitTtc = Math.Round(wo.ForfaitTtc, 2);
+        bool hasForfaitTtc = Math.Abs(forfaitTtc) > 0.0000000001;
+
+        double discountRate = 0, discountAmount, htNet, tvaAmount, ttcTotal;
+
+        if (hasForfaitTtc)
+        {
+            ttcTotal = forfaitTtc;
+            htNet = Math.Round(ttcTotal / (1.0 + (tvaRate / 100.0)), 2);
+            tvaAmount = Math.Round(ttcTotal - htNet, 2);
+            discountAmount = 0;
+        }
+        else
+        {
+            double htBrut = Math.Round(materialTotal + laborTotal + travelTotal + forfaitTotal, 2);
+
+            discountRate = wo.DiscountRate;
+            if (double.IsNaN(discountRate) || double.IsInfinity(discountRate)) discountRate = 0;
+            discountRate = Math.Max(0, discountRate);
+
+            // ✅ Réplique serveur : montant du rabais toujours positif (magnitude), le "-" est
+            // ajouté littéralement à l'affichage — pas déduit d'une soustraction HT net/brut.
+            discountAmount = Math.Round(htBrut * (discountRate / 100.0), 2);
+            htNet = Math.Round(htBrut - discountAmount, 2);
+
+            tvaAmount = Math.Round(htNet * (tvaRate / 100.0), 2);
+            ttcTotal = Math.Round(htNet + tvaAmount, 2);
+        }
 
         // ---- Validation (signature)
         byte[]? signatureBytes = null;
@@ -538,7 +557,7 @@ public static class PdfService
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(26);
+                page.Margin(10);
                 page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(10).FontColor(textMain));
 
                 // =========================
@@ -703,8 +722,6 @@ public static class PdfService
                             });
                         });
 
-                        col.Item().PaddingTop(10).LineHorizontal(1).LineColor(separatorBlack);
-
                         if (wo.IsCancelled)
                         {
                             col.Item().PaddingTop(6)
@@ -723,9 +740,9 @@ public static class PdfService
                 // =========================
                 // CONTENT
                 // =========================
-                page.Content().PaddingTop(10).Column(col =>
+                page.Content().PaddingTop(4).Column(col =>
                 {
-                    col.Spacing(12);
+                    col.Spacing(2);
 
                     // -------------------------
                     // DEMANDE
@@ -734,7 +751,7 @@ public static class PdfService
                         .CornerRadius(14)
                         .Background(demandeBg)
                         .Border(2).BorderColor(demandeBorder)
-                        .Padding(10)
+                        .Padding(4)
                         .Column(section =>
                     {
                         section.Item().Text("Demande")
@@ -787,10 +804,8 @@ public static class PdfService
                                     foreach (var ln in descriptionLines)
                                         list.Item().Text(string.IsNullOrWhiteSpace(ln) ? " " : ln).FontSize(10);
                                 });
-                            }, minHeight: 70));
+                            }, minHeight: 55));
                         });
-
-                        section.Item().PaddingTop(6).LineHorizontal(1).LineColor(separatorBlack);
                     });
 
                     // -------------------------
@@ -800,18 +815,22 @@ public static class PdfService
                         .CornerRadius(14)
                         .Background(devisBg)
                         .Border(2).BorderColor(devisBorder)
-                        .Padding(10)
+                        .Padding(4)
                         .Column(section =>
                     {
                         var d = wo.QuoteDate == default ? "" : FormatDateLong(wo.QuoteDate);
                         var quoteName = string.IsNullOrWhiteSpace(wo.QuoteName) ? "—" : wo.QuoteName;
                         var dateText = string.IsNullOrWhiteSpace(d) ? "—" : d;
 
+                        // ✅ Nom aligné à gauche (au lieu de centré) + marge à droite pour la date
+                        // (23.07.2026, demande de Joe).
+                        // ✅ AlignMiddle (23.07.2026, demande de Joe) : Nom/Date centrés
+                        // verticalement sur l'axe du titre "Devis" (16pt, plus haut que leur 10pt).
                         section.Item().Row(r =>
                         {
-                            r.RelativeItem(0.45f).AlignLeft().Text("Devis").Bold().FontSize(16);
-                            r.RelativeItem(0.90f).AlignCenter().Text($"Nom : {quoteName}").FontSize(10).FontColor(textMain);
-                            r.RelativeItem(0.65f).AlignRight().Text($"Devis créé le : {dateText}").FontSize(10).FontColor(textMain);
+                            r.RelativeItem(0.45f).AlignLeft().AlignMiddle().Text("Devis").Bold().FontSize(16);
+                            r.RelativeItem(0.90f).AlignLeft().AlignMiddle().Text($"Nom : {quoteName}").FontSize(10).FontColor(textMain);
+                            r.RelativeItem(0.65f).AlignRight().AlignMiddle().PaddingRight(8).Text($"Devis créé le : {dateText}").FontSize(10).FontColor(textMain);
                         });
 
                         var printableLines = lines
@@ -826,7 +845,10 @@ public static class PdfService
                             })
                             .ToList();
 
-                        section.Item().PaddingTop(6).Table(t =>
+                        // ✅ Bordure basse fermant le tableau (23.07.2026) : les lignes n'ont plus
+                        // que leur bordure haute (voir CellBody/CellBodyWhite), donc rien ne fermait
+                        // le bas de la dernière ligne, quel que soit son nombre.
+                        section.Item().PaddingTop(6).BorderBottom(0.75f).BorderColor("#000000").Table(t =>
                         {
                             t.ColumnsDefinition(c =>
                             {
@@ -838,10 +860,11 @@ public static class PdfService
 
                             t.Header(h =>
                             {
+                                // ✅ Réplique serveur : "Qt" centré (.col-qt.c), "Prix/pc"/"Total" alignés à droite (.r).
                                 h.Cell().Element(CellHeader).Text("Libellé / Matériel");
-                                h.Cell().Element(CellHeader).AlignRight().Text("Qt");
+                                h.Cell().Element(CellHeader).AlignCenter().Text("Qt");
                                 h.Cell().Element(CellHeader).AlignRight().Text("Prix/pc");
-                                h.Cell().Element(CellHeader).AlignRight().Text("Total");
+                                h.Cell().Element(CellHeaderLast).AlignRight().Text("Total");
                             });
 
                             foreach (var l in printableLines)
@@ -849,9 +872,9 @@ public static class PdfService
                                 var label = (l.Label ?? "").Trim();
                                 if (string.IsNullOrWhiteSpace(label)) label = "—";
 
-                                t.Cell().Element(CellBody).Text(label);
-                                t.Cell().Element(CellBody).AlignRight().Text(FormatQty(l.Qty));
-                                t.Cell().Element(CellBody).AlignRight().Text(FmtOptInv(l.UnitPrice));
+                                t.Cell().Element(CellBodyWhite).Text(label);
+                                t.Cell().Element(CellBodyWhite).AlignCenter().Text(FormatQty(l.Qty));
+                                t.Cell().Element(CellBodyWhite).AlignRight().Text(FmtOptInv(l.UnitPrice));
                                 t.Cell().Element(CellBody).AlignRight().Text(FmtInv(l.LineTotal));
                             }
                         });
@@ -882,6 +905,28 @@ public static class PdfService
                                         foreach (var ln in noteLines)
                                             list.Item().Text(string.IsNullOrWhiteSpace(ln) ? " " : ln).FontSize(9);
                                     });
+
+                                // ✅ Rectangle "Devis PDF" (23.07.2026, demande de Joe) : n'existait pas
+                                // du tout dans le PDF jusqu'ici (le montant Forfait TTC était pris en
+                                // compte dans les totaux, mais rien n'indiquait visuellement qu'un pdf
+                                // forfaitaire avait été joint). Réplique du rectangle bleu foncé
+                                // (#1E3A8A) affiché dans le WPF/Blazor, mêmes textes ("Devis PDF" /
+                                // "MONTANT TTC du pdf").
+                                if (hasForfaitTtc)
+                                {
+                                    left.Item()
+                                        .PaddingTop(6)
+                                        .Background("#1E3A8A")
+                                        .CornerRadius(4)
+                                        .Padding(8)
+                                        .Column(box =>
+                                        {
+                                            box.Item().Text("Devis PDF").Italic().SemiBold().FontSize(9).FontColor(Colors.White);
+
+                                            box.Item().PaddingTop(6).Text("MONTANT TTC du pdf").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
+                                            box.Item().PaddingTop(2).Text(FmtInv(forfaitTtc)).SemiBold().FontSize(10).FontColor(Colors.White);
+                                        });
+                                }
                             });
 
                             row.ConstantItem(6);
@@ -896,38 +941,32 @@ public static class PdfService
                                     c.ConstantColumn(82);
                                 });
 
+                                // ✅ Bordure haute ET basse (23.07.2026, demande de Joe) : avant, un
+                                // Cell séparé (ColumnSpan+PaddingVertical) simulait la ligne du bas
+                                // avec un espace ; remplacé par une vraie bordure directement sur la
+                                // ligne, comme Total HT/Total TTC.
                                 AddTotalsRow4Cols(t, "Total Matériel", "", "", FmtInv(materialTotal),
-                                    isStrong: true, noInnerDividers: true, bottomBorderThickness: 0f);
-
-                                t.Cell().ColumnSpan(4).BorderBottom(0.75f).BorderColor("#000000").PaddingVertical(4);
+                                    isStrong: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, greyBackground: true);
 
                                 AddTotalsRow4Cols(t, "Main d’œuvre",
                                     qtyText: FormatQty(wo.LaborHours),
                                     unitPriceText: FmtOptInv(wo.LaborRate),
                                     totalText: FmtInv(laborTotal),
-                                    isStrong: true);
+                                    isStrong: true, blueBackground: true);
 
                                 AddTotalsRow4Cols(t, "Déplacements",
                                     qtyText: FormatQty(wo.TravelQty),
                                     unitPriceText: FmtOptInv(wo.TravelRate),
                                     totalText: FmtInv(travelTotal),
-                                    isStrong: true);
+                                    isStrong: true, blueBackground: true);
 
                                 // ✅ Réplique serveur : le taux va dans la colonne Qt, le libellé reste statique,
                                 // et le total est toujours préfixé d'un "-" littéral (même à 0 : "-0.00").
-                                AddTotalsRow4Cols(t, "Rabais (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false);
+                                AddTotalsRow4Cols(t, "Rabais (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
 
-                                AddTotalsRow4Cols(t, "Forfait HT, selon pdf annexé",
-                                    qtyText: FormatQty(wo.ForfaitQty),
-                                    unitPriceText: FmtOptInv(wo.ForfaitUnitPrice),
-                                    totalText: FmtInv(forfaitTotal),
-                                    isStrong: true,
-                                    isForfait: true,
-                                    bottomBorderThickness: 1.5f);
-
-                                AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true);
-                                AddTotalsRow4Cols(t, "TVA (%)", FormatQty(tvaRate), "", FmtInv(tvaAmount), isStrong: false);
-                                AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true);
+                                AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true);
+                                AddTotalsRow4Cols(t, "TVA (%)", FormatQty(tvaRate), "", FmtInv(tvaAmount), isStrong: false, blueBackground: true, bluePrixDecorative: true);
+                                AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true, bottomBorderThickness: 0.9f, noInnerDividers: true);
                             });
                         });
 
@@ -941,7 +980,7 @@ public static class PdfService
                         .CornerRadius(14)
                         .Background(validationBg)
                         .Border(2).BorderColor(validationBorder)
-                        .Padding(10)
+                        .Padding(4)
                         .Column(section =>
                     {
                         // Constantes d'alignement (cohérentes avec la mise en page des tables à gauche)
@@ -987,17 +1026,20 @@ public static class PdfService
                                 // ✅ Ligne box signature (tout de suite après le titre)
                                 right.Item().Row(sig =>
                                 {
-                                    // Libellé "Signature" : aligné sur Nom/Date => on le descend au niveau de la table Nom/Date
+                                    // ✅ Libellé "Signature" remis sur la même ligne que Nom/Date
+                                    // (23.07.2026, demande de Joe, annule le AlignTop du tour précédent).
                                     sig.ConstantItem(58)
-                                        .PaddingTop(afterTitleToDecision + decisionBlockHeight + betweenDecisionAndNameDate)
+                                        // ✅ -8pt puis +4pt (~2mm puis ~1mm) (23.07.2026, demande de Joe).
+                                        .PaddingTop(afterTitleToDecision + decisionBlockHeight + betweenDecisionAndNameDate - 4)
                                         .Text("Signature")
                                         .SemiBold()
                                         .FontSize(9)
                                         .FontColor(Colors.Grey.Darken4);
 
-                                    // Box : remonte (débute juste sous le titre) et bas aligné au bas de Date
+                                    // ✅ PaddingTop retiré (23.07.2026, demande de Joe : la boîte n'avait
+                                    // pas bougé quand le libellé est remonté) : la boîte démarre
+                                    // maintenant au même niveau que le libellé "Signature".
                                     var box = sig.RelativeItem()
-                                        .PaddingTop(afterTitleToDecision)
                                         .Border(0.75f)
                                         .BorderColor(lineLight)
                                         .Background(Colors.White)
@@ -1009,7 +1051,10 @@ public static class PdfService
                                         // CropSignatureToContent) dans la box, horizontal + vertical.
                                         box.AlignCenter().AlignMiddle().Image(signatureBytes!).FitArea();
                                     else
-                                        box.AlignCenter().Text("—").FontColor(textMuted);
+                                        // ✅ AlignMiddle ajouté (23.07.2026, demande de Joe) : le "—"
+                                        // restait collé en haut de la grande boîte, seul le centrage
+                                        // horizontal était fait.
+                                        box.AlignCenter().AlignMiddle().Text("—").FontColor(textMuted);
                                 });
                             });
                         });
@@ -1113,20 +1158,52 @@ public static class PdfService
     // =========================
     // Styles (tables)
     // =========================
+    // ✅ Bordure Top+Right au lieu de Border() 4 côtés (23.07.2026, demande de Joe : lignes
+    // plus épaisses dans Libellé que dans les autres lignes) : Border() dessine les 4
+    // côtés de CHAQUE cellule -> les bords partagés entre cellules adjacentes (droite de
+    // l'une + gauche de la suivante, bas de l'une + haut de la suivante) se cumulaient,
+    // doublant l'épaisseur visible. Un seul côté par frontière partagée, comme dans
+    // AddTotalsRow4Cols. CellHeaderLast/CellBodyLast (colonne Total, dernière colonne) :
+    // pas de BorderRight (bord extérieur, pas une séparation entre colonnes). Le bas du
+    // tableau (dernière ligne) est fermé par la bordure du DataGrid/du Border englobant
+    // le Table, pas par les cellules elles-mêmes.
     private static IContainer CellHeader(IContainer c)
     {
+        // ✅ Réplique serveur (22.07.2026) : fond gris #F3F4F6 + texte sombre #111827
+        // (au lieu du bleu #DBEAFE/#1E3A8A jamais mis à jour depuis les changements Blazor).
         return c
-            .Background("#DBEAFE")
-            .Border(0.75f).BorderColor("#000000")
-            .PaddingVertical(5).PaddingHorizontal(7)
-            .DefaultTextStyle(x => x.SemiBold().FontSize(9).FontColor("#1E3A8A"));
+            .Background("#F3F4F6")
+            .BorderTop(0.75f).BorderRight(0.75f).BorderColor("#000000")
+            .PaddingVertical(3.2f).PaddingHorizontal(7)
+            .DefaultTextStyle(x => x.SemiBold().FontSize(9).FontColor("#111827"));
     }
 
+    private static IContainer CellHeaderLast(IContainer c)
+    {
+        return c
+            .Background("#F3F4F6")
+            .BorderTop(0.75f).BorderColor("#000000")
+            .PaddingVertical(3.2f).PaddingHorizontal(7)
+            .DefaultTextStyle(x => x.SemiBold().FontSize(9).FontColor("#111827"));
+    }
+
+    // ✅ Bleu #EAF2FF réservé à la colonne Total (23.07.2026, demande de Joe : mêmes
+    // couleurs de champs qu'en WPF) — Libellé/Qt/Prix utilisent CellBodyWhite.
     private static IContainer CellBody(IContainer c)
     {
         return c
-            .Border(0.75f).BorderColor("#000000")
-            .PaddingVertical(5).PaddingHorizontal(7)
+            .Background("#EAF2FF")
+            .BorderTop(0.75f).BorderColor("#000000")
+            .PaddingVertical(3.2f).PaddingHorizontal(7)
+            .DefaultTextStyle(x => x.FontSize(9));
+    }
+
+    private static IContainer CellBodyWhite(IContainer c)
+    {
+        return c
+            .Background(Colors.White)
+            .BorderTop(0.75f).BorderRight(0.75f).BorderColor("#000000")
+            .PaddingVertical(3.2f).PaddingHorizontal(7)
             .DefaultTextStyle(x => x.FontSize(9));
     }
 
@@ -1164,7 +1241,11 @@ public static class PdfService
         bool isGrandTotal = false,
         bool isForfait = false,
         bool noInnerDividers = false,
-        float bottomBorderThickness = 0.75f)
+        float bottomBorderThickness = 0.75f,
+        bool greyBackground = false,
+        float topBorderThickness = 0f,
+        bool blueBackground = false,
+        bool bluePrixDecorative = false)
     {
         var fontSize = isGrandTotal ? 12 : 10;
 
@@ -1182,34 +1263,66 @@ public static class PdfService
             labelStyle = labelStyle.Italic().FontColor("#4169E1");
         }
 
-        IContainer Cell(bool isFirst)
+        // ✅ col : 0=libellé, 1=Qt, 2=Prix/pc, 3=Total — nécessaire (au lieu d'un simple
+        // isFirst) pour appliquer le bleu #EAF2FF (23.07.2026, demande de Joe : mêmes
+        // couleurs de champs qu'en WPF) uniquement sur libellé+Total (Main d'œuvre/
+        // Déplacements/Rabais/TVA) et, en plus, sur Prix/pc pour Rabais/TVA (case
+        // décorative bleue, comme le WPF).
+        IContainer Cell(int col)
         {
             IContainer c = t.Cell();
 
-            if (isGrandTotal)
-                c = c.Background("#DBEAFE");
+            // ✅ Réplique serveur (22.07.2026) : fond gris #F3F4F6 sur Total Matériel/Total HT/
+            // Total TTC (.total-mat / .tot-row.bold / .tot-row.ttc côté Blazor) — pas sur
+            // Main d'œuvre/Déplacements (.tot-row.semi, gras mais sans fond).
+            if (isGrandTotal || greyBackground)
+                c = c.Background("#F3F4F6");
+            else if (blueBackground && (col == 0 || col == 3))
+                c = c.Background("#EAF2FF");
+            else if (bluePrixDecorative && col == 2)
+                c = c.Background("#EAF2FF");
+            else if (col == 1 || col == 2)
+                // ✅ Blanc explicite (23.07.2026, demande de Joe) : sans ça, Qt/Prix
+                // transparents laissaient transparaître le fond bleu de la carte Devis
+                // (devisBg, posé derrière tout le contenu), au lieu d'être sans couleur
+                // comme dans le WPF.
+                c = c.Background(Colors.White);
 
-            if (!isFirst && !noInnerDividers)
-                c = c.BorderLeft(0.75f).BorderColor("#000000");
+            // ✅ BorderRight au lieu de BorderLeft (23.07.2026, demande de Joe : bordures
+            // latérales plus grosses ici que dans le tableau Libellé) : même technique que
+            // CellBodyWhite/CellBody (BorderRight, colonne 0 à 2 seulement) pour une
+            // cohérence structurelle totale entre les deux tableaux.
+            if (col != 3 && !noInnerDividers)
+                c = c.BorderRight(0.75f).BorderColor("#000000");
+
+            // ✅ Bordure haute de Total TTC (0.6pt, un peu plus marquee que les 0.35pt de
+            // base) et de Total Matériel (0.35pt, via topBorderThickness) (23.07.2026,
+            // demande de Joe : bordures beaucoup plus fines partout + haut/bas sur Total
+            // Matériel).
+            if (isGrandTotal)
+                c = c.BorderTop(0.9f).BorderColor("#000000");
+            else if (topBorderThickness > 0)
+                c = c.BorderTop(topBorderThickness).BorderColor("#000000");
 
             if (bottomBorderThickness > 0)
                 c = c.BorderBottom(bottomBorderThickness).BorderColor("#000000");
 
-            c = c.PaddingVertical(isGrandTotal ? 6 : 4).PaddingHorizontal(7);
+            c = c.PaddingVertical(isGrandTotal ? 5 : 3).PaddingHorizontal(7);
 
             return c;
         }
 
-        Cell(true).Text(label).Style(labelStyle);
-        Cell(false).AlignRight().Text(qtyText ?? "");
-        Cell(false).AlignRight().Text(unitPriceText ?? "");
-        Cell(false).AlignRight().Text(totalText ?? "").Style(valueStyle);
+        // ✅ Réplique serveur : colonne Qt centrée (.tot-n), Prix/pc alignée à droite (.tot-n + .tot-n).
+        Cell(0).Text(label).Style(labelStyle);
+        Cell(1).AlignCenter().Text(qtyText ?? "");
+        Cell(2).AlignRight().Text(unitPriceText ?? "");
+        Cell(3).AlignRight().Text(totalText ?? "").Style(valueStyle);
     }
 
     // =========================
     // Helpers communs
     // =========================
-    private static List<byte[]> SlicePngVerticallyIntoPages(byte[] pngBytes, PageSize pageSize)
+    private static List<byte[]> SlicePngVerticallyIntoPages(byte[] pngBytes, PageSize pageSize, List<(double Top, double Bottom)>? avoidCutRanges = null)
     {
         double pageRatio = pageSize.Height / pageSize.Width;
 
@@ -1234,13 +1347,42 @@ public static class PdfService
 
         while (y < imgH)
         {
-            int h = Math.Min(sliceHeightPx, imgH - y);
+            int naiveCutY = Math.Min(y + sliceHeightPx, imgH);
+            int cutY = AdjustCutToAvoidSplittingSections(naiveCutY, y, avoidCutRanges);
+
+            int h = Math.Max(1, cutY - y);
             var cropped = new CroppedBitmap(bitmap, new Int32Rect(0, y, imgW, h));
             result.Add(EncodeBitmapSourceToPng(cropped));
             y += h;
         }
 
         return result;
+    }
+
+    // ✅ Évite de couper une carte pile entre deux pages (23.07.2026, demande de Joe) : si le point
+    // de coupure naturel tombe au milieu d'une carte qui commence après le début de la page
+    // courante, on recule la coupure jusqu'au début de cette carte (elle démarre alors la page
+    // suivante en entier). Si la carte a déjà commencé avant le début de la page courante (donc
+    // plus grande qu'une page à elle seule), aucun recul n'est possible : coupure brute inchangée.
+    private static int AdjustCutToAvoidSplittingSections(int naiveCutY, int y, List<(double Top, double Bottom)>? ranges)
+    {
+        if (ranges == null || ranges.Count == 0)
+            return naiveCutY;
+
+        double cut = naiveCutY;
+
+        for (int i = 0; i < 10; i++)
+        {
+            var conflicting = ranges.Where(r => r.Top < cut && cut < r.Bottom && r.Top > y).ToList();
+            if (conflicting.Count == 0) break;
+
+            var newCut = conflicting.Min(r => r.Top);
+            if (newCut >= cut) break;
+            cut = newCut;
+        }
+
+        var result = (int)Math.Round(cut);
+        return result > y ? result : naiveCutY;
     }
 
     private static BitmapSource? LoadPngToBitmapSource(byte[] pngBytes)
@@ -1273,7 +1415,10 @@ public static class PdfService
     // JS côté web, Bdr.razor) : une signature saisie sur le grand InkCanvas du client
     // desktop est capturée avec tout son fond blanc autour — sans ce recadrage, le trait
     // reste minuscule au milieu de la box PDF quelle que soit la hauteur de celle-ci.
-    private static byte[] CropSignatureToContent(byte[] pngBytes)
+    // ✅ internal (au lieu de private, 22.07.2026, demande de Joe) : réutilisé par
+    // WorkOrderWindow.CaptureSignaturePng pour que le PNG stocké soit déjà recadré, et non plus
+    // seulement au moment de générer le PDF — voir commentaire dans CaptureSignaturePng.
+    internal static byte[] CropSignatureToContent(byte[] pngBytes)
     {
         var source = LoadPngToBitmapSource(pngBytes);
         if (source == null) return pngBytes;

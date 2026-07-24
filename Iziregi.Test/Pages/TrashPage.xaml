@@ -27,6 +27,13 @@
 			<Setter Property="BorderBrush" Value="#FCA5A5"/>
 		</Style>
 
+		<!-- ✅ Même vert que "Archiver" dans Dashboard (24.07.2026, demande de Joe : couleurs
+		     cohérentes entre les pages pour les boutons Corbeille/Rétablir). -->
+		<Style x:Key="RestoreSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+			<Setter Property="Foreground" Value="#15803D"/>
+			<Setter Property="BorderBrush" Value="#15803D"/>
+		</Style>
+
 		<Style x:Key="InputStyle" TargetType="TextBox">
 			<Setter Property="Height" Value="26"/>
 			<Setter Property="Padding" Value="6,2"/>
@@ -232,7 +239,7 @@
 
 	<Button x:Name="RestoreSelectionButton"
 	        Content="Restaurer sélection"
-	        Style="{StaticResource SmallButtonStyle}"
+	        Style="{StaticResource RestoreSmallButtonStyle}"
 	        Click="RestoreSelected_Click"
 	        IsEnabled="False"
 	        Margin="0,0,6,0"/>
@@ -635,7 +642,7 @@
 								<StackPanel Orientation="Horizontal">
 									<Button Content="↩"
 											ToolTip="Restaurer"
-											Style="{StaticResource SmallButtonStyle}"
+											Style="{StaticResource RestoreSmallButtonStyle}"
 											Click="RestoreRow_Click"
 											Margin="0,0,4,0"/>
 

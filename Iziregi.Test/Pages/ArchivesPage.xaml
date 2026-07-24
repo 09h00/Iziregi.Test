@@ -27,6 +27,111 @@
 			<Setter Property="BorderBrush" Value="#FCA5A5"/>
 		</Style>
 
+		<!-- ✅ Même vert que "Archiver" dans Dashboard (24.07.2026, demande de Joe : couleurs
+		     cohérentes entre les pages pour les boutons Corbeille/Rétablir). -->
+		<Style x:Key="RestoreSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+			<Setter Property="Foreground" Value="#15803D"/>
+			<Setter Property="BorderBrush" Value="#15803D"/>
+		</Style>
+
+		<!-- ✅ "Corbeille sélection"/"Restaurer sélection" en rouge/vert arrondi (24.07.2026,
+		     demande de Joe) : ControlTemplate explicite avec CornerRadius, comme PdfButtonStyle
+		     dans App.xaml — le chrome Windows par défaut d'un Button ignore parfois le style selon
+		     le thème, d'où ce template minimal pour garantir l'arrondi. -->
+		<Style x:Key="TrashSelectionButtonStyle" TargetType="Button" BasedOn="{StaticResource DangerSmallButtonStyle}">
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bd"
+								Background="{TemplateBinding Background}"
+								BorderBrush="{TemplateBinding BorderBrush}"
+								BorderThickness="{TemplateBinding BorderThickness}"
+								CornerRadius="8"
+								SnapsToDevicePixels="True">
+							<ContentPresenter Margin="{TemplateBinding Padding}"
+											  HorizontalAlignment="Center"
+											  VerticalAlignment="Center"/>
+						</Border>
+						<!-- ✅ Grisé si désactivé (24.07.2026, demande de Joe) : un ControlTemplate
+						     custom ignore l'état IsEnabled=False par défaut, il faut un Trigger explicite. -->
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
+								<Setter Property="Foreground" Value="#9CA3AF"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<Style x:Key="RestoreSelectionButtonStyle" TargetType="Button" BasedOn="{StaticResource RestoreSmallButtonStyle}">
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bd"
+								Background="{TemplateBinding Background}"
+								BorderBrush="{TemplateBinding BorderBrush}"
+								BorderThickness="{TemplateBinding BorderThickness}"
+								CornerRadius="8"
+								SnapsToDevicePixels="True">
+							<ContentPresenter Margin="{TemplateBinding Padding}"
+											  HorizontalAlignment="Center"
+											  VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
+								<Setter Property="Foreground" Value="#9CA3AF"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<!-- ✅ Bouton filtre façon Excel dans les en-têtes de colonne (24.07.2026, demande de Joe). -->
+		<Style x:Key="FilterHeaderButtonStyle" TargetType="Button">
+			<Setter Property="Width" Value="16"/>
+			<Setter Property="Height" Value="16"/>
+			<Setter Property="Padding" Value="0"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Foreground" Value="#6B7280"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="FontSize" Value="9"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border Background="{TemplateBinding Background}" CornerRadius="3">
+							<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter Property="Background" Value="#E5E7EB"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<Style x:Key="FilterHeaderButtonActiveStyle" TargetType="Button" BasedOn="{StaticResource FilterHeaderButtonStyle}">
+			<Setter Property="Foreground" Value="#1D4ED8"/>
+			<Setter Property="FontWeight" Value="Bold"/>
+		</Style>
+
+		<!-- ✅ Bordure bleue autour de l'en-tête tant qu'un tri/filtre est actif sur cette colonne
+		     (24.07.2026, demande de Joe). -->
+		<Style x:Key="FilterHeaderHighlightBorderStyle" TargetType="Border">
+			<Setter Property="BorderThickness" Value="2"/>
+			<Setter Property="BorderBrush" Value="Transparent"/>
+			<Setter Property="CornerRadius" Value="4"/>
+			<Setter Property="Padding" Value="4,2"/>
+		</Style>
+
 		<Style x:Key="InputStyle" TargetType="TextBox">
 			<Setter Property="Height" Value="26"/>
 			<Setter Property="Padding" Value="6,2"/>
@@ -268,6 +373,72 @@
 			<RowDefinition Height="*"/>
 		</Grid.RowDefinitions>
 
+		<!-- ✅ Popup de filtre façon Excel, partagé par toutes les colonnes filtrables (24.07.2026,
+		     demande de Joe) : rempli dynamiquement en code-behind selon la colonne dont le bouton
+		     a été cliqué (voir ColumnFilterButton_Click). -->
+		<Popup x:Name="ColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
+			<Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8" MinWidth="220" MaxHeight="380" Effect="{StaticResource CardShadowEffect}">
+				<StackPanel>
+
+					<!-- ✅ Colonnes texte/statut (24.07.2026, demande de Joe) : tri alphabétique à
+					     cocher + liste de valeurs à cocher. Le tri est masqué pour la colonne Statut
+					     (n'a pas de sens de trier alphabétiquement des étapes de pipeline). -->
+					<StackPanel x:Name="TextFilterPanel">
+						<CheckBox x:Name="AlphaSortCheckBox"
+						          Content="Trier par ordre alphabétique (A→Z)"
+						          Margin="0,0,0,8"/>
+
+						<Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Margin="0,0,0,6"/>
+
+						<CheckBox x:Name="FilterSelectAllCheckBox"
+						          Content="(Tout sélectionner)"
+						          IsChecked="True"
+						          FontWeight="Bold"
+						          Click="FilterSelectAllCheckBox_Click"
+						          Margin="0,0,0,6"/>
+
+						<ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+							<ItemsControl x:Name="FilterOptionsItemsControl">
+								<ItemsControl.ItemTemplate>
+									<DataTemplate>
+										<CheckBox Content="{Binding Value}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
+									</DataTemplate>
+								</ItemsControl.ItemTemplate>
+							</ItemsControl>
+						</ScrollViewer>
+					</StackPanel>
+
+					<!-- ✅ Colonnes date (24.07.2026, demande de Joe) : tri croissant/décroissant à
+					     cocher (mutuellement exclusifs) + sélection d'une plage de dates (début/fin). -->
+					<StackPanel x:Name="DateFilterPanel" Visibility="Collapsed">
+						<CheckBox x:Name="DateAscCheckBox" Content="Trier par ordre croissant" Click="DateAscCheckBox_Click" Margin="0,0,0,4"/>
+						<CheckBox x:Name="DateDescCheckBox" Content="Trier par ordre décroissant" Click="DateDescCheckBox_Click" Margin="0,0,0,8"/>
+
+						<Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
+
+						<TextBlock Text="Du" Foreground="#6B7280" Margin="0,0,0,2"/>
+						<DatePicker x:Name="DateFromPicker" Width="190" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+
+						<TextBlock Text="Au" Foreground="#6B7280" Margin="0,0,0,2"/>
+						<DatePicker x:Name="DateToPicker" Width="190" HorizontalAlignment="Left"/>
+
+						<!-- ✅ Réinitialise juste la plage Du/Au de cette colonne (24.07.2026, demande
+						     de Joe), sans toucher au tri croissant/décroissant coché au-dessus. -->
+						<Button Content="Réinitialiser les dates sélectionnées"
+						        Style="{StaticResource SmallButtonStyle}"
+						        Click="ResetDateRangeButton_Click"
+						        HorizontalAlignment="Left"
+						        Margin="0,8,0,0"/>
+					</StackPanel>
+
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+						<Button Content="Annuler" Style="{StaticResource SmallButtonStyle}" Click="ColumnFilterCancel_Click" Margin="0,0,6,0"/>
+						<Button Content="OK" Style="{StaticResource SmallButtonStyle}" Click="ColumnFilterApply_Click"/>
+					</StackPanel>
+				</StackPanel>
+			</Border>
+		</Popup>
+
 		<!-- BARRE -->
 		<Border Grid.Row="0"
 				Background="White"
@@ -288,21 +459,28 @@
 
 		<Button x:Name="RestoreSelectionButton"
 		        Content="Restaurer sélection"
-		        Style="{StaticResource SmallButtonStyle}"
+		        Style="{StaticResource RestoreSelectionButtonStyle}"
 		        Click="RestoreSelected_Click"
 		        IsEnabled="False"
 		        Margin="0,0,6,0"/>
 
 		<Button x:Name="TrashSelectionButton"
 		        Content="Corbeille sélection"
-		        Style="{StaticResource DangerSmallButtonStyle}"
+		        Style="{StaticResource TrashSelectionButtonStyle}"
 		        Click="TrashSelected_Click"
 		        IsEnabled="False"
 		        Margin="0,0,6,0"/>
 
 		<Button Content="Rafraîchir"
 		        Style="{StaticResource SmallButtonStyle}"
-		        Click="Refresh_Click"/>
+		        Click="Refresh_Click"
+		        Margin="0,0,6,0"/>
+
+		<!-- ✅ Filtres façon Excel sur les en-têtes de colonnes (24.07.2026, demande de Joe) :
+		     remplace l'ancien filtre Entreprise/période unique. -->
+		<Button Content="Effacer filtres"
+		        Style="{StaticResource SmallButtonStyle}"
+		        Click="ClearFilters_Click"/>
 	</StackPanel>
 </Grid>
 		</Border>
@@ -352,12 +530,20 @@
 
 					<!-- Concerne -->
 					<DataGridTextColumn Width="SizeToCells"
-										MinWidth="90"
+										MinWidth="80"
 										Binding="{Binding WorkOrder.Reserve}"
 										ElementStyle="{StaticResource GridTextCellStyle}"
-										IsReadOnly="True">
+										IsReadOnly="True"
+										CanUserSort="False">
 						<DataGridTextColumn.Header>
-							<TextBlock Text="Concerne"/>
+							<Border x:Name="ConcerneHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+								<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+									<TextBlock Text="Concerne" HorizontalAlignment="Center"/>
+									<Button x:Name="ConcerneFilterButton" Content="▾" Tag="Concerne"
+											Style="{StaticResource FilterHeaderButtonStyle}"
+											Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+								</StackPanel>
+							</Border>
 						</DataGridTextColumn.Header>
 					</DataGridTextColumn>
 
@@ -366,16 +552,31 @@
 										MinWidth="90"
 										Binding="{Binding WorkOrder.RequestedBy}"
 										ElementStyle="{StaticResource GridTextCellStyle}"
-										IsReadOnly="True">
+										IsReadOnly="True"
+										CanUserSort="False">
 						<DataGridTextColumn.Header>
-							<TextBlock Text="Demandé par"/>
+							<Border x:Name="RequestedByHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+								<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+									<TextBlock Text="Demandé par" HorizontalAlignment="Center"/>
+									<Button x:Name="RequestedByFilterButton" Content="▾" Tag="RequestedBy"
+											Style="{StaticResource FilterHeaderButtonStyle}"
+											Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+								</StackPanel>
+							</Border>
 						</DataGridTextColumn.Header>
 					</DataGridTextColumn>
 
 					<!-- Entreprise (avec couleur) -->
 					<DataGridTemplateColumn Width="SizeToCells" MinWidth="76" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
-							<TextBlock Text="Entreprise"/>
+							<Border x:Name="CompanyHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+								<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+									<TextBlock Text="Entreprise" HorizontalAlignment="Center"/>
+									<Button x:Name="CompanyFilterButton" Content="▾" Tag="Company"
+											Style="{StaticResource FilterHeaderButtonStyle}"
+											Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+								</StackPanel>
+							</Border>
 						</DataGridTemplateColumn.Header>
 						<DataGridTemplateColumn.CellTemplate>
 							<DataTemplate>
@@ -392,12 +593,23 @@
 					</DataGridTemplateColumn>
 
 					<!-- Date -->
-					<DataGridTextColumn Header="Créé le"
-										Binding="{Binding WorkOrder.RequestDate, StringFormat=dd.MM.yyyy}"
+					<DataGridTextColumn Binding="{Binding WorkOrder.RequestDate, StringFormat=dd.MM.yyyy}"
 										Width="SizeToCells"
 										MinWidth="70"
 										ElementStyle="{StaticResource GridTextCellStyle}"
-										IsReadOnly="True"/>
+										IsReadOnly="True"
+										CanUserSort="False">
+						<DataGridTextColumn.Header>
+							<Border x:Name="CreatedDateHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+								<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+									<TextBlock Text="Créé le" HorizontalAlignment="Center"/>
+									<Button x:Name="CreatedDateFilterButton" Content="▾" Tag="CreatedDate"
+											Style="{StaticResource FilterHeaderButtonStyle}"
+											Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+								</StackPanel>
+							</Border>
+						</DataGridTextColumn.Header>
+					</DataGridTextColumn>
 
 					<!-- ========================= -->
 					<!-- STATUT (5 colonnes) -->
@@ -525,6 +737,7 @@
 
 					<!-- 3) Devis reçu -->
 					<DataGridTemplateColumn Width="SizeToCells"
+											MinWidth="70"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -535,11 +748,14 @@
 									<RowDefinition Height="*"/>
 								</Grid.RowDefinitions>
 
-								<TextBlock Text="Statut"
-										   Grid.Row="0"
-										   Grid.RowSpan="2"
-										   Style="{StaticResource StatusHeaderTopText}"
-										   VerticalAlignment="Center"/>
+								<Border x:Name="StatusHeaderBorder" Grid.Row="0" Grid.RowSpan="2" Style="{StaticResource FilterHeaderHighlightBorderStyle}" HorizontalAlignment="Center" VerticalAlignment="Center">
+									<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+										<TextBlock Text="Statut" Style="{StaticResource StatusHeaderTopText}" HorizontalAlignment="Center"/>
+										<Button x:Name="StatusFilterButton" Content="▾" Tag="Status"
+												Style="{StaticResource FilterHeaderButtonStyle}"
+												Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+									</StackPanel>
+								</Border>
 							</Grid>
 						</DataGridTemplateColumn.Header>
 						<DataGridTemplateColumn.CellTemplate>
@@ -685,7 +901,17 @@
 					</DataGridTemplateColumn>
 
 					<!-- Distribué le -->
-					<DataGridTemplateColumn Header="Distribué le" Width="94" IsReadOnly="False">
+					<DataGridTemplateColumn Width="95" IsReadOnly="False">
+						<DataGridTemplateColumn.Header>
+							<Border x:Name="DistributedDateHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+								<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+									<TextBlock Text="Distribué le" HorizontalAlignment="Center"/>
+									<Button x:Name="DistributedDateFilterButton" Content="▾" Tag="DistributedDate"
+											Style="{StaticResource FilterHeaderButtonStyle}"
+											Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+								</StackPanel>
+							</Border>
+						</DataGridTemplateColumn.Header>
 						<DataGridTemplateColumn.CellTemplate>
 							<DataTemplate>
 								<Border Style="{StaticResource DateCellBorderStyle_Distributed}">
@@ -703,7 +929,17 @@
 					</DataGridTemplateColumn>
 
 					<!-- Effectué le -->
-					<DataGridTemplateColumn Header="Effectué le" Width="94" IsReadOnly="False">
+					<DataGridTemplateColumn Width="95" IsReadOnly="False">
+						<DataGridTemplateColumn.Header>
+							<Border x:Name="PerformedDateHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+								<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+									<TextBlock Text="Effectué le" HorizontalAlignment="Center"/>
+									<Button x:Name="PerformedDateFilterButton" Content="▾" Tag="PerformedDate"
+											Style="{StaticResource FilterHeaderButtonStyle}"
+											Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+								</StackPanel>
+							</Border>
+						</DataGridTemplateColumn.Header>
 						<DataGridTemplateColumn.CellTemplate>
 							<DataTemplate>
 								<Border Style="{StaticResource DateCellBorderStyle_Performed}">
@@ -720,14 +956,14 @@
 						</DataGridTemplateColumn.CellTemplate>
 					</DataGridTemplateColumn>
 
-					<!-- Actions -->
-					<DataGridTemplateColumn Header="Actions" Width="150" IsReadOnly="True">
+					<!-- Actions (largeur réduite de 35% puis 15% de plus, 24.07.2026, demande de Joe) -->
+					<DataGridTemplateColumn Header="Actions" Width="83" IsReadOnly="True">
 						<DataGridTemplateColumn.CellTemplate>
 							<DataTemplate>
 								<StackPanel Orientation="Horizontal">
 									<Button Content="↩"
 											ToolTip="Restaurer"
-											Style="{StaticResource SmallButtonStyle}"
+											Style="{StaticResource RestoreSmallButtonStyle}"
 											Click="RestoreRow_Click"
 											Margin="0,0,4,0"/>
 

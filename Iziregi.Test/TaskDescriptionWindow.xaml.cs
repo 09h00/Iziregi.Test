@@ -179,6 +179,14 @@ public partial class TaskDescriptionWindow : Window
                 GetVisibleInfoFields(),
                 DescriptifTextBox.Text);
 
+            // ✅ Ouvre automatiquement le PDF (23.07.2026, demande de Joe : tous les pdf générés
+            // dans l'app doivent s'ouvrir automatiquement).
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
+            }
+            catch { }
+
             WpfMessageBox.Show(this, "PDF généré avec succès.", "Iziregi", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)

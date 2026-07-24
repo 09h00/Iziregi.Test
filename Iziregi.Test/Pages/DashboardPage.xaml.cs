@@ -46,11 +46,367 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     private bool _suspendDirtyTracking;
     private long? _lastProjectId;
 
-    // Filtre dashboard
+    // ✅ Filtres façon Excel sur les en-têtes de colonnes, portés depuis Archives (24.07.2026,
+    // demande de Joe) : remplace les anciennes puces "Tous/En cours/Lien expiré/Validé/Refusé"
+    // + case de recherche.
     private System.Collections.Generic.List<WorkOrder> _allWorkOrders = new();
-    private System.ComponentModel.ICollectionView? _workOrdersView;
-    private string _filterStatus = "Tous";
-    private string _filterText = "";
+
+    private enum ColumnKind { Text, Date, Status }
+
+    private static ColumnKind GetColumnKind(string columnKey) => columnKey switch
+    {
+        "CreatedDate" or "DistributedDate" or "PerformedDate" => ColumnKind.Date,
+        "Status" => ColumnKind.Status,
+        _ => ColumnKind.Text
+    };
+
+    private readonly System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>> _activeValueFilters = new();
+    private readonly System.Collections.Generic.Dictionary<string, (DateTime? From, DateTime? To)> _activeDateRangeFilters = new();
+
+    // ✅ Tri par défaut : Créé le décroissant (24.07.2026, demande de Joe).
+    private string? _sortColumnKey = "CreatedDate";
+    private System.ComponentModel.ListSortDirection _sortDirection = System.ComponentModel.ListSortDirection.Descending;
+
+    // ✅ Distingue le tri par défaut (Créé le décroissant, pas de bordure bleue) d'un tri choisi
+    // explicitement par l'utilisateur via une case à cocher (24.07.2026, demande de Joe).
+    private bool _sortIsUserChosen;
+
+    private string? _currentFilterColumnKey;
+    private System.Collections.Generic.List<FilterOption> _filterPopupOptions = new();
+
+    // ✅ Champ de recherche conservé à côté des filtres par colonne (24.07.2026, demande de Joe).
+    private string _searchText = "";
+
+    private void WorkOrderSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _searchText = WorkOrderSearchBox?.Text ?? "";
+        ApplyFilters();
+    }
+
+    private bool MatchesSearch(WorkOrder wo)
+    {
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+
+        var q = _searchText.Trim().ToLowerInvariant();
+        return (wo.BdrDisplay?.ToLowerInvariant().Contains(q) == true)
+            || (wo.PerformedBy?.ToLowerInvariant().Contains(q) == true)
+            || (wo.RequestedBy?.ToLowerInvariant().Contains(q) == true)
+            || (wo.Place?.ToLowerInvariant().Contains(q) == true)
+            || (wo.Reserve?.ToLowerInvariant().Contains(q) == true)
+            || (wo.Description?.ToLowerInvariant().Contains(q) == true);
+    }
+
+    public class FilterOption : System.ComponentModel.INotifyPropertyChanged
+    {
+        public string Value { get; set; } = "";
+
+        private bool _isChecked = true;
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set { _isChecked = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsChecked))); }
+        }
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    private static string GetColumnValue(WorkOrder w, string columnKey) => columnKey switch
+    {
+        "Company" => string.IsNullOrWhiteSpace(w.PerformedBy) ? "(Non défini)" : w.PerformedBy.Trim(),
+        "Concerne" => string.IsNullOrWhiteSpace(w.Reserve) ? "(Non défini)" : w.Reserve.Trim(),
+        "RequestedBy" => string.IsNullOrWhiteSpace(w.RequestedBy) ? "(Non défini)" : w.RequestedBy.Trim(),
+        "Status" => GetStatusLabel(w),
+        _ => ""
+    };
+
+    // ✅ Les 5 colonnes Statut sont des drapeaux cumulatifs : cette méthode réduit ça à une seule
+    // étiquette représentant l'étape la plus avancée atteinte, pour le filtre à cases à cocher.
+    private static string GetStatusLabel(WorkOrder w)
+    {
+        var decision = (w.ValidationDecision ?? "").Trim();
+        if (string.Equals(decision, "Validé", StringComparison.OrdinalIgnoreCase)) return "Validé";
+        if (string.Equals(decision, "Refusé", StringComparison.OrdinalIgnoreCase)) return "Refusé";
+        if (string.Equals(decision, "Annulé", StringComparison.OrdinalIgnoreCase)) return "Annulé";
+        if (w.IsSentToSigner) return "Demande validation envoyée";
+        if (w.IsQuoteReceived) return "Devis reçu";
+        if (w.IsSentToCompany) return "Demande devis envoyée";
+        return "Créé";
+    }
+
+    // ✅ 6 statuts possibles en tout, toujours proposés dans la liste à cocher (même si aucun bon
+    // n'a actuellement tel ou tel statut).
+    private static readonly string[] AllStatusLabels =
+    {
+        "Demande devis envoyée",
+        "Devis reçu",
+        "Demande validation envoyée",
+        "Validé",
+        "Refusé",
+        "Annulé"
+    };
+
+    private static DateTime? GetDateValue(WorkOrder w, string columnKey) => columnKey switch
+    {
+        "CreatedDate" => w.RequestDate,
+        "DistributedDate" => w.DistributedAt,
+        "PerformedDate" => w.PerformedAt,
+        _ => null
+    };
+
+    private void ColumnFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not string columnKey) return;
+
+        _currentFilterColumnKey = columnKey;
+        var kind = GetColumnKind(columnKey);
+
+        if (kind == ColumnKind.Date)
+        {
+            TextFilterPanel.Visibility = Visibility.Collapsed;
+            DateFilterPanel.Visibility = Visibility.Visible;
+
+            DateAscCheckBox.IsChecked = _sortColumnKey == columnKey && _sortDirection == System.ComponentModel.ListSortDirection.Ascending;
+            DateDescCheckBox.IsChecked = _sortColumnKey == columnKey && _sortDirection == System.ComponentModel.ListSortDirection.Descending;
+
+            var hasRange = _activeDateRangeFilters.TryGetValue(columnKey, out var range);
+            DateFromPicker.SelectedDate = hasRange ? range.From : null;
+            DateToPicker.SelectedDate = hasRange ? range.To : null;
+        }
+        else
+        {
+            DateFilterPanel.Visibility = Visibility.Collapsed;
+            TextFilterPanel.Visibility = Visibility.Visible;
+
+            AlphaSortCheckBox.Visibility = kind == ColumnKind.Status ? Visibility.Collapsed : Visibility.Visible;
+            AlphaSortCheckBox.IsChecked = _sortColumnKey == columnKey && _sortDirection == System.ComponentModel.ListSortDirection.Ascending;
+
+            var allValues = kind == ColumnKind.Status
+                ? AllStatusLabels.ToList()
+                : _allWorkOrders
+                    .Select(w => GetColumnValue(w, columnKey))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+            var active = _activeValueFilters.TryGetValue(columnKey, out var set) ? set : null;
+
+            _filterPopupOptions = allValues
+                .Select(v => new FilterOption { Value = v, IsChecked = active == null || active.Contains(v) })
+                .ToList();
+
+            FilterOptionsItemsControl.ItemsSource = _filterPopupOptions;
+            FilterSelectAllCheckBox.IsChecked = _filterPopupOptions.All(o => o.IsChecked);
+        }
+
+        ColumnFilterPopup.PlacementTarget = fe;
+        ColumnFilterPopup.IsOpen = true;
+    }
+
+    private void FilterSelectAllCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        var check = FilterSelectAllCheckBox.IsChecked == true;
+        foreach (var o in _filterPopupOptions)
+            o.IsChecked = check;
+    }
+
+    private void DateAscCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (DateAscCheckBox.IsChecked == true) DateDescCheckBox.IsChecked = false;
+    }
+
+    private void DateDescCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (DateDescCheckBox.IsChecked == true) DateAscCheckBox.IsChecked = false;
+    }
+
+    private void ResetDateRangeButton_Click(object sender, RoutedEventArgs e)
+    {
+        DateFromPicker.SelectedDate = null;
+        DateToPicker.SelectedDate = null;
+    }
+
+    private void ColumnFilterCancel_Click(object sender, RoutedEventArgs e)
+    {
+        ColumnFilterPopup.IsOpen = false;
+    }
+
+    private void ColumnFilterApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFilterColumnKey == null)
+        {
+            ColumnFilterPopup.IsOpen = false;
+            return;
+        }
+
+        var columnKey = _currentFilterColumnKey;
+        var kind = GetColumnKind(columnKey);
+
+        if (kind == ColumnKind.Date)
+        {
+            var from = DateFromPicker.SelectedDate?.Date;
+            var to = DateToPicker.SelectedDate?.Date;
+
+            if (from.HasValue || to.HasValue)
+                _activeDateRangeFilters[columnKey] = (from, to);
+            else
+                _activeDateRangeFilters.Remove(columnKey);
+
+            if (DateAscCheckBox.IsChecked == true) { _sortColumnKey = columnKey; _sortDirection = System.ComponentModel.ListSortDirection.Ascending; _sortIsUserChosen = true; }
+            else if (DateDescCheckBox.IsChecked == true) { _sortColumnKey = columnKey; _sortDirection = System.ComponentModel.ListSortDirection.Descending; _sortIsUserChosen = true; }
+            else if (_sortColumnKey == columnKey) { _sortColumnKey = null; _sortIsUserChosen = false; }
+        }
+        else
+        {
+            var checkedValues = _filterPopupOptions.Where(o => o.IsChecked).Select(o => o.Value)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (checkedValues.Count == _filterPopupOptions.Count)
+                _activeValueFilters.Remove(columnKey);
+            else
+                _activeValueFilters[columnKey] = checkedValues;
+
+            if (kind != ColumnKind.Status && AlphaSortCheckBox.IsChecked == true)
+            {
+                _sortColumnKey = columnKey;
+                _sortDirection = System.ComponentModel.ListSortDirection.Ascending;
+                _sortIsUserChosen = true;
+            }
+            else if (_sortColumnKey == columnKey)
+            {
+                _sortColumnKey = null;
+                _sortIsUserChosen = false;
+            }
+        }
+
+        ColumnFilterPopup.IsOpen = false;
+
+        UpdateFilterButtonIndicators();
+        ApplyFilters();
+    }
+
+    private void UpdateFilterButtonIndicators()
+    {
+        SetFilterHeaderState(ConcerneFilterButton, ConcerneHeaderBorder, "Concerne");
+        SetFilterHeaderState(RequestedByFilterButton, RequestedByHeaderBorder, "RequestedBy");
+        SetFilterHeaderState(CompanyFilterButton, CompanyHeaderBorder, "Company");
+        SetFilterHeaderState(CreatedDateFilterButton, CreatedDateHeaderBorder, "CreatedDate");
+        SetFilterHeaderState(DistributedDateFilterButton, DistributedDateHeaderBorder, "DistributedDate");
+        SetFilterHeaderState(PerformedDateFilterButton, PerformedDateHeaderBorder, "PerformedDate");
+        SetFilterHeaderState(StatusFilterButton, StatusHeaderBorder, "Status");
+    }
+
+    private bool IsColumnFilterActive(string columnKey) =>
+        _activeValueFilters.ContainsKey(columnKey) ||
+        _activeDateRangeFilters.ContainsKey(columnKey) ||
+        (_sortColumnKey == columnKey && _sortIsUserChosen);
+
+    private void SetFilterHeaderState(System.Windows.Controls.Button? button, System.Windows.Controls.Border? headerBorder, string columnKey)
+    {
+        var active = IsColumnFilterActive(columnKey);
+
+        if (headerBorder != null)
+            headerBorder.BorderBrush = active
+                ? new WpfSolidColorBrush((WpfColor)WpfColorConverter.ConvertFromString("#2563EB")!)
+                : WpfBrushes.Transparent;
+
+        SetFilterButtonStyle(button, columnKey);
+    }
+
+    private void SetFilterButtonStyle(System.Windows.Controls.Button? button, string columnKey)
+    {
+        if (button == null) return;
+        button.Style = (Style)(IsColumnFilterActive(columnKey)
+            ? FindResource("FilterHeaderButtonActiveStyle")
+            : FindResource("FilterHeaderButtonStyle"));
+    }
+
+    private void ApplyFilters()
+    {
+        var filtered = _allWorkOrders.Where(w =>
+        {
+            if (!MatchesSearch(w)) return false;
+
+            foreach (var kvp in _activeValueFilters)
+            {
+                var value = GetColumnValue(w, kvp.Key);
+                if (kvp.Key == "Status" && value == "Créé") continue;
+                if (!kvp.Value.Contains(value)) return false;
+            }
+
+            foreach (var kvp in _activeDateRangeFilters)
+            {
+                var d = GetDateValue(w, kvp.Key);
+                var (from, to) = kvp.Value;
+
+                if (d == null) return false;
+                if (from.HasValue && d.Value.Date < from.Value.Date) return false;
+                if (to.HasValue && d.Value.Date > to.Value.Date) return false;
+            }
+
+            return true;
+        });
+
+        System.Collections.Generic.List<WorkOrder> sorted;
+
+        if (_sortColumnKey == "CreatedDate" || _sortColumnKey == "DistributedDate" || _sortColumnKey == "PerformedDate")
+        {
+            Func<WorkOrder, DateTime> dateKey = _sortColumnKey switch
+            {
+                "CreatedDate" => w => w.RequestDate,
+                "DistributedDate" => w => w.DistributedAt ?? DateTime.MinValue,
+                "PerformedDate" => w => w.PerformedAt ?? DateTime.MinValue,
+                _ => w => w.RequestDate
+            };
+
+            sorted = (_sortDirection == System.ComponentModel.ListSortDirection.Ascending
+                ? filtered.OrderBy(dateKey)
+                : filtered.OrderByDescending(dateKey)).ToList();
+        }
+        else if (_sortColumnKey != null)
+        {
+            Func<WorkOrder, string> textKey = _sortColumnKey switch
+            {
+                "Concerne" => w => w.Reserve ?? "",
+                "RequestedBy" => w => w.RequestedBy ?? "",
+                "Company" => w => w.PerformedBy ?? "",
+                _ => w => w.PerformedBy ?? ""
+            };
+
+            sorted = (_sortDirection == System.ComponentModel.ListSortDirection.Ascending
+                ? filtered.OrderBy(textKey, StringComparer.OrdinalIgnoreCase)
+                : filtered.OrderByDescending(textKey, StringComparer.OrdinalIgnoreCase)).ToList();
+        }
+        else
+        {
+            sorted = filtered.OrderBy(w => w.RequestDate).ToList();
+        }
+
+        WorkOrdersGrid.ItemsSource = sorted;
+
+        RefreshBatchSelectionUi();
+    }
+
+    private void ClearFilters_Click(object sender, RoutedEventArgs e)
+    {
+        ResetFiltersAndSortToDefault();
+        UpdateFilterButtonIndicators();
+        ApplyFilters();
+    }
+
+    // ✅ État par défaut : Créé le décroissant, sans bordure bleue (24.07.2026, demande de Joe) —
+    // utilisé par "Effacer filtres" et par "Rafraîchir" (voir Refresh_Click), distinct d'un tri
+    // choisi explicitement (qui, lui, affiche la bordure même si c'est le même Créé le décroissant).
+    private void ResetFiltersAndSortToDefault()
+    {
+        _activeValueFilters.Clear();
+        _activeDateRangeFilters.Clear();
+        _sortColumnKey = "CreatedDate";
+        _sortDirection = System.ComponentModel.ListSortDirection.Descending;
+        _sortIsUserChosen = false;
+
+        _searchText = "";
+        if (WorkOrderSearchBox != null) WorkOrderSearchBox.Text = "";
+    }
 
     public DashboardPage()
     {
@@ -69,8 +425,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         AllowDrop = true;
         PreviewDragOver += DashboardPage_PreviewDragOver;
         Drop += DashboardPage_Drop;
-
-        Loaded += DashboardPage_Loaded;
 
         HookDirtyTracking();
 
@@ -233,32 +587,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             return c;
 
         return $"Réf : {n}    {c}";
-    }
-
-    // =========================
-    // ✅ Alignement "+ Nouveau bon" sur le bord droit de "Validé"
-    // =========================
-    private void DashboardPage_Loaded(object sender, RoutedEventArgs e)
-    {
-        Dispatcher.BeginInvoke(new Action(AlignNewWorkOrderButtonWidth),
-            System.Windows.Threading.DispatcherPriority.Loaded);
-    }
-
-    private void AlignNewWorkOrderButtonWidth()
-    {
-        try
-        {
-            if (NewWorkOrderTopButton == null || FilterValidatedButton == null) return;
-
-            var left = NewWorkOrderTopButton.TransformToAncestor(this).Transform(new System.Windows.Point(0, 0));
-            var right = FilterValidatedButton.TransformToAncestor(this)
-                .Transform(new System.Windows.Point(FilterValidatedButton.ActualWidth, 0));
-
-            var width = right.X - left.X;
-            if (width > 0)
-                NewWorkOrderTopButton.Width = width;
-        }
-        catch { /* non bloquant */ }
     }
 
     // =========================
@@ -442,7 +770,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         if (ProjectComboBox?.SelectedItem is not Project selectedProject)
         {
             _allWorkOrders = new System.Collections.Generic.List<WorkOrder>();
-            _workOrdersView = null;
             WorkOrdersGrid.ItemsSource = Array.Empty<WorkOrder>();
             RefreshBatchSelectionUi();
             UpdateSelectedWorkOrderPreview();
@@ -455,69 +782,8 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         foreach (var wo in _allWorkOrders)
             wo.IsBatchSelected = false;
 
-        _workOrdersView = System.Windows.Data.CollectionViewSource.GetDefaultView(_allWorkOrders);
-        _workOrdersView.Filter = WorkOrderFilter;
-        WorkOrdersGrid.ItemsSource = _workOrdersView;
-
-        RefreshBatchSelectionUi();
-    }
-
-    // =========================
-    // Filtre dashboard
-    // =========================
-    private bool WorkOrderFilter(object obj)
-    {
-        if (obj is not WorkOrder wo) return false;
-
-        var matchStatus = _filterStatus switch
-        {
-            "En cours"      => !wo.IsValidated && string.IsNullOrEmpty(wo.ValidationDecision) && !wo.HasExpiredLink,
-            "Lien expiré"   => wo.HasExpiredLink,
-            "Validé"        => wo.ValidationDecision == "Validé",
-            "Refusé/Annulé" => wo.ValidationDecision == "Refusé" || wo.ValidationDecision == "Annulé",
-            _               => true
-        };
-        if (!matchStatus) return false;
-
-        if (!string.IsNullOrWhiteSpace(_filterText))
-        {
-            var q = _filterText.Trim().ToLowerInvariant();
-            return (wo.BdrDisplay?.ToLowerInvariant().Contains(q) == true)
-                || (wo.PerformedBy?.ToLowerInvariant().Contains(q) == true)
-                || (wo.RequestedBy?.ToLowerInvariant().Contains(q) == true)
-                || (wo.Place?.ToLowerInvariant().Contains(q) == true)
-                || (wo.Reserve?.ToLowerInvariant().Contains(q) == true)
-                || (wo.Description?.ToLowerInvariant().Contains(q) == true);
-        }
-
-        return true;
-    }
-
-    private void ApplyWorkOrderFilter() => _workOrdersView?.Refresh();
-
-    private void SetFilterChip(string status)
-    {
-        _filterStatus = status;
-        var active   = (System.Windows.Style)FindResource("FilterChipActiveStyle");
-        var inactive = (System.Windows.Style)FindResource("FilterChipStyle");
-        if (FilterAllButton        != null) FilterAllButton.Style        = status == "Tous"           ? active : inactive;
-        if (FilterInProgressButton != null) FilterInProgressButton.Style = status == "En cours"       ? active : inactive;
-        if (FilterExpiredButton    != null) FilterExpiredButton.Style    = status == "Lien expiré"    ? active : inactive;
-        if (FilterValidatedButton  != null) FilterValidatedButton.Style  = status == "Validé"         ? active : inactive;
-        if (FilterRefusedButton    != null) FilterRefusedButton.Style    = status == "Refusé/Annulé"  ? active : inactive;
-        ApplyWorkOrderFilter();
-    }
-
-    private void FilterAll_Click(object sender, RoutedEventArgs e)        => SetFilterChip("Tous");
-    private void FilterInProgress_Click(object sender, RoutedEventArgs e) => SetFilterChip("En cours");
-    private void FilterExpired_Click(object sender, RoutedEventArgs e)     => SetFilterChip("Lien expiré");
-    private void FilterValidated_Click(object sender, RoutedEventArgs e)   => SetFilterChip("Validé");
-    private void FilterRefused_Click(object sender, RoutedEventArgs e)     => SetFilterChip("Refusé/Annulé");
-
-    private void WorkOrderSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        _filterText = WorkOrderSearchBox?.Text ?? "";
-        ApplyWorkOrderFilter();
+        ApplyFilters();
+        UpdateFilterButtonIndicators();
     }
 
     private void RefreshArchived()
@@ -1030,6 +1296,8 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     private void Refresh_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureNotDirtyOrWarn()) return;
+
+        ResetFiltersAndSortToDefault();
 
         LoadProjects();
         RefreshAll();

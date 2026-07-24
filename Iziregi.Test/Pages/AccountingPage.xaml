@@ -6,6 +6,37 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
 
+    <UserControl.Resources>
+        <!-- ✅ Bordure bleue arrondie + police bleue (23.07.2026, demande de Joe). -->
+        <Style x:Key="CategoryChartToggleButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#1D4ED8"/>
+            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <DockPanel>
 
         <!-- =========================
@@ -33,6 +64,14 @@
                         Width="120"
                         Margin="8,0,0,0"
                         Click="Refresh_Click"/>
+
+                <!-- ✅ Afficher/Masquer le graphique des catégories (23.07.2026, demande de Joe). -->
+                <Button x:Name="ToggleCategoryChartButton"
+                        Content="Masquer graphique catégories"
+                        Width="210"
+                        Margin="8,0,0,0"
+                        Style="{StaticResource CategoryChartToggleButtonStyle}"
+                        Click="ToggleCategoryChartButton_Click"/>
 
                 <Button Content="Générer PDF"
                         Width="150"
@@ -70,7 +109,8 @@
                     <!-- ✅ IMPORTANT : PAS DE 2e titre ici -->
 
                     <!-- Filtres -->
-                    <Border BorderBrush="#DDDDDD"
+                    <Border x:Name="FiltersCardBorder"
+                            BorderBrush="#DDDDDD"
                             BorderThickness="1"
                             CornerRadius="6"
                             Padding="10"
@@ -127,7 +167,8 @@
                                 </Grid.RowDefinitions>
 
                                 <!-- Totaux -->
-                                <Border Grid.Row="0"
+                                <Border x:Name="TotalsCardBorder"
+                                        Grid.Row="0"
                                         BorderBrush="#D1D5DB"
                                         BorderThickness="1"
                                         CornerRadius="10"
@@ -271,7 +312,8 @@
                                 </Border>
 
                                 <!-- Détail -->
-                                <Border Grid.Row="2"
+                                <Border x:Name="DetailsCardBorder"
+                                        Grid.Row="2"
                                         BorderBrush="#D1D5DB"
                                         BorderThickness="1"
                                         CornerRadius="10"
@@ -377,7 +419,8 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                            <Border Grid.Row="0"
+                            <Border x:Name="ChartCardBorder"
+                                    Grid.Row="0"
                                     BorderBrush="#D1D5DB"
                                     BorderThickness="1"
                                     CornerRadius="10"
@@ -476,7 +519,8 @@
                                  régie ; la catégorie est un champ du tableau des Tâches de la page
                                  Planning, sans notion de date) — reflète le projet courant dans son
                                  intégralité. -->
-                            <Border Grid.Row="2"
+                            <Border x:Name="CategoryChartBorder"
+                                    Grid.Row="2"
                                     BorderBrush="#D1D5DB"
                                     BorderThickness="1"
                                     CornerRadius="10"

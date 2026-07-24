@@ -68,6 +68,18 @@ public partial class WorkOrderWindow : Window
     private bool _isCreateMode;
     private bool _isLoading;
 
+    // ✅ Lecture seule par défaut (23.07.2026, demande de Joe) : un bon déjà enregistré s'ouvre
+    // verrouillé pour éviter les modifications accidentelles (frappe clavier, trait dans la
+    // signature...). Le bouton "Modifier" déverrouille explicitement. Un nouveau bon (création)
+    // reste éditable directement.
+    private bool _formLocked;
+
+    // ✅ Détection fiable des modifications réelles (23.07.2026, demande de Joe) : au lieu d'un
+    // suivi événementiel par champ (abandonné, faux positifs sur événements différés WPF), on
+    // compare un instantané de tous les champs pris au déverrouillage avec l'état au moment de
+    // fermer — une seule comparaison de valeurs, pas d'écoute d'événements.
+    private string? _unlockedSnapshot;
+
     private byte[]? _existingSignaturePng;
     private bool _signatureCleared;
 
@@ -281,7 +293,7 @@ public partial class WorkOrderWindow : Window
     }
 
     private const int QuoteNotesMaxCharsPerLine = 26;
-    private const int QuoteNotesMaxLines = 9;
+    private const int QuoteNotesMaxLines = 5;
 
     private bool _quoteNotesGuard;
     private bool _quoteNotesLimitHooked;
@@ -488,6 +500,26 @@ public partial class WorkOrderWindow : Window
         catch { }
     }
 
+    // ✅ Champs obligatoires du Devis (20.07.2026, demande de Joe) : Nom toujours obligatoire ;
+    // Forfait TTC obligatoire dès qu'un pdf de devis forfaitaire est joint.
+    private bool EnsureQuoteRequiredFieldsOrWarn()
+    {
+        var hasPdf = _workOrder?.ForfaitPdfFileBytes != null && _workOrder.ForfaitPdfFileBytes.Length > 0;
+        var forfaitTtc = ParseDouble(ForfaitTtcTextBox?.Text, 0);
+        if (hasPdf && Math.Abs(forfaitTtc) < 0.0000000001)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "Le montant \"Forfait TTC\" est obligatoire lorsqu'un pdf est joint au devis.",
+                "Devis",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        return true;
+    }
+
     private bool EnsureValidationIsNotPartialOrWarn()
     {
         var decision = (GetSelectedValidationDecision() ?? "").Trim();
@@ -562,7 +594,16 @@ public partial class WorkOrderWindow : Window
             try { SignaturePreviewImage.Source = null; } catch { }
 
             _existingSignaturePng = null;
-            _signatureCleared = true;
+
+            // ✅ Correctif (22.07.2026, demande de Joe) : _signatureCleared=true signifie ici
+            // "l'utilisateur vient d'effacer la signature en cours d'édition" (voir
+            // ClearSignatureButton_Click), un état PARTIEL qui doit bloquer un renvoi tant que
+            // le reste n'est pas re-rempli. Mais un Reset complet remet TOUT à vide (décision,
+            // nom, date, signature) -> EnsureValidationIsNotPartialOrWarn doit reconnaître ça
+            // comme un état vierge (allEmpty), pas comme une validation partielle. Sans ce
+            // correctif, renvoyer le lien pour validation après un reset échouait toujours avec
+            // "Validation incomplète", même bon vidé intégralement.
+            _signatureCleared = false;
 
             if (_workOrder == null || _workOrder.Id <= 0)
             {
@@ -684,6 +725,8 @@ public partial class WorkOrderWindow : Window
 
             ApplyMode();
             RecomputeTotals();
+
+            Closing += WorkOrderWindow_Closing;
         }
         catch (Exception ex)
         {
@@ -722,8 +765,50 @@ public partial class WorkOrderWindow : Window
 
             PreviewMouseWheel -= WorkOrderWindow_PreviewMouseWheel;
             PreviewMouseWheel += WorkOrderWindow_PreviewMouseWheel;
+
+            // ✅ La ligne sélectionnée du tableau Libellé/Matériel restait bordée en bleu
+            // même après un clic ailleurs sur la fenêtre (20.07.2026, demande de Joe) :
+            // IsSelected d'une DataGridRow ne se désélectionne pas tout seul en perdant le
+            // focus. On désélectionne explicitement dès qu'un clic a lieu hors de LinesGrid.
+            PreviewMouseDown -= WorkOrderWindow_PreviewMouseDown_ClearLinesGridSelection;
+            PreviewMouseDown += WorkOrderWindow_PreviewMouseDown_ClearLinesGridSelection;
         }
         catch { }
+    }
+
+    private void WorkOrderWindow_PreviewMouseDown_ClearLinesGridSelection(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (LinesGrid == null) return;
+
+            var dep = e.OriginalSource as DependencyObject;
+            if (FindAncestor<DataGrid>(dep) == LinesGrid) return;
+
+            // ✅ Ne pas désélectionner si le clic vient du bouton "Supprimer ligne" lui-même
+            // (22.07.2026, correctif) : le bouton est hors du DataGrid, donc ce handler
+            // PreviewMouseDown (qui se déclenche AVANT le Click du bouton) videait la
+            // sélection juste avant que DeleteLineButton_Click ne la lise, rendant la
+            // suppression impossible.
+            var clickedButton = FindAncestor<System.Windows.Controls.Button>(dep);
+            if (clickedButton == DeleteLineButton || clickedButton == AddLineButton) return;
+
+            LinesGrid.UnselectAllCells();
+            LinesGrid.UnselectAll();
+            LinesGrid.SelectedItem = null;
+            LinesGrid.SelectedIndex = -1;
+        }
+        catch { }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current != null)
+        {
+            if (current is T match) return match;
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     private void WorkOrderWindow_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -761,8 +846,7 @@ public partial class WorkOrderWindow : Window
         HookNoSelectAll(TravelRateTextBox);
         HookNoSelectAll(TvaRateTextBox);
         HookNoSelectAll(DiscountRateTextBox);
-        HookNoSelectAll(ForfaitQtyTextBox);
-        HookNoSelectAll(ForfaitUnitPriceTextBox);
+        HookNoSelectAll(ForfaitTtcTextBox);
     }
 
     private void HookNoSelectAll(WpfTextBox? tb)
@@ -903,29 +987,25 @@ public partial class WorkOrderWindow : Window
             ResetValidationBottomButton.Visibility = isArchitecte ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    // ✅ Toujours disponible (23.07.2026, demande de Joe) : le bouton se cachait auparavant selon
+    // le mode (Entreprise/Devis) et la présence de données de devis, ce qui le rendait absent dans
+    // certains cas alors qu'on doit toujours pouvoir générer le PDF.
     private void UpdatePdfButtonVisibility()
     {
         if (PdfButton == null) return;
 
-        if (_mode == WorkOrderEditMode.EntrepriseDevis)
-        {
-            PdfButton.Visibility = _pdfAvailableForExternal ? Visibility.Visible : Visibility.Collapsed;
-            PdfButton.IsEnabled = _pdfAvailableForExternal;
-            return;
-        }
-
-        var hasQuoteData = (_workOrder != null) && (HasAnyQuoteData(_workOrder) || _lines.Any(l => !string.IsNullOrWhiteSpace(l?.Label)));
-        var show = hasQuoteData || _pdfAvailableForExternal;
-
-        PdfButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        PdfButton.IsEnabled = show;
+        PdfButton.Visibility = Visibility.Visible;
+        PdfButton.IsEnabled = true;
     }
 
     private void ApplyFieldPermissions()
     {
-        var isArchitecte = true;
-        var isEntreprise = true;
-        var isSignataire = true;
+        var isArchitecte = !_formLocked;
+        var isEntreprise = !_formLocked;
+        var isSignataire = !_formLocked;
+
+        SetTextBoxEditable(BdrNumberTextBox, isArchitecte);
+        SetEnabled(RequestDatePicker, isArchitecte);
 
         SetEnabled(ReserveComboBox, isArchitecte);
         SetEnabled(RequestedByComboBox, isArchitecte);
@@ -938,14 +1018,17 @@ public partial class WorkOrderWindow : Window
 
         var devisEditable = isArchitecte || isEntreprise;
 
-        // ✅ Forfait (ligne)
-        SetTextBoxEditable(ForfaitQtyTextBox, devisEditable);
-        SetTextBoxEditable(ForfaitUnitPriceTextBox, devisEditable);
-
-        // ✅ Forfait : si utilisé, désactiver Matériel/MO/Déplacements/Rabais
+        // ✅ Forfait (ancien, donnée existante) : si utilisé, désactive Matériel/MO/Déplacements/
+        // Rabais. Forfait TTC (nouveau, 20.07.2026, demande de Joe) : même principe, exclusivité
+        // mutuelle avec le devis détaillé. Le champ Forfait TTC lui-même reste cliquable même sans
+        // pdf joint (20.07.2026, 3e demande de Joe : un clic sans pdf doit avertir par pop-up
+        // plutôt que d'être simplement désactivé — voir ForfaitTtcTextBox_GotFocus) ; il n'est
+        // en revanche verrouillé (IsEnabled=false) que si les autres totaux ne sont pas à 0.
         var forfaitUsed = IsForfaitUsedFromUi();
+        var forfaitTtcUsed = IsForfaitTtcUsedFromUi();
 
-        var devisStandardEditable = devisEditable && !forfaitUsed;
+        var devisStandardEditable = devisEditable && !forfaitUsed && !forfaitTtcUsed;
+        var forfaitTtcEditable = devisEditable && !forfaitUsed && (forfaitTtcUsed || AreStandardQuoteFieldsAllZero());
 
         SetTextBoxEditable(QuoteNameTextBox, devisEditable);
         SetEnabled(QuoteDatePicker, devisEditable);
@@ -955,6 +1038,7 @@ public partial class WorkOrderWindow : Window
         SetTextBoxEditable(TravelQtyTextBox, devisStandardEditable);
         SetTextBoxEditable(TravelRateTextBox, devisStandardEditable);
         SetTextBoxEditable(DiscountRateTextBox, devisStandardEditable);
+        SetTextBoxEditable(ForfaitTtcTextBox, forfaitTtcEditable);
 
         SetTextBoxEditable(TvaRateTextBox, devisEditable);
         SetTextBoxEditable(QuoteNotesTextBox, devisEditable);
@@ -962,6 +1046,11 @@ public partial class WorkOrderWindow : Window
         if (AddLineButton != null) AddLineButton.IsEnabled = devisStandardEditable;
         if (DeleteLineButton != null) DeleteLineButton.IsEnabled = devisStandardEditable;
         if (LinesGrid != null) LinesGrid.IsReadOnly = !devisStandardEditable;
+
+        // ✅ Compteur de lignes (22.07.2026, demande de Joe) : réplique du "(N / 15 max.)"
+        // déjà affiché côté Blazor.
+        if (AddLineButton != null)
+            AddLineButton.Content = $"+ Ajouter ligne ({_lines.Count} / {QuoteMaxLines} max.)";
 
         var validationEditable = isArchitecte || isSignataire;
         SetTextBoxEditable(SignatureNameTextBox, validationEditable);
@@ -981,15 +1070,27 @@ public partial class WorkOrderWindow : Window
         if (ClearSignatureButton != null) ClearSignatureButton.IsEnabled = validationEditable;
         if (ResetValidationBottomButton != null) ResetValidationBottomButton.IsEnabled = isArchitecte;
 
+        if (SaveButton != null) SaveButton.IsEnabled = !_formLocked;
+        if (ModifyButton != null) ModifyButton.IsEnabled = _formLocked;
+
         // boutons PDF devis forfaitaire
         UpdateCompanyPdfButtons();
     }
 
+    private void ModifyButton_Click(object sender, RoutedEventArgs e)
+    {
+        _formLocked = false;
+        _unlockedSnapshot = BuildFormSnapshot();
+        ApplyMode();
+    }
+
+    // ✅ Lit désormais _workOrder (plus de ForfaitQtyTextBox/ForfaitUnitPriceTextBox, ligne
+    // supprimée du tableau — 20.07.2026) : préserve le comportement pour un bon existant qui
+    // avait déjà un montant forfait enregistré avant ce changement.
     private bool IsForfaitUsedFromUi()
     {
-        var q = ParseDouble(ForfaitQtyTextBox?.Text, 0);
-        var u = ParseDouble(ForfaitUnitPriceTextBox?.Text, 0);
-        var total = q * u;
+        if (_workOrder == null) return false;
+        var total = _workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice;
         return Math.Abs(total) > 0.0000000001;
     }
 
@@ -1005,7 +1106,11 @@ public partial class WorkOrderWindow : Window
         catch { hasPdf = false; }
 
         if (CompanyPdfOpenButton != null) CompanyPdfOpenButton.IsEnabled = hasPdf;
-        if (CompanyPdfRemoveButton != null) CompanyPdfRemoveButton.IsEnabled = hasPdf;
+        if (CompanyPdfRemoveButton != null) CompanyPdfRemoveButton.IsEnabled = hasPdf && !_formLocked;
+
+        // ✅ Réplique Blazor (22.07.2026, demande de Joe) : bouton "Ajouter PDF" grisé si un
+        // montant existe déjà dans le devis standard.
+        if (CompanyPdfUploadButton != null) CompanyPdfUploadButton.IsEnabled = AreStandardQuoteFieldsAllZero() && !_formLocked;
 
         if (CompanyPdfFileNameTextBlock != null)
         {
@@ -1163,6 +1268,8 @@ public partial class WorkOrderWindow : Window
                 }
             }
 
+            _formLocked = !_isCreateMode && _workOrder.Id > 0;
+
             BdrNumberTextBox.Text = _workOrder.BdrNumber.ToString(CultureInfo.InvariantCulture);
             RequestDatePicker.SelectedDate = _workOrder.RequestDate == default ? DateTime.Today : _workOrder.RequestDate;
 
@@ -1184,9 +1291,7 @@ public partial class WorkOrderWindow : Window
             TravelQtyTextBox.Text = FormatInputNumber(_workOrder.TravelQty);
             TravelRateTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.TravelRate);
 
-            // ✅ Forfait
-            ForfaitQtyTextBox.Text = FormatInputNumber(_workOrder.ForfaitQty);
-            ForfaitUnitPriceTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.ForfaitUnitPrice);
+            ForfaitTtcTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.ForfaitTtc);
 
             var tvaRate = _workOrder.TvaRate <= 0 ? 8.1 : _workOrder.TvaRate;
             TvaRateTextBox.Text = tvaRate.ToString("0.00", CultureInfo.InvariantCulture);
@@ -1227,8 +1332,55 @@ public partial class WorkOrderWindow : Window
             ApplyMode();
             UpdatePdfButtonVisibility();
             UpdateCompanyPdfButtons();
+
+            _unlockedSnapshot = BuildFormSnapshot();
         }
         finally { _isLoading = false; }
+    }
+
+    // ✅ Voir _unlockedSnapshot ci-dessus : capture tous les champs qui comptent pour
+    // "Enregistrer" (mêmes champs que SaveWorkOrder lit depuis l'UI), pour comparaison de valeurs
+    // plutôt qu'un suivi événementiel.
+    private string BuildFormSnapshot()
+    {
+        var sb = new StringBuilder();
+        void Add(string? s) => sb.Append(s ?? "").Append('␟');
+        void AddDate(DateTime? d) => sb.Append(d?.ToString("O") ?? "").Append('␟');
+
+        Add(BdrNumberTextBox.Text);
+        Add(ReserveComboBox.Text);
+        Add(RequestedByComboBox.Text);
+        Add(PerformedByComboBox.Text);
+        Add(PlaceComboBox.Text);
+        Add(EtageComboBox.Text);
+        AddDate(RequestDatePicker.SelectedDate);
+        AddDate(DeadlineDatePicker.SelectedDate);
+        Add(DescriptionTextBox.Text);
+        Add(QuoteNameTextBox.Text);
+        AddDate(QuoteDatePicker.SelectedDate);
+        Add(LaborHoursTextBox.Text);
+        Add(LaborRateTextBox.Text);
+        Add(TravelQtyTextBox.Text);
+        Add(TravelRateTextBox.Text);
+        Add(DiscountRateTextBox.Text);
+        Add(ForfaitTtcTextBox.Text);
+        Add(TvaRateTextBox.Text);
+        Add(QuoteNotesTextBox.Text);
+        Add(SignatureNameTextBox.Text);
+        AddDate(SignatureDatePicker.SelectedDate);
+        Add(GetSelectedValidationDecision());
+
+        foreach (var l in _lines)
+        {
+            Add(l.Label);
+            Add(l.QtyDisplay);
+            Add(l.UnitPriceDisplay);
+        }
+
+        var sig = CaptureSignaturePng();
+        Add(sig == null ? "" : Convert.ToBase64String(sig));
+
+        return sb.ToString();
     }
 
     private WorkOrder CreateDefaultWorkOrder()
@@ -1270,6 +1422,7 @@ public partial class WorkOrderWindow : Window
             ForfaitUnitPrice = 0,
             ForfaitPdfFileName = "",
             ForfaitPdfFileBytes = null,
+            ForfaitTtc = 0,
 
             TvaRate = 8.1,
             QuoteNotes = "",
@@ -1375,6 +1528,9 @@ public partial class WorkOrderWindow : Window
         LinesGrid.SelectedItem = newLine;
         LinesGrid.ScrollIntoView(newLine);
 
+        if (AddLineButton != null)
+            AddLineButton.Content = $"+ Ajouter ligne ({_lines.Count} / {QuoteMaxLines} max.)";
+
         QueueRecomputeTotals();
     }
 
@@ -1387,6 +1543,10 @@ public partial class WorkOrderWindow : Window
             _deletedLineIds.Add(line.Id);
 
         _lines.Remove(line);
+
+        if (AddLineButton != null)
+            AddLineButton.Content = $"+ Ajouter ligne ({_lines.Count} / {QuoteMaxLines} max.)";
+
         QueueRecomputeTotals();
     }
 
@@ -1439,8 +1599,10 @@ public partial class WorkOrderWindow : Window
             materialTotal += l.LineTotal;
         }
 
-        var forfaitQty = ParseDouble(ForfaitQtyTextBox?.Text, 0);
-        var forfaitUnit = ParseDouble(ForfaitUnitPriceTextBox?.Text, 0);
+        // ✅ Plus de champ UI pour le forfait (ligne supprimée du tableau, 20.07.2026) : la valeur
+        // vient directement de _workOrder, pour ne pas perdre le montant d'un bon existant.
+        var forfaitQty = _workOrder?.ForfaitQty ?? 0;
+        var forfaitUnit = _workOrder?.ForfaitUnitPrice ?? 0;
         var forfaitTotal = forfaitQty * forfaitUnit;
 
         var laborHours = ParseDouble(LaborHoursTextBox?.Text);
@@ -1456,19 +1618,32 @@ public partial class WorkOrderWindow : Window
         var discountRate = ParseDouble(DiscountRateTextBox?.Text, 0);
         discountRate = Math.Max(0, discountRate);
 
-        var totalHtNet = totalHtBrut * (1.0 - (discountRate / 100.0));
-        var discountAmount = totalHtNet - totalHtBrut;
-
         var tvaRate = ParseDouble(TvaRateTextBox?.Text, 8.1);
-        var tvaAmount = totalHtNet * (tvaRate / 100.0);
-        var totalTtc = totalHtNet + tvaAmount;
+
+        double totalHtNet, discountAmount, tvaAmount, totalTtc;
+
+        // ✅ Forfait TTC (20.07.2026, demande de Joe) : montant TTC saisi directement -> HT et TVA
+        // recalculés à rebours à partir de ce montant, au lieu du sens normal HT -> TVA -> TTC.
+        if (IsForfaitTtcUsedFromUi())
+        {
+            totalTtc = ParseDouble(ForfaitTtcTextBox?.Text, 0);
+            totalHtNet = totalTtc / (1.0 + (tvaRate / 100.0));
+            tvaAmount = totalTtc - totalHtNet;
+            discountAmount = 0;
+        }
+        else
+        {
+            totalHtNet = totalHtBrut * (1.0 - (discountRate / 100.0));
+            discountAmount = totalHtNet - totalHtBrut;
+            tvaAmount = totalHtNet * (tvaRate / 100.0);
+            totalTtc = totalHtNet + tvaAmount;
+        }
 
         var fr = CultureInfo.GetCultureInfo("fr-FR");
 
         if (MaterialTotalTextBlock != null) MaterialTotalTextBlock.Text = materialTotal.ToString("0.00", fr);
         if (LaborTotalTextBlock != null) LaborTotalTextBlock.Text = laborTotal.ToString("0.00", fr);
         if (TravelTotalTextBlock != null) TravelTotalTextBlock.Text = travelTotal.ToString("0.00", fr);
-        if (ForfaitTotalTextBlock != null) ForfaitTotalTextBlock.Text = forfaitTotal.ToString("0.00", fr);
 
         var discountDisplay = Math.Abs(discountAmount) < 0.0000000001 ? 0 : discountAmount;
         if (DiscountAmountTextBlock != null) DiscountAmountTextBlock.Text = discountDisplay.ToString("0.00", fr);
@@ -1477,6 +1652,48 @@ public partial class WorkOrderWindow : Window
 
         if (TvaAmountTextBlock != null) TvaAmountTextBlock.Text = tvaAmount.ToString("0.00", fr);
         if (TotalTtcTextBlock != null) TotalTtcTextBlock.Text = totalTtc.ToString("0.00", fr);
+    }
+
+    // ✅ Forfait TTC : mutuelle exclusivité avec le devis détaillé (20.07.2026, demande de Joe).
+    private bool IsForfaitTtcUsedFromUi()
+        => Math.Abs(ParseDouble(ForfaitTtcTextBox?.Text, 0)) > 0.0000000001;
+
+    // ✅ Pop-up d'avertissement au clic sans pdf joint (20.07.2026, 3e demande de Joe) : le champ
+    // reste cliquable (voir ApplyFieldPermissions), mais on retire aussitôt le focus si aucun pdf
+    // n'a encore été chargé, pour empêcher toute saisie.
+    private void ForfaitTtcTextBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        var hasPdf = _workOrder?.ForfaitPdfFileBytes != null && _workOrder.ForfaitPdfFileBytes.Length > 0;
+        if (hasPdf) return;
+
+        System.Windows.MessageBox.Show(
+            this,
+            "Charge d'abord le pdf du devis forfaitaire (bouton \"Ajouter PDF\") avant de saisir un montant.",
+            "Forfait : Montant TTC",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+
+        Keyboard.ClearFocus();
+    }
+
+    private bool AreStandardQuoteFieldsAllZero()
+    {
+        double materialTotal = 0;
+        foreach (var l in _lines)
+        {
+            if (l == null) continue;
+            if (IsLineEmpty(l)) continue;
+            materialTotal += l.LineTotal;
+        }
+
+        var laborTotal = ParseDouble(LaborHoursTextBox?.Text) * ParseDouble(LaborRateTextBox?.Text);
+        var travelTotal = ParseDouble(TravelQtyTextBox?.Text) * ParseDouble(TravelRateTextBox?.Text);
+        var discountRate = ParseDouble(DiscountRateTextBox?.Text, 0);
+
+        return Math.Abs(materialTotal) < 0.0000000001
+            && Math.Abs(laborTotal) < 0.0000000001
+            && Math.Abs(travelTotal) < 0.0000000001
+            && Math.Abs(discountRate) < 0.0000000001;
     }
 
     private static double ParseDouble(string? value, double def = 0)
@@ -1496,7 +1713,8 @@ public partial class WorkOrderWindow : Window
     {
         if (sender is not System.Windows.Controls.TextBox tb) return;
         var v = ParseDouble(tb.Text);
-        tb.Text = Math.Abs(v) < 0.0000000001 ? "" : v.ToString("0.00", CultureInfo.InvariantCulture);
+        // ✅ fr-FR (23.07.2026, demande de Joe) : cohérent avec les colonnes Total/HT/TTC.
+        tb.Text = Math.Abs(v) < 0.0000000001 ? "" : v.ToString("0.00", CultureInfo.GetCultureInfo("fr-FR"));
     }
 
     private void ClearSignatureButton_Click(object sender, RoutedEventArgs e)
@@ -1546,6 +1764,11 @@ public partial class WorkOrderWindow : Window
 
         try
         {
+            // ✅ Recadre à l'affichage (22.07.2026, demande de Joe) : corrige immédiatement,
+            // sans attendre un nouvel enregistrement, l'aperçu des bons déjà signés AVANT le
+            // correctif de CaptureSignaturePng (PNG stocké = canvas entier, non recadré).
+            png = PdfService.CropSignatureToContent(png);
+
             var bmp = new BitmapImage();
             using var ms = new MemoryStream(png);
             bmp.BeginInit();
@@ -1574,7 +1797,14 @@ public partial class WorkOrderWindow : Window
     private byte[]? CaptureSignaturePng()
     {
         if (SignatureInkCanvas.Strokes.Count == 0)
-            return _signatureCleared ? null : _existingSignaturePng;
+        {
+            var existing = _signatureCleared ? null : _existingSignaturePng;
+            // ✅ Recadre aussi une signature déjà existante (importée, ou capturée avant ce
+            // correctif) : idempotent si déjà recadrée, corrige les anciennes non recadrées.
+            return existing != null && existing.Length > 0
+                ? PdfService.CropSignatureToContent(existing)
+                : existing;
+        }
 
         // ✅ L'architecte/signataire a tracé de nouveaux traits : on capture sur un
         // fond blanc opaque (et non transparent, qui peut rester actif après
@@ -1597,7 +1827,14 @@ public partial class WorkOrderWindow : Window
 
         using var ms = new MemoryStream();
         encoder.Save(ms);
-        return ms.ToArray();
+
+        // ✅ Recadrage sur le tracé réel (22.07.2026, demande de Joe) : le PNG stocké était
+        // jusqu'ici le canvas entier (fond blanc inclus), recadré seulement au moment de
+        // générer le PDF (PdfService.CropSignatureToContent). Résultat : en rouvrant le bon,
+        // l'aperçu WPF (qui affichait le PNG stocké tel quel) montrait la signature à une
+        // taille/position différente du PDF. On recadre maintenant dès la capture, pour que
+        // le PNG stocké soit partout le même (aperçu WPF, PDF, sync serveur).
+        return PdfService.CropSignatureToContent(ms.ToArray());
     }
 
     private enum StageRank
@@ -1630,6 +1867,7 @@ public partial class WorkOrderWindow : Window
         if (Math.Abs(wo.TravelRate) > 0.0000000001) return true;
         if (Math.Abs(wo.DiscountRate) > 0.0000000001) return true;
         if (Math.Abs(wo.ForfaitQty * wo.ForfaitUnitPrice) > 0.0000000001) return true;
+        if (Math.Abs(wo.ForfaitTtc) > 0.0000000001) return true;
         return false;
     }
 
@@ -1699,7 +1937,10 @@ public partial class WorkOrderWindow : Window
             var desired = ComputeDesiredStageAfterSave();
             ApplyStageIfAdvancing(_workOrder.Id, desired);
 
-            UpdatePdfButtonVisibility();
+            // ✅ Re-verrouillage après enregistrement (23.07.2026, demande de Joe) : évite une
+            // manœuvre accidentelle juste après avoir sauvegardé ; il faut recliquer "Modifier".
+            _formLocked = true;
+            ApplyMode();
 
             if (_mode == WorkOrderEditMode.EntrepriseDevis && !pdfWasAvailable && _pdfAvailableForExternal)
             {
@@ -1754,13 +1995,18 @@ public partial class WorkOrderWindow : Window
         _workOrder.QuoteName = (QuoteNameTextBox.Text ?? "").Trim();
         _workOrder.QuoteDate = QuoteDatePicker.SelectedDate ?? DateTime.Today;
 
-        // ✅ Forfait (toujours enregistré)
-        _workOrder.ForfaitQty = ParseDouble(ForfaitQtyTextBox.Text, 0);
-        _workOrder.ForfaitUnitPrice = ParseDouble(ForfaitUnitPriceTextBox.Text, 0);
-
+        // ✅ Plus de champ UI pour saisir le forfait (ligne supprimée du tableau, 20.07.2026) :
+        // _workOrder.ForfaitQty/ForfaitUnitPrice ne sont donc plus jamais réécrits ici — la
+        // valeur existante (bon créé avant ce changement) reste telle quelle.
         var forfaitUsed = Math.Abs(_workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice) > 0.0000000001;
 
-        if (forfaitUsed)
+        // ✅ Forfait TTC (20.07.2026, demande de Joe) : toujours lu depuis son champ (contrairement
+        // à l'ancien Forfait HT, celui-ci reste éditable dans l'UI). Même règle B que l'ancien
+        // forfait quand utilisé : force à 0 les autres montants + rabais.
+        _workOrder.ForfaitTtc = ParseDouble(ForfaitTtcTextBox.Text, 0);
+        var forfaitTtcUsed = Math.Abs(_workOrder.ForfaitTtc) > 0.0000000001;
+
+        if (forfaitUsed || forfaitTtcUsed)
         {
             // ✅ règle B : on force à 0 les autres montants + rabais
             _workOrder.LaborHours = 0;
@@ -1789,6 +2035,9 @@ public partial class WorkOrderWindow : Window
         _workOrder.TvaRate = ParseDouble(TvaRateTextBox.Text, 8.1);
 
         _workOrder.QuoteNotes = EnforceQuoteNotesRules(QuoteNotesTextBox.Text ?? "");
+
+        if (!EnsureQuoteRequiredFieldsOrWarn())
+            return false;
 
         if (!EnsureValidationIsNotPartialOrWarn())
             return false;
@@ -1843,6 +2092,57 @@ public partial class WorkOrderWindow : Window
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    // ✅ Avertissement à la fermeture (23.07.2026, demande de Joe) : condition simple et fiable
+    // basée sur le verrouillage (déverrouillé via "Modifier" = potentiellement modifié, reverrouillé
+    // automatiquement après un enregistrement réussi) plutôt qu'un suivi événementiel par champ
+    // (abandonné plus tôt à cause de faux positifs sur des événements différés WPF).
+    private void WorkOrderWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_formLocked) return;
+
+        if (_unlockedSnapshot != null && _unlockedSnapshot == BuildFormSnapshot())
+            return;
+
+        var result = System.Windows.MessageBox.Show(
+            this,
+            "Voulez-vous enregistrer les modifications avant de fermer?",
+            "Bon d'intervention",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Cancel)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (result == MessageBoxResult.Yes)
+        {
+            SaveButton_Click(this, new RoutedEventArgs());
+            if (!_formLocked)
+                e.Cancel = true;
+        }
+    }
+
+    // ✅ Envoi de lien (Devis/Validation) après modification non enregistrée (23.07.2026, demande
+    // de Joe) : ces boutons enregistraient déjà silencieusement (SaveWorkOrder()) avant d'envoyer
+    // le lien, ce qui persistait une manœuvre accidentelle sans prévenir. Même instantané que
+    // WorkOrderWindow_Closing pour détecter s'il y a vraiment quelque chose à enregistrer.
+    private bool ConfirmSaveBeforeSendingLink()
+    {
+        if (_formLocked) return true;
+        if (_unlockedSnapshot != null && _unlockedSnapshot == BuildFormSnapshot()) return true;
+
+        var result = System.Windows.MessageBox.Show(
+            this,
+            "Voulez-vous enregistrer les modifications avant d'envoyer le lien?",
+            "Bon d'intervention",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        return result == MessageBoxResult.Yes;
+    }
 
     private static string NormalizeServerBaseUrl(string? baseUrl)
     {
@@ -2018,6 +2318,8 @@ public partial class WorkOrderWindow : Window
 
     private async void ExportQuoteRequestButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!ConfirmSaveBeforeSendingLink()) return;
+
         try
         {
             try
@@ -2030,6 +2332,9 @@ public partial class WorkOrderWindow : Window
 
             var saved = SaveWorkOrder();
             if (!saved) return;
+
+            _formLocked = true;
+            ApplyMode();
 
             if (_workOrder == null || _workOrder.Id <= 0)
                 throw new InvalidOperationException("Le bon doit être enregistré avant génération du lien.");
@@ -2076,6 +2381,8 @@ public partial class WorkOrderWindow : Window
 
     private async void ExportSignatureRequestButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!ConfirmSaveBeforeSendingLink()) return;
+
         try
         {
             try
@@ -2088,6 +2395,9 @@ public partial class WorkOrderWindow : Window
 
             var saved = SaveWorkOrder();
             if (!saved) return;
+
+            _formLocked = true;
+            ApplyMode();
 
             if (_workOrder == null || _workOrder.Id <= 0)
                 throw new InvalidOperationException("Le bon doit être enregistré avant génération du lien.");
@@ -2232,6 +2542,11 @@ public partial class WorkOrderWindow : Window
     {
         try
         {
+            // ✅ Réplique Blazor (22.07.2026, demande de Joe) : impossible d'ajouter un pdf
+            // forfait si un montant existe déjà dans le devis standard.
+            if (!AreStandardQuoteFieldsAllZero())
+                return;
+
             if (_workOrder == null)
                 _workOrder = CreateDefaultWorkOrder();
 
@@ -2269,7 +2584,9 @@ public partial class WorkOrderWindow : Window
 
             _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
 
-            UpdateCompanyPdfButtons();
+            // ✅ ApplyFieldPermissions (au lieu de UpdateCompanyPdfButtons seul, 20.07.2026,
+            // demande de Joe) : deverrouille aussi Forfait TTC, qui exige desormais un pdf joint.
+            ApplyFieldPermissions();
 
             System.Windows.MessageBox.Show(
                 this,
@@ -2341,7 +2658,15 @@ public partial class WorkOrderWindow : Window
 
             _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
 
-            UpdateCompanyPdfButtons();
+            // ✅ Le montant Forfait TTC est effacé quand le pdf est supprimé (20.07.2026, 4e
+            // demande de Joe) : un montant forfait sans le pdf qui le justifie n'a plus de sens.
+            if (ForfaitTtcTextBox != null) ForfaitTtcTextBox.Text = "";
+            _workOrder.ForfaitTtc = 0;
+
+            // ✅ ApplyFieldPermissions (au lieu de UpdateCompanyPdfButtons seul) : recalcule aussi
+            // l'état du champ Forfait TTC.
+            ApplyFieldPermissions();
+            RecomputeTotals();
 
             System.Windows.MessageBox.Show(
                 this,

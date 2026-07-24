@@ -98,18 +98,23 @@ public class WorkOrderLine : INotifyPropertyChanged
             out var v) ? v : 0;
     }
 
+    // ✅ fr-FR au lieu de InvariantCulture (23.07.2026, demande de Joe) : Qt/Prix affichaient un
+    // point "." alors que la colonne Total (StringFormat, ConverterCulture=fr-FR) affiche une
+    // virgule ",", incohérence visible sur la même ligne du tableau.
+    private static readonly CultureInfo FrFr = CultureInfo.GetCultureInfo("fr-FR");
+
     private static string EmptyIfZeroUnlimited(double v)
     {
         if (Math.Abs(v) < 0.0000000001) return "";
 
         // "G17" = représentation compacte qui conserve la précision d’un double
-        return v.ToString("G17", CultureInfo.InvariantCulture);
+        return v.ToString("G17", FrFr);
     }
 
     private static string EmptyIfZero2Decimals(double v)
     {
         if (Math.Abs(v) < 0.0000000001) return "";
-        return v.ToString("0.00", CultureInfo.InvariantCulture);
+        return v.ToString("0.00", FrFr);
     }
 
     // =========================

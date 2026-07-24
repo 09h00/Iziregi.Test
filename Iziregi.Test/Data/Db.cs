@@ -186,6 +186,9 @@ public static class Db
         TryAddColumn(con, "WorkOrders", "ForfaitPdfFileName", "TEXT NOT NULL DEFAULT ''");
         TryAddColumn(con, "WorkOrders", "ForfaitPdfFileBytes", "BLOB");
 
+        // ✅ NOUVEAU (20.07.2026) : Forfait TTC saisi directement (voir WorkOrder.ForfaitTtc).
+        TryAddColumn(con, "WorkOrders", "ForfaitTtc", "REAL NOT NULL DEFAULT 0");
+
         TryAddColumn(con, "WorkOrders", "QuoteNotes", "TEXT");
 
         TryAddColumn(con, "WorkOrders", "ProjectId", "INTEGER");
@@ -1250,7 +1253,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1280,7 +1283,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1311,7 +1314,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1340,7 +1343,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1370,7 +1373,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1400,7 +1403,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1431,7 +1434,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1461,7 +1464,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1492,7 +1495,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1527,7 +1530,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1561,7 +1564,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1621,6 +1624,7 @@ public static class Db
                 ForfaitUnitPrice=@ForfaitUnitPrice,
                 ForfaitPdfFileName=@ForfaitPdfFileName,
                 ForfaitPdfFileBytes=@ForfaitPdfFileBytes,
+                ForfaitTtc=@ForfaitTtc,
                 QuoteNotes=@QuoteNotes,
 
                 SignatureName=@SignatureName,
@@ -1663,6 +1667,7 @@ public static class Db
             ForfaitUnitPrice = imported.ForfaitUnitPrice,
             ForfaitPdfFileName = (imported.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = imported.ForfaitPdfFileBytes,
+            ForfaitTtc = imported.ForfaitTtc,
 
             QuoteNotes = imported.QuoteNotes ?? "",
 
@@ -1731,7 +1736,7 @@ public static class Db
                 QuoteName, QuoteDate,
                 DeadlineDate,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes,
                 SignatureName, SignatureDate, SignaturePng,
                 IsInCreation, IsSentToCompany, IsQuoteReceived, IsSentToSigner,
@@ -1748,7 +1753,7 @@ public static class Db
                 @QuoteName, @QuoteDate,
                 @DeadlineDate,
                 @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate,
-                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes,
+                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc,
                 @QuoteNotes,
                 @SignatureName, @SignatureDate, @SignaturePng,
                 0, 0, 0, 0,
@@ -1790,6 +1795,7 @@ public static class Db
             ForfaitUnitPrice = imported.ForfaitUnitPrice,
             ForfaitPdfFileName = (imported.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = imported.ForfaitPdfFileBytes,
+            ForfaitTtc = imported.ForfaitTtc,
 
             QuoteNotes = imported.QuoteNotes ?? "",
 
@@ -1943,6 +1949,7 @@ public static class Db
             ForfaitUnitPrice = AsDouble(row.ForfaitUnitPrice, 0),
             ForfaitPdfFileName = AsString(row.ForfaitPdfFileName, ""),
             ForfaitPdfFileBytes = forfaitPdfBytes,
+            ForfaitTtc = AsDouble(row.ForfaitTtc, 0),
 
             QuoteNotes = AsString(row.QuoteNotes),
 
@@ -2003,7 +2010,7 @@ public static class Db
                 QuoteName, QuoteDate,
                 DeadlineDate,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
                 QuoteNotes, ProjectId,
                 SignatureName, SignatureDate, SignaturePng,
                 Reserve,
@@ -2019,7 +2026,7 @@ public static class Db
                 @QuoteName, @QuoteDate,
                 @DeadlineDate,
                 @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate,
-                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes,
+                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc,
                 @QuoteNotes, @ProjectId,
                 @SignatureName, @SignatureDate, @SignaturePng,
                 @Reserve,
@@ -2069,6 +2076,7 @@ public static class Db
             ForfaitUnitPrice = wo.ForfaitUnitPrice,
             ForfaitPdfFileName = (wo.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = wo.ForfaitPdfFileBytes,
+            ForfaitTtc = wo.ForfaitTtc,
 
             QuoteNotes = wo.QuoteNotes ?? "",
             wo.ProjectId,
@@ -2147,6 +2155,7 @@ public static class Db
                 ForfaitUnitPrice=@ForfaitUnitPrice,
                 ForfaitPdfFileName=@ForfaitPdfFileName,
                 ForfaitPdfFileBytes=@ForfaitPdfFileBytes,
+                ForfaitTtc=@ForfaitTtc,
                 QuoteNotes=@QuoteNotes
             WHERE Id=@Id;
         """, new
@@ -2165,6 +2174,7 @@ public static class Db
             ForfaitUnitPrice = wo.ForfaitUnitPrice,
             ForfaitPdfFileName = (wo.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = wo.ForfaitPdfFileBytes,
+            ForfaitTtc = wo.ForfaitTtc,
 
             QuoteNotes = wo.QuoteNotes ?? ""
         });

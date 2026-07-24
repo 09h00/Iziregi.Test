@@ -370,36 +370,44 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Chips de filtre statut -->
-        <Style x:Key="FilterChipStyle" TargetType="Button">
-            <Setter Property="Height" Value="26"/>
-            <Setter Property="Padding" Value="10,0"/>
-            <Setter Property="Background" Value="#F3F4F6"/>
-            <Setter Property="Foreground" Value="#374151"/>
-            <Setter Property="BorderBrush" Value="#D1D5DB"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize" Value="12"/>
+        <!-- ✅ Filtres façon Excel sur les en-têtes de colonnes, portés depuis Archives (24.07.2026,
+             demande de Joe) : remplace les anciennes puces "Tous/En cours/Lien expiré/Validé/
+             Refusé/Annulé" + case de recherche. -->
+        <Style x:Key="FilterHeaderButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="9"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="3">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#E5E7EB"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
-        <Style x:Key="FilterChipActiveStyle" TargetType="Button" BasedOn="{StaticResource FilterChipStyle}">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="#2563EB"/>
-            <Setter Property="BorderBrush" Value="#2563EB"/>
+        <Style x:Key="FilterHeaderButtonActiveStyle" TargetType="Button" BasedOn="{StaticResource FilterHeaderButtonStyle}">
+            <Setter Property="Foreground" Value="#1D4ED8"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="FilterHeaderHighlightBorderStyle" TargetType="Border">
             <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="4,2"/>
         </Style>
 
     </UserControl.Resources>
@@ -409,6 +417,63 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
+
+        <!-- ✅ Popup de filtre façon Excel, porté depuis Archives (24.07.2026, demande de Joe). -->
+        <Popup x:Name="ColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
+            <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8" MinWidth="220" MaxHeight="380" Effect="{StaticResource CardShadowEffect}">
+                <StackPanel>
+
+                    <StackPanel x:Name="TextFilterPanel">
+                        <CheckBox x:Name="AlphaSortCheckBox"
+                                  Content="Trier par ordre alphabétique (A→Z)"
+                                  Margin="0,0,0,8"/>
+
+                        <Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Margin="0,0,0,6"/>
+
+                        <CheckBox x:Name="FilterSelectAllCheckBox"
+                                  Content="(Tout sélectionner)"
+                                  IsChecked="True"
+                                  FontWeight="Bold"
+                                  Click="FilterSelectAllCheckBox_Click"
+                                  Margin="0,0,0,6"/>
+
+                        <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="FilterOptionsItemsControl">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Value}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+
+                    <StackPanel x:Name="DateFilterPanel" Visibility="Collapsed">
+                        <CheckBox x:Name="DateAscCheckBox" Content="Trier par ordre croissant" Click="DateAscCheckBox_Click" Margin="0,0,0,4"/>
+                        <CheckBox x:Name="DateDescCheckBox" Content="Trier par ordre décroissant" Click="DateDescCheckBox_Click" Margin="0,0,0,8"/>
+
+                        <Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
+
+                        <TextBlock Text="Du" Foreground="#6B7280" Margin="0,0,0,2"/>
+                        <DatePicker x:Name="DateFromPicker" Width="190" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+
+                        <TextBlock Text="Au" Foreground="#6B7280" Margin="0,0,0,2"/>
+                        <DatePicker x:Name="DateToPicker" Width="190" HorizontalAlignment="Left"/>
+
+                        <Button Content="Réinitialiser les dates sélectionnées"
+                                Style="{StaticResource SmallButtonStyle}"
+                                Click="ResetDateRangeButton_Click"
+                                HorizontalAlignment="Left"
+                                Margin="0,8,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="Annuler" Style="{StaticResource SmallButtonStyle}" Click="ColumnFilterCancel_Click" Margin="0,0,6,0"/>
+                        <Button Content="OK" Style="{StaticResource SmallButtonStyle}" Click="ColumnFilterApply_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
 
         <!-- BARRE COMPACTE -->
         <Border Grid.Row="0"
@@ -447,7 +512,6 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <Grid.ColumnDefinitions>
@@ -459,11 +523,6 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- Ligne 1 : Bons actifs + actions ... Nom, Adresse -->
-                    <!-- ✅ La largeur de "+ Nouveau bon" est calculée en code-behind (AlignNewWorkOrderButtonWidth)
-                         pour que son bord droit tombe exactement sur celui de "Validé" (ligne 2). Un
-                         SharedSizeGroup+ColumnSpan WPF ne fonctionne pas de façon fiable ici : un élément qui
-                         s'étend sur plusieurs colonnes à taille partagée n'est pas pris en compte pour calculer
-                         la taille de chaque groupe, ce qui faisait déborder le bouton bien au-delà de "Validé". -->
                     <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="Bons actifs"
                                    FontSize="18"
@@ -497,7 +556,12 @@
                         <Button x:Name="RefreshTopButton"
                                 Content="Rafraîchir"
                                 Style="{StaticResource SmallButtonStyle}"
-                                Click="Refresh_Click"/>
+                                Click="Refresh_Click"
+                                Margin="0,0,6,0"/>
+
+                        <Button Content="Effacer filtres"
+                                Style="{StaticResource SmallButtonStyle}"
+                                Click="ClearFilters_Click"/>
                     </StackPanel>
 
                     <!-- ✅ Dossier, sur une seule colonne, disposé comme dans les bons/PDF -->
@@ -527,89 +591,86 @@
                     </StackPanel>
 
                     <!-- Ligne de séparation verticale entre boutons/filtres et infos dossier -->
-                    <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
+                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                             Width="1"
                             Background="Black"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Stretch"
                             Margin="0,2,0,2"/>
 
-                    <!-- Ligne 2 : filtres + recherche ... NPA, Ville, Géré par -->
+                    <!-- ✅ Ligne 2 : recherche (24.07.2026, demande de Joe : garder le champ de
+                         recherche, à gauche de "Résumé demande") + Résumé demande. -->
                     <Grid Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="10"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Button x:Name="FilterAllButton"        Grid.Column="0" Content="Tous"           Click="FilterAll_Click"        Style="{StaticResource FilterChipActiveStyle}" Margin="0,0,6,0"/>
-                        <Button x:Name="FilterInProgressButton" Grid.Column="1" Content="En cours"       Click="FilterInProgress_Click" Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
-                        <Button x:Name="FilterExpiredButton"    Grid.Column="2" Content="⚠ Lien expiré" Click="FilterExpired_Click"    Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
-                        <Button x:Name="FilterValidatedButton"  Grid.Column="3" Content="Validé"         Click="FilterValidated_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,6,0"/>
-                        <Button x:Name="FilterRefusedButton"    Grid.Column="4" Content="Refusé / Annulé" Click="FilterRefused_Click"  Style="{StaticResource FilterChipStyle}"       Margin="0,0,10,0"/>
+                        <StackPanel Grid.Column="0" Orientation="Vertical" VerticalAlignment="Top">
+                            <TextBlock Text="Recherche"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="#6B7280"
+                                       Margin="0,0,0,2"/>
 
-                        <Border Grid.Column="5"
-                                BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6"
-                                Padding="8,0" Background="White" VerticalAlignment="Center" Height="26"
-                                HorizontalAlignment="Stretch">
-                            <!-- ✅ Grid (pas StackPanel) : un StackPanel Horizontal ne force jamais ses
-                                 enfants à s'étirer, même avec HorizontalAlignment="Stretch" — le TextBox
-                                 se retrouvait avec une largeur quasi nulle et devenait impossible à cliquer. -->
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
+                            <Border BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6"
+                                    Padding="8,0" Background="White" Height="26"
+                                    HorizontalAlignment="Stretch">
+                                <!-- ✅ Grid (pas StackPanel) : un StackPanel Horizontal ne force jamais ses
+                                     enfants à s'étirer, même avec HorizontalAlignment="Stretch" — le TextBox
+                                     se retrouvait avec une largeur quasi nulle et devenait impossible à cliquer. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
 
-                                <Path Grid.Column="0"
-                                      Data="{StaticResource IconSearchGeometry}"
-                                      Width="11" Height="11" Stretch="Uniform"
-                                      Fill="Transparent" StrokeThickness="1.6" StrokeLineJoin="Round"
-                                      Stroke="#9CA3AF"
-                                      VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBox x:Name="WorkOrderSearchBox"
-                                         Grid.Column="1"
-                                         BorderThickness="0"
-                                         VerticalAlignment="Center"
-                                         HorizontalAlignment="Stretch"
-                                         FontSize="12"
-                                         Foreground="#374151"
-                                         Background="Transparent"
-                                         TextChanged="WorkOrderSearchBox_TextChanged"/>
-                            </Grid>
-                        </Border>
+                                    <Path Grid.Column="0"
+                                          Data="{StaticResource IconSearchGeometry}"
+                                          Width="11" Height="11" Stretch="Uniform"
+                                          Fill="Transparent" StrokeThickness="1.6" StrokeLineJoin="Round"
+                                          Stroke="#9CA3AF"
+                                          VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBox x:Name="WorkOrderSearchBox"
+                                             Grid.Column="1"
+                                             BorderThickness="0"
+                                             VerticalAlignment="Center"
+                                             HorizontalAlignment="Stretch"
+                                             FontSize="12"
+                                             Foreground="#374151"
+                                             Background="Transparent"
+                                             TextChanged="WorkOrderSearchBox_TextChanged"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Vertical"
+                                    HorizontalAlignment="Stretch">
+
+                            <TextBlock Text="Résumé demande"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="#6B7280"
+                                       Margin="0,0,0,2"/>
+
+                            <Border x:Name="SelectedWorkOrderDescriptionPreviewBorder"
+                                    HorizontalAlignment="Stretch"
+                                    BorderBrush="#2563EB"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Background="#F9FAFB"
+                                    Padding="10,4">
+                                <TextBlock x:Name="SelectedWorkOrderDescriptionPreviewTextBlock"
+                                           Text=""
+                                           Foreground="#374151"
+                                           FontSize="12"
+                                           TextAlignment="Left"
+                                           TextWrapping="Wrap"/>
+                            </Border>
+                        </StackPanel>
                     </Grid>
-
-                    <!-- Ligne 3 : Résumé demande (limité à la largeur de la colonne boutons/filtres) -->
-                    <StackPanel Grid.Row="2" Grid.Column="0"
-                                Orientation="Vertical"
-                                HorizontalAlignment="Stretch"
-                                Margin="0,8,0,0">
-
-                        <TextBlock Text="Résumé demande"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   Foreground="#6B7280"
-                                   Margin="0,0,0,2"/>
-
-                        <Border x:Name="SelectedWorkOrderDescriptionPreviewBorder"
-                                HorizontalAlignment="Stretch"
-                                BorderBrush="#2563EB"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Background="#F9FAFB"
-                                Padding="10,4">
-                            <TextBlock x:Name="SelectedWorkOrderDescriptionPreviewTextBlock"
-                                       Text=""
-                                       Foreground="#374151"
-                                       FontSize="12"
-                                       TextAlignment="Left"
-                                       TextWrapping="Wrap"/>
-                        </Border>
-                    </StackPanel>
 
                     <!-- ✅ Choix du projet autorisé (hidden, remplacé par bandeau coloré) -->
                     <ComboBox x:Name="ProjectComboBox"
@@ -700,9 +761,17 @@
                                             MinWidth="110"
                                             Binding="{Binding Reserve}"
                                             ElementStyle="{StaticResource EmptyTextCellStyle}"
-                                            IsReadOnly="True">
+                                            IsReadOnly="True"
+                                            CanUserSort="False">
                             <DataGridTextColumn.Header>
-                                <TextBlock x:Name="ReserveHeaderTextBlock" Text="Concerne"/>
+                                <Border x:Name="ConcerneHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                        <TextBlock x:Name="ReserveHeaderTextBlock" Text="Concerne" HorizontalAlignment="Center"/>
+                                        <Button x:Name="ConcerneFilterButton" Content="▾" Tag="Concerne"
+                                                Style="{StaticResource FilterHeaderButtonStyle}"
+                                                Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
                             </DataGridTextColumn.Header>
                         </DataGridTextColumn>
 
@@ -711,9 +780,17 @@
                                             MinWidth="90"
                                             Binding="{Binding RequestedBy}"
                                             ElementStyle="{StaticResource GridTextCellStyle}"
-                                            IsReadOnly="True">
+                                            IsReadOnly="True"
+                                            CanUserSort="False">
                             <DataGridTextColumn.Header>
-                                <TextBlock x:Name="RequestedByHeaderTextBlock" Text="Demandé par"/>
+                                <Border x:Name="RequestedByHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                        <TextBlock x:Name="RequestedByHeaderTextBlock" Text="Demandé par" HorizontalAlignment="Center"/>
+                                        <Button x:Name="RequestedByFilterButton" Content="▾" Tag="RequestedBy"
+                                                Style="{StaticResource FilterHeaderButtonStyle}"
+                                                Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
                             </DataGridTextColumn.Header>
                         </DataGridTextColumn>
 
@@ -722,19 +799,38 @@
                                             MinWidth="98"
                                             Binding="{Binding PerformedBy}"
                                             ElementStyle="{StaticResource GridTextCellStyle}"
-                                            IsReadOnly="True">
+                                            IsReadOnly="True"
+                                            CanUserSort="False">
                             <DataGridTextColumn.Header>
-                                <TextBlock x:Name="PerformedByHeaderTextBlock" Text="Entreprise"/>
+                                <Border x:Name="CompanyHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                        <TextBlock x:Name="PerformedByHeaderTextBlock" Text="Entreprise" HorizontalAlignment="Center"/>
+                                        <Button x:Name="CompanyFilterButton" Content="▾" Tag="Company"
+                                                Style="{StaticResource FilterHeaderButtonStyle}"
+                                                Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
                             </DataGridTextColumn.Header>
                         </DataGridTextColumn>
 
                         <!-- Date -->
-                        <DataGridTextColumn Header="Créé le"
-                                            Binding="{Binding RequestDate, StringFormat=dd.MM.yyyy}"
+                        <DataGridTextColumn Binding="{Binding RequestDate, StringFormat=dd.MM.yyyy}"
                                             Width="SizeToCells"
-                                            MinWidth="65"
+                                            MinWidth="70"
                                             ElementStyle="{StaticResource GridTextCellStyle}"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="False">
+                            <DataGridTextColumn.Header>
+                                <Border x:Name="CreatedDateHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                        <TextBlock Text="Créé le" HorizontalAlignment="Center"/>
+                                        <Button x:Name="CreatedDateFilterButton" Content="▾" Tag="CreatedDate"
+                                                Style="{StaticResource FilterHeaderButtonStyle}"
+                                                Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
 
                         <!-- ========================= -->
                         <!-- STATUT (5 colonnes) -->
@@ -882,6 +978,7 @@
 
                         <!-- 3) Devis reçu -->
                         <DataGridTemplateColumn Width="SizeToCells"
+                                                MinWidth="70"
                                                 HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
                                                 CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
                                                 IsReadOnly="True">
@@ -892,11 +989,14 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Text="Statut"
-                                               Grid.Row="0"
-                                               Grid.RowSpan="2"
-                                               Style="{StaticResource StatusHeaderTopText}"
-                                               VerticalAlignment="Center"/>
+                                    <Border x:Name="StatusHeaderBorder" Grid.Row="0" Grid.RowSpan="2" Style="{StaticResource FilterHeaderHighlightBorderStyle}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                            <TextBlock Text="Statut" Style="{StaticResource StatusHeaderTopText}" HorizontalAlignment="Center"/>
+                                            <Button x:Name="StatusFilterButton" Content="▾" Tag="Status"
+                                                    Style="{StaticResource FilterHeaderButtonStyle}"
+                                                    Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
                                 </Grid>
                             </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
@@ -1059,7 +1159,17 @@
                         </DataGridTemplateColumn>
 
                         <!-- Distribué le -->
-                        <DataGridTemplateColumn Header="Distribué le" Width="90" IsReadOnly="False">
+                        <DataGridTemplateColumn Width="95" IsReadOnly="False">
+                            <DataGridTemplateColumn.Header>
+                                <Border x:Name="DistributedDateHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                        <TextBlock Text="Distribué le" HorizontalAlignment="Center"/>
+                                        <Button x:Name="DistributedDateFilterButton" Content="▾" Tag="DistributedDate"
+                                                Style="{StaticResource FilterHeaderButtonStyle}"
+                                                Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Style="{StaticResource DateCellBorderStyle_Distributed}">
@@ -1077,7 +1187,17 @@
                         </DataGridTemplateColumn>
 
                         <!-- Effectué le -->
-                        <DataGridTemplateColumn Header="Effectué le" Width="90" IsReadOnly="False">
+                        <DataGridTemplateColumn Width="95" IsReadOnly="False">
+                            <DataGridTemplateColumn.Header>
+                                <Border x:Name="PerformedDateHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                        <TextBlock Text="Effectué le" HorizontalAlignment="Center"/>
+                                        <Button x:Name="PerformedDateFilterButton" Content="▾" Tag="PerformedDate"
+                                                Style="{StaticResource FilterHeaderButtonStyle}"
+                                                Click="ColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Style="{StaticResource DateCellBorderStyle_Performed}">
