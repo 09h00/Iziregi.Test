@@ -139,6 +139,9 @@
                     <Button x:Name="NavPlanningButton" Content="Planning" Click="NavPlanning_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavArchitectIdentityButton" Content="Identité Société" Click="NavArchitectIdentity_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavSettingsButton" Content="Paramètres" Click="NavSettings_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ Aide (24.07.2026, demande de Joe) : ouvre la page d'aide (mode d'emploi PDF)
+                         dans le navigateur par défaut, ne devient jamais l'onglet "actif". -->
+                    <Button x:Name="NavHelpButton" Content="Aide" Click="NavHelp_Click" Style="{StaticResource NavPillButtonStyle}"/>
                 </StackPanel>
 
                 <!-- Pastille projet (dans le même bandeau que la navigation) -->

@@ -937,9 +937,10 @@ public partial class MainWindow : Window
 
         if (!int.TryParse(parts[0], out bdrNumber)) return false;
 
-        var p = parts[1].Trim(); // "P1"
-        if (p.StartsWith("P", StringComparison.OrdinalIgnoreCase))
-            p = p.Substring(1);
+        var p = parts[1].Trim(); // "D1" (ou "P1" pour les anciens bons créés avant le renommage)
+        var i = 0;
+        while (i < p.Length && char.IsLetter(p[i])) i++;
+        p = p.Substring(i);
 
         return long.TryParse(p, out projectIdFromRef);
     }
@@ -1512,6 +1513,26 @@ public partial class MainWindow : Window
     {
         var setup = new ConfigSetupWindow();
         setup.ShowDialog();
+    }
+
+    // ✅ Aide (24.07.2026, demande de Joe) : ouvre la page d'aide (mode d'emploi PDF, destiné à
+    // l'architecte — entreprises/signataires n'en ont pas besoin) dans le navigateur par défaut.
+    private void NavHelp_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"{baseUrl}/aide") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’ouvrir la page d’aide.\n\n{ex.Message}",
+                "Aide",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     // ✅ BUG (grilles/images/stickers du Planning perdus au changement de page) : on ne

@@ -4,6 +4,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Iziregi.Test"
         mc:Ignorable="d"
         Title="Dossiers"
         Height="680"
@@ -15,6 +16,11 @@
         Background="#F6F7FB">
 
     <Window.Resources>
+        <local:HexToBrushConverter x:Key="HexToBrushConverter"/>
+        <local:BoolToActiveStatusConverter x:Key="BoolToActiveStatusConverter"/>
+        <local:BoolToStatusBrushConverter x:Key="BoolToStatusBrushConverter"/>
+        <local:BoolToStatusForegroundConverter x:Key="BoolToStatusForegroundConverter"/>
+
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="White"/>
             <Setter Property="BorderBrush" Value="#E5E7EB"/>
@@ -97,6 +103,36 @@
             <Setter Property="BorderBrush" Value="#D1D5DB"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#9CA3AF"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#E5E7EB"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
@@ -123,10 +159,11 @@
         </Style>
     </Window.Resources>
 
+    <ScrollViewer x:Name="RootScrollViewer" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="RootScrollViewer_PreviewMouseWheel">
     <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -138,26 +175,20 @@
                                FontSize="22"
                                FontWeight="Bold"
                                Foreground="#111827"/>
-                    <TextBlock Text="Créer et gérer les noms/adresses des dossiers utilisés dans les bons d'intervention."
+                    <TextBlock Text="Créer et gérer les informations des dossiers utilisés dans les bons d'intervention."
                                FontSize="13"
                                Foreground="#6B7280"
                                Margin="0,4,0,0"/>
                 </StackPanel>
-
-                <Button Content="Rafraîchir"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        Click="Refresh_Click"
-                        DockPanel.Dock="Right"
-                        VerticalAlignment="Center"/>
             </DockPanel>
         </Border>
 
         <!-- Contenu principal -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" MinHeight="560">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.25*"/>
+                <ColumnDefinition Width="1.5*"/>
                 <ColumnDefinition Width="14"/>
-                <ColumnDefinition Width="0.85*"/>
+                <ColumnDefinition Width="0.85*" MinWidth="580"/>
             </Grid.ColumnDefinitions>
 
             <!-- Liste projets -->
@@ -182,10 +213,36 @@
                               HorizontalAlignment="Stretch"
                               Width="NaN">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="55"/>
+                            <DataGridTemplateColumn Header="●" Width="34">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Width="20" Height="20"
+                                                CornerRadius="10"
+                                                BorderBrush="#D1D5DB"
+                                                BorderThickness="1"
+                                                HorizontalAlignment="Center"
+                                                Background="{Binding ColorHex, Converter={StaticResource HexToBrushConverter}}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="ID" Binding="{Binding Id, StringFormat=D{0}}" Width="55"/>
                             <DataGridTextColumn Header="Nom du dossier" Binding="{Binding Name}" Width="1.2*"/>
                             <DataGridTextColumn Header="Adresse" Binding="{Binding Address}" Width="1.6*"/>
-                            <DataGridCheckBoxColumn Header="Actif" Binding="{Binding IsActive}" Width="70"/>
+                            <DataGridTemplateColumn Header="État" Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{Binding IsActive, Converter={StaticResource BoolToStatusBrushConverter}}"
+                                                CornerRadius="10"
+                                                Padding="8,2"
+                                                HorizontalAlignment="Left">
+                                            <TextBlock Text="{Binding IsActive, Converter={StaticResource BoolToActiveStatusConverter}}"
+                                                       Foreground="{Binding IsActive, Converter={StaticResource BoolToStatusForegroundConverter}}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -193,64 +250,40 @@
 
             <!-- Formulaire -->
             <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0">
-                <DockPanel LastChildFill="True">
-
-                    <!-- ACTIONS -->
-                    <Border DockPanel.Dock="Bottom"
-                            Background="#F9FAFB"
-                            BorderBrush="#E5E7EB"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10"
-                            Margin="0,12,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Actions"
-                                       FontSize="13"
-                                       FontWeight="SemiBold"
-                                       Foreground="#111827"
-                                       Margin="0,0,0,10"/>
-
-                            <WrapPanel>
-                                <Button Content="+ Nouveau"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Click="NewProject_Click"
-                                        Margin="0,0,8,8"/>
-
-                                <Button Content="Modifier"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Click="EditProject_Click"
-                                        Margin="0,0,8,8"/>
-
-                                <Button Content="Enregistrer"
-                                        Style="{StaticResource PrimaryButtonStyle}"
-                                        Click="SaveProject_Click"
-                                        Margin="0,0,8,8"/>
-
-                                <Button Content="Désactiver"
-                                        Style="{StaticResource DangerButtonStyle}"
-                                        Click="DisableProject_Click"
-                                        Margin="0,0,8,8"/>
-
-                                <Button Content="Réactiver"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Click="EnableProject_Click"
-                                        Margin="0,0,8,8"/>
-
-                                <Button Content="Supprimer"
-                                        Style="{StaticResource DangerButtonStyle}"
-                                        Click="DeleteProject_Click"
-                                        Margin="0,0,8,8"/>
-                            </WrapPanel>
-                        </StackPanel>
-                    </Border>
+                <StackPanel>
 
                     <!-- Champs -->
                     <StackPanel>
-                        <TextBlock Text="Dossier"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="#111827"
-                                   Margin="0,0,0,12"/>
+                        <DockPanel Margin="0,0,0,12" LastChildFill="True">
+                            <Button Content="Fermer"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="Close_Click"
+                                    BorderBrush="Black"
+                                    DockPanel.Dock="Right"
+                                    VerticalAlignment="Center"/>
+
+                            <TextBlock Text="Dossier"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="#111827"
+                                       VerticalAlignment="Center"
+                                       DockPanel.Dock="Left"
+                                       Margin="0,0,14,0"/>
+
+                            <Button Content="+ Nouveau"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="NewProject_Click"
+                                    DockPanel.Dock="Left"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,14,0"/>
+
+                            <TextBlock x:Name="StatusTextBlock"
+                                       Text=""
+                                       Foreground="#6B7280"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"/>
+                        </DockPanel>
 
                         <!-- Ligne 1 : Nom du dossier -->
                         <TextBlock Text="Nom du dossier" Style="{StaticResource LabelStyle}"/>
@@ -341,43 +374,59 @@
                                     BorderThickness="1"
                                     Background="#111827"/>
                         </Grid>
-
-                        <CheckBox x:Name="ProjectIsActiveCheckBox"
-                                  Content="Dossier actif"
-                                  IsChecked="True"
-                                  Margin="0,0,0,18"/>
-
-                        <TextBlock x:Name="StatusTextBlock"
-                                   Text=""
-                                   Foreground="#6B7280"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"
-                                   Margin="0,10,0,0"/>
                     </StackPanel>
-                </DockPanel>
+
+                    <!-- ACTIONS -->
+                    <Border Background="#F9FAFB"
+                            BorderBrush="Black"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Actions"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="#111827"
+                                       Margin="0,0,0,10"/>
+
+                            <WrapPanel HorizontalAlignment="Center">
+                                <Button Content="Modifier"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="EditProject_Click"
+                                        BorderBrush="Black"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Enregistrer"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Click="SaveProject_Click"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Désactiver"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Click="DisableProject_Click"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Réactiver"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="EnableProject_Click"
+                                        BorderBrush="#16A34A"
+                                        Foreground="#16A34A"
+                                        Margin="0,0,8,8"/>
+
+                                <Button Content="Supprimer"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Click="DeleteProject_Click"
+                                        Background="#DC2626"
+                                        Foreground="White"
+                                        BorderBrush="#DC2626"
+                                        Margin="0,0,8,8"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Border>
         </Grid>
-
-        <!-- Bas fenêtre -->
-        <Border Grid.Row="2"
-                Background="White"
-                BorderBrush="#E5E7EB"
-                BorderThickness="1"
-                CornerRadius="12"
-                Padding="10"
-                Margin="0,12,0,0">
-            <DockPanel LastChildFill="False">
-                <TextBlock Text="Astuce : sélectionne un dossier dans la liste puis clique sur Modifier."
-                           Foreground="#6B7280"
-                           FontSize="12"
-                           VerticalAlignment="Center"
-                           DockPanel.Dock="Left"/>
-
-                <Button Content="Fermer"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        Click="Close_Click"
-                        DockPanel.Dock="Right"/>
-            </DockPanel>
-        </Border>
     </Grid>
+    </ScrollViewer>
 </Window>

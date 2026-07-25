@@ -45,6 +45,15 @@ public partial class ProjectsWindow : Window
         ClearForm();
     }
 
+    // ✅ Le DataGrid a son propre scroll interne et peut avaler la molette avant qu'elle
+    // n'atteigne le ScrollViewer de la page (comportement WPF classique). On force le
+    // scroll de la page entière quel que soit le contrôle survolé.
+    private void RootScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        RootScrollViewer.ScrollToVerticalOffset(RootScrollViewer.VerticalOffset - e.Delta);
+        e.Handled = true;
+    }
+
     // =========================
     // Adresse helpers (split/join)
     // =========================
@@ -278,12 +287,6 @@ public partial class ProjectsWindow : Window
         }
     }
 
-    private void Refresh_Click(object sender, RoutedEventArgs e)
-    {
-        LoadProjects();
-        StatusTextBlock.Text = $"Liste mise à jour : {DateTime.Now:HH:mm}";
-    }
-
     // =========================
     // Sélection (ne remplit plus forcément le formulaire)
     // =========================
@@ -322,8 +325,6 @@ public partial class ProjectsWindow : Window
         ProjectManagerNameTextBox.Text = _selectedProject.ManagerName ?? "";
         ProjectManagerContactTextBox.Text = _selectedProject.ManagerContact ?? "";
 
-        ProjectIsActiveCheckBox.IsChecked = _selectedProject.IsActive;
-
         ProjectColorHexTextBox.Text = string.IsNullOrWhiteSpace(_selectedProject.ColorHex) ? "#111827" : _selectedProject.ColorHex;
         UpdateColorPreview();
 
@@ -344,8 +345,6 @@ public partial class ProjectsWindow : Window
 
         ProjectManagerNameTextBox.Text = "";
         ProjectManagerContactTextBox.Text = "";
-
-        ProjectIsActiveCheckBox.IsChecked = true;
 
         ProjectColorHexTextBox.Text = "#111827";
         UpdateColorPreview();
@@ -387,7 +386,6 @@ public partial class ProjectsWindow : Window
         var managerName = (ProjectManagerNameTextBox.Text ?? "").Trim();
         var managerContact = (ProjectManagerContactTextBox.Text ?? "").Trim();
 
-        var isActive = ProjectIsActiveCheckBox.IsChecked == true;
         var colorHex = NormalizeHex(ProjectColorHexTextBox.Text);
 
         if (string.IsNullOrWhiteSpace(name))
@@ -423,9 +421,6 @@ public partial class ProjectsWindow : Window
                 var newId = Db.InsertProject(name, address);
                 idToUpdateColor = newId;
 
-                if (!isActive)
-                    Db.SetProjectActive(newId, false);
-
                 Db.SetCurrentProjectId(newId);
 
                 StatusTextBlock.Text = $"Dossier créé : {name}";
@@ -434,14 +429,13 @@ public partial class ProjectsWindow : Window
             {
                 _selectedProject.Name = name;
                 _selectedProject.Address = address;
-                _selectedProject.IsActive = isActive;
                 _selectedProject.ColorHex = colorHex;
 
                 Db.UpdateProject(_selectedProject);
 
                 idToUpdateColor = _selectedProject.Id;
 
-                if (isActive)
+                if (_selectedProject.IsActive)
                     Db.SetCurrentProjectId(_selectedProject.Id);
 
                 StatusTextBlock.Text = $"Dossier mis à jour : {name}";

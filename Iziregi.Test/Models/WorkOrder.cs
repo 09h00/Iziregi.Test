@@ -183,14 +183,14 @@ public class WorkOrder
 
     // =========================
     // Affichage numérotation
-    // Format: 01-P1 (01 = numéro du bon par projet, P1 = ID projet)
+    // Format: 01-D1 (01 = numéro du bon par projet, D1 = ID dossier/projet)
     // =========================
     public string ProjectTag
     {
         get
         {
             if (!ProjectId.HasValue || ProjectId.Value <= 0) return "";
-            return $"P{ProjectId.Value}";
+            return $"D{ProjectId.Value}";
         }
     }
 
