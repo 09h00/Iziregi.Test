@@ -257,8 +257,9 @@ public partial class MainWindow : Window
         // ✅ Badge projet
         UpdateProjectBadge(show: false); // Dashboard par défaut => caché
 
-        // Page par défaut
-        ShowDashboard();
+        // ✅ Page par défaut au démarrage, propre à chaque dossier (25.07.2026, demande de
+        // Joe) : configurée dans Paramètres > Démarrage. Vide/dossier absent -> Dashboard.
+        ShowDefaultStartupPage();
 
         // Init project selector
         InitProjectSelector();
@@ -1581,6 +1582,25 @@ public partial class MainWindow : Window
         foreach (var b in all)
         {
             b.Style = (Style)FindResource(b == active ? "NavPillButtonActiveStyle" : "NavPillButtonStyle");
+        }
+    }
+
+    // ✅ Page par défaut au démarrage, par dossier (25.07.2026, demande de Joe). Clés
+    // possibles : "Dashboard" (ou vide), "Archives", "Corbeille", "Listes", "Comptabilité",
+    // "Planning" -- voir ConfigSetupWindow, onglet "Démarrage".
+    internal void ShowDefaultStartupPage()
+    {
+        var projectId = _selectedProject?.Id ?? 0;
+        var page = projectId > 0 ? Db.GetDefaultStartupPage(projectId) : "";
+
+        switch (page)
+        {
+            case "Archives": ShowArchives(); break;
+            case "Corbeille": ShowTrash(); break;
+            case "Listes": ShowLists(); break;
+            case "Comptabilité": ShowAccounting(); break;
+            case "Planning": ShowPlanning(); break;
+            default: ShowDashboard(); break;
         }
     }
 

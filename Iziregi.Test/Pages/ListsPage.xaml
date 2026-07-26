@@ -12,8 +12,8 @@
             <Setter Property="Height" Value="28"/>
             <Setter Property="Padding" Value="10,0"/>
             <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="#111827"/>
-            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="BorderBrush" Value="Black"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -57,8 +57,7 @@
         <Style x:Key="ListLabelTextBoxStyle" TargetType="TextBox">
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Height" Value="24"/>
-            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="Padding" Value="4,3"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="BorderBrush" Value="#D1D5DB"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -123,7 +122,8 @@
 			Text="Listes"
 			FontSize="18"
 			FontWeight="SemiBold"
-			Foreground="#111827"/>
+			Foreground="#111827"
+			Margin="0,-11,0,-3"/>
 
         <Border Grid.Row="2"
 			BorderBrush="#E5E7EB"
@@ -139,9 +139,9 @@
 						VerticalAlignment="Center"
 						Margin="0,0,12,0"/>
 
-                    <Button x:Name="CommonAddButton" Content="Ajouter" Width="90" Margin="0,0,8,0" Click="CommonAdd_Click" Style="{StaticResource SmallButtonStyle}"/>
+                    <Button x:Name="CommonAddButton" Content="Ajouter" Width="90" Margin="0,0,8,0" Click="CommonAdd_Click" Style="{StaticResource SmallButtonStyle}" Foreground="#2563EB" BorderBrush="#2563EB"/>
                     <Button x:Name="CommonRenameButton" Content="Renommer" Width="90" Margin="0,0,8,0" Click="CommonRename_Click" Style="{StaticResource SmallButtonStyle}"/>
-                    <Button x:Name="CommonDeleteButton" Content="Supprimer" Width="90" Margin="0,0,8,0" Click="CommonDelete_Click" Style="{StaticResource SmallButtonStyle}"/>
+                    <Button x:Name="CommonDeleteButton" Content="Supprimer" Width="90" Margin="0,0,8,0" Click="CommonDelete_Click" Style="{StaticResource SmallButtonStyle}" Foreground="#DC2626" BorderBrush="#DC2626"/>
                     <Button x:Name="CommonSetDefaultButton" Content="Définir par défaut" Width="140" Margin="0,0,8,0" Click="CommonSetDefault_Click" Style="{StaticResource SmallButtonStyle}"/>
                     <Button x:Name="CommonCopyButton" Content="Copier" Width="90" Margin="0,0,8,0" Click="CommonCopy_Click" Style="{StaticResource SmallButtonStyle}"/>
                     <Button x:Name="CommonPasteButton" Content="Coller" Width="90" Click="CommonPaste_Click" Style="{StaticResource SmallButtonStyle}"/>
@@ -163,7 +163,7 @@
 
         <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel>
-        <Grid Height="440">
+        <Grid Height="478">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="12"/>
@@ -278,11 +278,11 @@
 						Margin="0,0,0,10">
                         <StackPanel>
                             <TextBox x:Name="NewCompanyTextBox" Visibility="Collapsed"/>
-                            <WrapPanel VerticalAlignment="Center">
-                                <Border x:Name="SelectedCompanyColorPreview" Width="24" Height="24" Background="Transparent" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="3" Margin="0,0,8,0"/>
-                                <Button Content="Couleur..." Height="24" Width="80" Margin="0,0,8,0" Click="PickCompanyColor_Click" Style="{StaticResource SmallButtonStyle}"/>
-                                <Button Content="✕" Height="24" Width="24" ToolTip="Effacer" Click="ClearCompanyColor_Click" Style="{StaticResource SmallButtonStyle}"/>
-                            </WrapPanel>
+                            <DockPanel VerticalAlignment="Center" LastChildFill="False">
+                                <Button x:Name="PickCompanyColorButton" Content="Couleur" Height="24" Width="64" Margin="0,0,8,0" Click="PickCompanyColor_Click" Style="{StaticResource SmallButtonStyle}" DockPanel.Dock="Left"/>
+                                <CheckBox x:Name="CompanyGradientCheckBox" Content="Mix" VerticalAlignment="Center" Margin="0,0,8,0" Checked="CompanyGradientCheckBox_Changed" Unchecked="CompanyGradientCheckBox_Changed" DockPanel.Dock="Left"/>
+                                <Button Content="✕" Height="24" Width="32" ToolTip="Effacer" Click="ClearCompanyColor_Click" Style="{StaticResource SmallButtonStyle}" DockPanel.Dock="Right"/>
+                            </DockPanel>
                         </StackPanel>
                     </Border>
 
@@ -324,7 +324,7 @@
         <!-- ✅ Listes liées au Planning (déplacées ensemble : Zone de texte, Cat., Urg.) —
              mêmes ColumnDefinitions que la grille du haut pour que chaque liste ait
              exactement la même largeur (seules les colonnes 0/2/4 sont utilisées). -->
-        <Grid Height="440">
+        <Grid Height="478">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="12"/>
@@ -375,11 +375,11 @@
 						Padding="8"
 						Background="#FFFFFF"
 						Margin="0,0,0,10">
-                        <WrapPanel VerticalAlignment="Center">
-                            <Border x:Name="SelectedTaskCategoryColorPreview" Width="24" Height="24" Background="Transparent" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="3" Margin="0,0,8,0"/>
-                            <Button Content="Couleur..." Height="24" Width="80" Margin="0,0,8,0" Click="PickTaskCategoryColor_Click" Style="{StaticResource SmallButtonStyle}"/>
-                            <Button Content="✕" Height="24" Width="24" ToolTip="Effacer" Click="ClearTaskCategoryColor_Click" Style="{StaticResource SmallButtonStyle}"/>
-                        </WrapPanel>
+                        <DockPanel VerticalAlignment="Center" LastChildFill="False">
+                            <Button x:Name="PickTaskCategoryColorButton" Content="Couleur" Height="24" Width="64" Margin="0,0,8,0" Click="PickTaskCategoryColor_Click" Style="{StaticResource SmallButtonStyle}" DockPanel.Dock="Left"/>
+                            <CheckBox x:Name="TaskCategoryGradientCheckBox" Content="Mix" VerticalAlignment="Center" Margin="0,0,8,0" Checked="TaskCategoryGradientCheckBox_Changed" Unchecked="TaskCategoryGradientCheckBox_Changed" DockPanel.Dock="Left"/>
+                            <Button Content="✕" Height="24" Width="32" ToolTip="Effacer" Click="ClearTaskCategoryColor_Click" Style="{StaticResource SmallButtonStyle}" DockPanel.Dock="Right"/>
+                        </DockPanel>
                     </Border>
 
                     <Border x:Name="TaskCategoriesListBorder"

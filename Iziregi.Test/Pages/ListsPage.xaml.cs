@@ -303,7 +303,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             LabelTaskCategoryTextBox.Text = "";
             LabelTaskUrgencyTextBox.Text = "";
 
-            SetSelectedCompanyColorPreview(null);
+            SetSelectedCompanyColorPreview(null, false);
 
             SetActiveList(ActiveListKind.None);
 
@@ -848,23 +848,24 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             var projectId = Db.GetCurrentProjectId();
             if (!projectId.HasValue || projectId.Value <= 0)
             {
-                SetSelectedCompanyColorPreview(null);
+                SetSelectedCompanyColorPreview(null, false);
                 return;
             }
 
             var companyName = GetSelectedCompanyName();
             if (string.IsNullOrWhiteSpace(companyName))
             {
-                SetSelectedCompanyColorPreview(null);
+                SetSelectedCompanyColorPreview(null, false);
                 return;
             }
 
             var hex = Db.GetCompanyColorHex(projectId.Value, companyName);
-            SetSelectedCompanyColorPreview(hex);
+            var isGradient = Db.GetCompanyIsGradient(projectId.Value, companyName);
+            SetSelectedCompanyColorPreview(hex, isGradient);
         }
         catch
         {
-            SetSelectedCompanyColorPreview(null);
+            SetSelectedCompanyColorPreview(null, false);
         }
     }
 
@@ -876,8 +877,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             if (string.IsNullOrWhiteSpace(hex))
                 return MediaBrushes.Transparent;
 
-            return (System.Windows.Media.SolidColorBrush)(
-                new System.Windows.Media.BrushConverter().ConvertFrom(hex) ?? MediaBrushes.Transparent);
+            var isGradient = Db.GetCompanyIsGradient(projectId, companyName);
+            return Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex, isGradient) ?? MediaBrushes.Transparent;
         }
         catch
         {
@@ -885,26 +886,77 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         }
     }
 
-    private void SetSelectedCompanyColorPreview(string? colorHex)
+    private void SetSelectedCompanyColorPreview(string? colorHex, bool isGradient)
     {
-        if (SelectedCompanyColorPreview == null) return;
+        if (PickCompanyColorButton == null) return;
 
+        _suppressCompanyGradientCheckBoxEvent = true;
+        if (CompanyGradientCheckBox != null)
+            CompanyGradientCheckBox.IsChecked = isGradient;
+        _suppressCompanyGradientCheckBoxEvent = false;
+
+        ApplyColorToButton(PickCompanyColorButton, colorHex, isGradient);
+    }
+
+    // ✅ Couleur choisie directement sur le bouton "Couleur..." (25.07.2026, demande de
+    // Joe), remplace le carré de prévisualisation séparé. Texte blanc/noir choisi selon la
+    // luminance pour rester lisible sur n'importe quelle couleur de fond.
+    private static void ApplyColorToButton(System.Windows.Controls.Button button, string? colorHex, bool isGradient)
+    {
         if (string.IsNullOrWhiteSpace(colorHex))
         {
-            SelectedCompanyColorPreview.Background = MediaBrushes.Transparent;
+            button.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+            button.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
             return;
         }
 
         try
         {
-            var brush = (System.Windows.Media.SolidColorBrush)(
-                new System.Windows.Media.BrushConverter().ConvertFrom(colorHex) ?? MediaBrushes.Transparent);
+            button.Background = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(colorHex, isGradient) ?? MediaBrushes.White;
 
-            SelectedCompanyColorPreview.Background = brush;
+            var c = (System.Windows.Media.Color)new System.Windows.Media.ColorConverter().ConvertFrom(colorHex)!;
+            double luminance = (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
+            button.Foreground = luminance > 0.55 ? MediaBrushes.Black : MediaBrushes.White;
         }
         catch
         {
-            SelectedCompanyColorPreview.Background = MediaBrushes.Transparent;
+            button.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+            button.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+        }
+    }
+
+    private bool _suppressCompanyGradientCheckBoxEvent;
+
+    private void CompanyGradientCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressCompanyGradientCheckBoxEvent) return;
+
+        try
+        {
+            var projectId = RequireCurrentProjectId();
+            var companyName = GetSelectedCompanyName();
+            if (string.IsNullOrWhiteSpace(companyName)) return;
+
+            var hex = Db.GetCompanyColorHex(projectId, companyName);
+            if (string.IsNullOrWhiteSpace(hex)) return;
+
+            var isGradient = CompanyGradientCheckBox?.IsChecked == true;
+            Db.SetCompanyColorHex(projectId, companyName, hex, isGradient);
+
+            Reload();
+
+            // ✅ Reload() recree les items de CompaniesListBox (nouvelles instances) -> la
+            // selection precedente est perdue, ce qui reinitialisait visuellement la case
+            // "Degrade" juste apres l'avoir cochee (25.07.2026, signale par Joe).
+            CompaniesListBox.SelectedItem = (CompaniesListBox.ItemsSource as System.Collections.Generic.IEnumerable<CompanyListItem>)?
+                .FirstOrDefault(x => string.Equals(x.Name, companyName, StringComparison.OrdinalIgnoreCase));
+
+            SetSelectedCompanyColorPreview(hex, isGradient);
+            try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Erreur couleur", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -932,10 +984,19 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
 
             var c = dlg.Color;
             var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
-            Db.SetCompanyColorHex(projectId, companyName, hex);
+            var isGradient = CompanyGradientCheckBox?.IsChecked == true;
+            Db.SetCompanyColorHex(projectId, companyName, hex, isGradient);
 
             // Forcer le reload de la page Planning pour prendre en compte la nouvelle couleur
             Reload();
+
+            // ✅ Reload() recree les items de CompaniesListBox -> la selection (et donc le
+            // contraste du bouton "Couleur") se perdait juste apres avoir choisi une couleur
+            // (25.07.2026, signale par Joe). Meme correctif que CompanyGradientCheckBox_Changed.
+            CompaniesListBox.SelectedItem = (CompaniesListBox.ItemsSource as System.Collections.Generic.IEnumerable<CompanyListItem>)?
+                .FirstOrDefault(x => string.Equals(x.Name, companyName, StringComparison.OrdinalIgnoreCase));
+            SetSelectedCompanyColorPreview(hex, isGradient);
+
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
         }
         catch (Exception ex)
@@ -957,6 +1018,11 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             Db.DeleteCompanyColor(projectId, companyName);
             // Forcer le reload de la page Planning pour prendre en compte la suppression
             Reload();
+
+            CompaniesListBox.SelectedItem = (CompaniesListBox.ItemsSource as System.Collections.Generic.IEnumerable<CompanyListItem>)?
+                .FirstOrDefault(x => string.Equals(x.Name, companyName, StringComparison.OrdinalIgnoreCase));
+            SetSelectedCompanyColorPreview(null, false);
+
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
         }
         catch (Exception ex)
@@ -976,23 +1042,24 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             var projectId = Db.GetCurrentProjectId();
             if (!projectId.HasValue || projectId.Value <= 0)
             {
-                SetSelectedTaskCategoryColorPreview(null);
+                SetSelectedTaskCategoryColorPreview(null, false);
                 return;
             }
 
             var categoryName = GetSelectedTaskCategoryName();
             if (string.IsNullOrWhiteSpace(categoryName))
             {
-                SetSelectedTaskCategoryColorPreview(null);
+                SetSelectedTaskCategoryColorPreview(null, false);
                 return;
             }
 
             var hex = Db.GetTaskCategoryColorHex(projectId.Value, categoryName);
-            SetSelectedTaskCategoryColorPreview(hex);
+            var isGradient = Db.GetTaskCategoryIsGradient(projectId.Value, categoryName);
+            SetSelectedTaskCategoryColorPreview(hex, isGradient);
         }
         catch
         {
-            SetSelectedTaskCategoryColorPreview(null);
+            SetSelectedTaskCategoryColorPreview(null, false);
         }
     }
 
@@ -1004,8 +1071,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             if (string.IsNullOrWhiteSpace(hex))
                 return MediaBrushes.Transparent;
 
-            return (System.Windows.Media.SolidColorBrush)(
-                new System.Windows.Media.BrushConverter().ConvertFrom(hex) ?? MediaBrushes.Transparent);
+            var isGradient = Db.GetTaskCategoryIsGradient(projectId, categoryName);
+            return Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex, isGradient) ?? MediaBrushes.Transparent;
         }
         catch
         {
@@ -1013,26 +1080,49 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         }
     }
 
-    private void SetSelectedTaskCategoryColorPreview(string? colorHex)
-    {
-        if (SelectedTaskCategoryColorPreview == null) return;
+    private bool _suppressTaskCategoryGradientCheckBoxEvent;
 
-        if (string.IsNullOrWhiteSpace(colorHex))
-        {
-            SelectedTaskCategoryColorPreview.Background = MediaBrushes.Transparent;
-            return;
-        }
+    private void SetSelectedTaskCategoryColorPreview(string? colorHex, bool isGradient)
+    {
+        if (PickTaskCategoryColorButton == null) return;
+
+        _suppressTaskCategoryGradientCheckBoxEvent = true;
+        if (TaskCategoryGradientCheckBox != null)
+            TaskCategoryGradientCheckBox.IsChecked = isGradient;
+        _suppressTaskCategoryGradientCheckBoxEvent = false;
+
+        ApplyColorToButton(PickTaskCategoryColorButton, colorHex, isGradient);
+    }
+
+    private void TaskCategoryGradientCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressTaskCategoryGradientCheckBoxEvent) return;
 
         try
         {
-            var brush = (System.Windows.Media.SolidColorBrush)(
-                new System.Windows.Media.BrushConverter().ConvertFrom(colorHex) ?? MediaBrushes.Transparent);
+            var projectId = RequireCurrentProjectId();
+            var categoryName = GetSelectedTaskCategoryName();
+            if (string.IsNullOrWhiteSpace(categoryName)) return;
 
-            SelectedTaskCategoryColorPreview.Background = brush;
+            var hex = Db.GetTaskCategoryColorHex(projectId, categoryName);
+            if (string.IsNullOrWhiteSpace(hex)) return;
+
+            var isGradient = TaskCategoryGradientCheckBox?.IsChecked == true;
+            Db.SetTaskCategoryColorHex(projectId, categoryName, hex, isGradient);
+
+            Reload();
+
+            // ✅ Reload() recree les items de TaskCategoriesListBox -> selection perdue,
+            // meme correctif que pour CompanyGradientCheckBox_Changed ci-dessus.
+            TaskCategoriesListBox.SelectedItem = (TaskCategoriesListBox.ItemsSource as System.Collections.Generic.IEnumerable<TaskCategoryListItem>)?
+                .FirstOrDefault(x => string.Equals(x.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+
+            SetSelectedTaskCategoryColorPreview(hex, isGradient);
+            try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
         }
-        catch
+        catch (Exception ex)
         {
-            SelectedTaskCategoryColorPreview.Background = MediaBrushes.Transparent;
+            MessageBox.Show(ex.Message, "Erreur couleur", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -1060,10 +1150,18 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
 
             var c = dlg.Color;
             var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
-            Db.SetTaskCategoryColorHex(projectId, categoryName, hex);
+            var isGradient = TaskCategoryGradientCheckBox?.IsChecked == true;
+            Db.SetTaskCategoryColorHex(projectId, categoryName, hex, isGradient);
 
             // Forcer le reload de la page Planning pour prendre en compte la nouvelle couleur
             Reload();
+
+            // ✅ Reload() recree les items de TaskCategoriesListBox -> meme correctif que
+            // PickCompanyColor_Click (25.07.2026, contraste du bouton "Couleur" perdu).
+            TaskCategoriesListBox.SelectedItem = (TaskCategoriesListBox.ItemsSource as System.Collections.Generic.IEnumerable<TaskCategoryListItem>)?
+                .FirstOrDefault(x => string.Equals(x.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+            SetSelectedTaskCategoryColorPreview(hex, isGradient);
+
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
         }
         catch (Exception ex)
@@ -1085,6 +1183,11 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             Db.DeleteTaskCategoryColor(projectId, categoryName);
             // Forcer le reload de la page Planning pour prendre en compte la suppression
             Reload();
+
+            TaskCategoriesListBox.SelectedItem = (TaskCategoriesListBox.ItemsSource as System.Collections.Generic.IEnumerable<TaskCategoryListItem>)?
+                .FirstOrDefault(x => string.Equals(x.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+            SetSelectedTaskCategoryColorPreview(null, false);
+
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
         }
         catch (Exception ex)

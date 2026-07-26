@@ -83,10 +83,75 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
+
+        <!-- ✅ Descriptif enrichi (25.07.2026, demande de Joe) : mêmes styles de boutons
+             (arrondis + bordure noire) que la barre d'outils des "zones de texte" du Planning
+             (PlanningPage.xaml), dupliqués ici volontairement (convention déjà établie dans ce
+             projet : chaque page/fenêtre garde ses propres styles locaux plutôt qu'une
+             centralisation à large portée). -->
+        <Style x:Key="TextZoneToolButtonStyle" TargetType="Button">
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TextZoneToolToggleStyle" TargetType="ToggleButton">
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#DBEAFE"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -144,28 +209,99 @@
             </StackPanel>
         </Border>
 
-        <!-- Zone de texte agrandie -->
+        <!-- Barre d'outils : mise en forme + insertion d'image (25.07.2026, demande de Joe) -->
         <Border Grid.Row="1"
+                Background="White"
+                BorderBrush="#E5E7EB"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="8"
+                Margin="0,0,0,10"
+                Effect="{StaticResource CardShadowEffect}">
+            <StackPanel Orientation="Horizontal">
+                <ToggleButton x:Name="BoldToggle" Width="36" Height="28" Margin="0,0,8,0"
+                              Style="{StaticResource TextZoneToolToggleStyle}"
+                              Background="White" Foreground="#111827"
+                              Click="BoldToggle_Click"
+                              ToolTip="Gras">
+                    <TextBlock Text="G" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </ToggleButton>
+
+                <ToggleButton x:Name="ItalicToggle" Width="36" Height="28" Margin="0,0,8,0"
+                              Style="{StaticResource TextZoneToolToggleStyle}"
+                              Background="White" Foreground="#111827"
+                              Click="ItalicToggle_Click"
+                              ToolTip="Italique">
+                    <TextBlock Text="I" FontSize="13" FontStyle="Italic" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </ToggleButton>
+
+                <ToggleButton x:Name="UnderlineToggle" Width="36" Height="28" Margin="0,0,16,0"
+                              Style="{StaticResource TextZoneToolToggleStyle}"
+                              Background="White" Foreground="#111827"
+                              Click="UnderlineToggle_Click"
+                              ToolTip="Souligné">
+                    <TextBlock Text="S" FontSize="13" TextDecorations="Underline" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </ToggleButton>
+
+                <Button Content="🖼 Insérer image" Height="28"
+                        Style="{StaticResource TextZoneToolButtonStyle}"
+                        Padding="10,0"
+                        Background="White" Foreground="#111827"
+                        Click="InsertImageButton_Click"
+                        ToolTip="Insérer une image (PNG, JPG...). Ctrl + molette sur l'image pour la redimensionner."/>
+
+                <!-- ✅ Astuce affichée uniquement s'il y a une image insérée (26.07.2026,
+                     demande de Joe : l'utilisateur ne devine pas Ctrl+molette tout seul). -->
+                <Border x:Name="ResizeImageHintBorder"
+                        Background="#FEF3C7"
+                        BorderBrush="#FCD34D"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,4"
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                    <TextBlock FontSize="11">
+                        <Run Text="💡" FontFamily="Segoe UI Emoji"/>
+                        <Run Text=" Ctrl + molette sur l'image pour la redimensionner" Foreground="#92400E"/>
+                    </TextBlock>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Zone de texte agrandie -->
+        <Border Grid.Row="2"
                 Background="White"
                 BorderBrush="#E5E7EB"
                 BorderThickness="1"
                 CornerRadius="12"
                 Padding="2"
                 Effect="{StaticResource CardShadowEffect}">
-            <TextBox x:Name="DescriptifTextBox"
+            <RichTextBox x:Name="DescriptifRichTextBox"
                      BorderThickness="0"
                      Background="Transparent"
                      Padding="12"
                      FontSize="13"
                      AcceptsReturn="True"
                      AcceptsTab="True"
-                     TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
-                     HorizontalScrollBarVisibility="Disabled"/>
+                     HorizontalScrollBarVisibility="Disabled"
+                     TextChanged="DescriptifRichTextBox_TextChanged"
+                     SelectionChanged="DescriptifRichTextBox_SelectionChanged"
+                     PreviewMouseWheel="DescriptifRichTextBox_PreviewMouseWheel">
+                <!-- ✅ Sans ça, chaque retour à la ligne crée un nouveau Paragraph avec la
+                     marge par défaut du thème (~10px), donnant un écart bien plus grand
+                     qu'avec l'ancien TextBox simple (26.07.2026, signalé par Joe). -->
+                <RichTextBox.Resources>
+                    <Style TargetType="Paragraph">
+                        <Setter Property="Margin" Value="0"/>
+                    </Style>
+                </RichTextBox.Resources>
+            </RichTextBox>
         </Border>
 
         <!-- Boutons -->
-        <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
+        <DockPanel Grid.Row="3" Margin="0,12,0,0" LastChildFill="False">
             <Button x:Name="GeneratePdfButton"
                     Content="Générer PDF"
                     Style="{StaticResource PdfButtonStyle}"

@@ -69,6 +69,7 @@ public partial class TrashPage : System.Windows.Controls.UserControl, IReloadabl
 
         // ✅ couleurs entreprises par projet
         var colorMap = Db.GetCompanyColorMap(projectId);
+        var gradientMap = Db.GetCompanyGradientMap(projectId);
 
         _rows = list.Select(w =>
         {
@@ -78,8 +79,8 @@ public partial class TrashPage : System.Windows.Controls.UserControl, IReloadabl
 
             colorMap.TryGetValue(company, out var hex);
 
-            var bg = BrushFromHexOrDefault(hex, MediaBrushes.Transparent);
-            var fg = GetTextBrushForBackground(bg);
+            var fg = GetTextBrushForBackground(BrushFromHexOrDefault(hex, MediaBrushes.Transparent));
+            var bg = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex, gradientMap.Contains(company)) ?? MediaBrushes.Transparent;
 
             return new WorkOrderRow
             {

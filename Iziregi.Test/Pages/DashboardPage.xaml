@@ -1266,6 +1266,40 @@
                           ColumnWidth="SizeToCells"
                           MouseDoubleClick="TrashedGrid_MouseDoubleClick"/>
 
+                <!-- ✅ Retour en haut de la liste (25.07.2026, demande de Joe) -->
+                <Button x:Name="ScrollToTopButton"
+                        Click="ScrollToTopButton_Click"
+                        Width="36" Height="36"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,14,14"
+                        Panel.ZIndex="99"
+                        Cursor="Hand"
+                        ToolTip="Revenir en haut">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="#992563EB"
+                                    CornerRadius="18">
+                                <Path Data="M 9 21 L 18 12 L 27 21"
+                                      Stretch="None"
+                                      Stroke="White"
+                                      StrokeThickness="3"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Opacity" Value="1"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <Button.Opacity>0.8</Button.Opacity>
+                </Button>
+
             </Grid>
         </Border>
 

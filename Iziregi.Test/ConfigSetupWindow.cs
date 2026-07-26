@@ -10,6 +10,7 @@ using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Iziregi.Test.Data;
 using Iziregi.Test.Services;
 using WpfButton      = System.Windows.Controls.Button;
 using WpfColor       = System.Windows.Media.Color;
@@ -18,6 +19,8 @@ using WpfOrientation = System.Windows.Controls.Orientation;
 using WpfTextBox     = System.Windows.Controls.TextBox;
 using WpfTabControl  = System.Windows.Controls.TabControl;
 using WpfTabItem     = System.Windows.Controls.TabItem;
+using WpfComboBox    = System.Windows.Controls.ComboBox;
+using WpfComboBoxItem = System.Windows.Controls.ComboBoxItem;
 
 namespace Iziregi.Test;
 
@@ -44,6 +47,10 @@ internal class ConfigSetupWindow : Window
         var dataTab = new WpfTabItem { Header = "Vos données" };
         dataTab.Content = BuildDataTabContent();
         tabs.Items.Add(dataTab);
+
+        var startupTab = new WpfTabItem { Header = "Démarrage" };
+        startupTab.Content = BuildStartupTabContent();
+        tabs.Items.Add(startupTab);
 
         var ethicsTab = new WpfTabItem { Header = "Éthique & confidentialité" };
         ethicsTab.Content = BuildEthicsTabContent();
@@ -189,6 +196,97 @@ internal class ConfigSetupWindow : Window
         };
         btnExportAll.Click += (_, _) => ExportAllData();
         panel.Children.Add(btnExportAll);
+
+        return panel;
+    }
+
+    // =========================
+    // Onglet "Démarrage" (25.07.2026, demande de Joe) : page ouverte automatiquement au
+    // lancement d'Iziregi, propre à CHAQUE dossier (pas un réglage global) -- deux dossiers
+    // différents peuvent donc démarrer sur des pages différentes. S'applique au dossier
+    // actuellement sélectionné (Db.GetCurrentProjectId()) ; aucun dossier sélectionné ->
+    // réglage désactivé (rien à associer).
+    // =========================
+    private static readonly (string Key, string Display)[] StartupPageOptions =
+    {
+        ("", "Dashboard (par défaut)"),
+        ("Archives", "Archives"),
+        ("Corbeille", "Corbeille"),
+        ("Listes", "Listes"),
+        ("Comptabilité", "Comptabilité"),
+        ("Planning", "Planning"),
+    };
+
+    private FrameworkElement BuildStartupTabContent()
+    {
+        var panel = new StackPanel { Margin = new Thickness(16, 20, 16, 16) };
+
+        var title = new TextBlock
+        {
+            Text = "Page d'ouverture au démarrage",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        panel.Children.Add(title);
+
+        var projectId = Db.GetCurrentProjectId();
+        var project = projectId.HasValue ? Db.GetProjectById(projectId.Value) : null;
+
+        if (project == null)
+        {
+            var noProject = new TextBlock
+            {
+                Text = "Sélectionne d'abord un dossier pour configurer sa page de démarrage.",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                TextWrapping = TextWrapping.Wrap
+            };
+            panel.Children.Add(noProject);
+            return panel;
+        }
+
+        var desc = new TextBlock
+        {
+            Text = $"Ce réglage est propre au dossier « {project.Name} ». Chaque dossier peut avoir sa propre page de démarrage.",
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Colors.Gray),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        panel.Children.Add(desc);
+
+        var label = new TextBlock
+        {
+            Text = "Ouvrir automatiquement :",
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        panel.Children.Add(label);
+
+        var combo = new WpfComboBox
+        {
+            Width = 260,
+            Height = 30,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left
+        };
+
+        var currentValue = Db.GetDefaultStartupPage(projectId!.Value);
+        foreach (var (key, display) in StartupPageOptions)
+        {
+            var item = new WpfComboBoxItem { Content = display, Tag = key };
+            combo.Items.Add(item);
+            if (string.Equals(key, currentValue, StringComparison.Ordinal))
+                combo.SelectedItem = item;
+        }
+        if (combo.SelectedItem == null)
+            combo.SelectedIndex = 0;
+
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (combo.SelectedItem is WpfComboBoxItem item)
+                Db.SetDefaultStartupPage(projectId.Value, (string)item.Tag);
+        };
+        panel.Children.Add(combo);
 
         return panel;
     }

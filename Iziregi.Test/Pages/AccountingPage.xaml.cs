@@ -39,6 +39,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
     // ✅ couleurs entreprise (réutilisées pour surligner le titre "Détail")
     private Dictionary<string, string> _companyColorMap = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _companyGradientMap = new(StringComparer.OrdinalIgnoreCase);
 
     // ✅ Tri + échelle du graphique (pilotent aussi le tableau)
     private enum SortMode
@@ -399,6 +400,15 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
+    private HashSet<string> GetCompanyGradientMap()
+    {
+        var pid = Db.GetCurrentProjectId();
+        if (pid.HasValue && pid.Value > 0)
+            return Db.GetCompanyGradientMap(pid.Value);
+
+        return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
     private static bool TryGetSolidColor(MediaBrush brush, out MediaColor color)
     {
         if (brush is MediaSolidColorBrush scb)
@@ -544,15 +554,14 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
                     // ✅ Couleurs (17.07.2026, demande de Joe) : mêmes règles que le graphique
                     // entreprise -- pas de couleur définie (ou "Sans catégorie") -> SteelBlue.
                     var colorMap = Db.GetTaskCategoryColorMap(projectId.Value);
+                    var gradientMap = Db.GetTaskCategoryGradientMap(projectId.Value);
 
                     counts = rows
                         .GroupBy(r => string.IsNullOrWhiteSpace(r.Category) ? "Sans catégorie" : r.Category.Trim())
                         .Select(g =>
                         {
                             colorMap.TryGetValue(g.Key, out var hex);
-                            var barBrush = BrushFromHexOrDefault(hex, MediaBrushes.Transparent);
-                            if (barBrush == null || barBrush == MediaBrushes.Transparent)
-                                barBrush = MediaBrushes.SteelBlue;
+                            MediaBrush barBrush = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex, gradientMap.Contains(g.Key)) ?? MediaBrushes.SteelBlue;
 
                             return new TaskCategoryChartRow { Category = g.Key, Count = g.Count(), BarBrush = barBrush };
                         })
@@ -604,6 +613,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         // ✅ conserver le map pour le titre "Détail"
         _companyColorMap = GetCompanyColorMap();
+        _companyGradientMap = GetCompanyGradientMap();
 
         // Lignes entreprises (sans TOTAL)
         var companyRows = _currentRows
@@ -616,8 +626,9 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
                 var tva = Math.Round(g.Sum(x => x.Tva), 2);
                 var ttc = Math.Round(g.Sum(x => x.Ttc), 2);
 
-                var bg = GetCompanyBackgroundBrush(companyName, _companyColorMap);
-                var fg = GetTextBrushForBackground(bg);
+                var solidBg = GetCompanyBackgroundBrush(companyName, _companyColorMap);
+                var fg = GetTextBrushForBackground(solidBg);
+                var bg = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(_companyColorMap.GetValueOrDefault(companyName), _companyGradientMap.Contains(companyName)) ?? solidBg;
 
                 return new CompanyTotalsRow
                 {
@@ -670,9 +681,9 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         DetailsTitleTextBlock.Text = $"Détail — {company}";
 
         // ✅ surbrillance du titre avec la couleur entreprise
-        var bg = GetCompanyBackgroundBrush(company, _companyColorMap);
-        var fg = GetTextBrushForBackground(bg);
-        DetailsTitleBorder.Background = bg;
+        var solidTitleBg = GetCompanyBackgroundBrush(company, _companyColorMap);
+        var fg = GetTextBrushForBackground(solidTitleBg);
+        DetailsTitleBorder.Background = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(_companyColorMap.GetValueOrDefault(company), _companyGradientMap.Contains(company)) ?? solidTitleBg;
         DetailsTitleTextBlock.Foreground = fg;
 
         var details = _currentRows
@@ -681,8 +692,9 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             .ThenByDescending(r => r.BdrNumber)
             .Select(r =>
             {
-                var bg2 = GetCompanyBackgroundBrush(r.Company, _companyColorMap);
-                var fg2 = GetTextBrushForBackground(bg2);
+                var solidBg2 = GetCompanyBackgroundBrush(r.Company, _companyColorMap);
+                var fg2 = GetTextBrushForBackground(solidBg2);
+                var bg2 = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(_companyColorMap.GetValueOrDefault(r.Company), _companyGradientMap.Contains(r.Company)) ?? solidBg2;
 
                 return new DetailsRow
                 {

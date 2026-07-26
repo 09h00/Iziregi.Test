@@ -836,6 +836,17 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         UpdatePreviewBorderFromSelection();
     }
 
+    // ✅ 25.07.2026, demande de Joe : bouton flottant pour revenir en haut de la liste.
+    private void ScrollToTopButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (WorkOrdersGrid.Items.Count > 0)
+                WorkOrdersGrid.ScrollIntoView(WorkOrdersGrid.Items[0]);
+        }
+        catch { }
+    }
+
     // =========================
     // Batch selection (multi)
     // =========================
@@ -1521,9 +1532,10 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
                 if (string.IsNullOrWhiteSpace(hex))
                     return FallbackBrush;
 
-                var color = (WpfColor)WpfColorConverter.ConvertFromString(hex);
-                var brush = new WpfSolidColorBrush(color);
-                brush.Freeze();
+                var isGradient = Db.GetCompanyIsGradient(pid.Value, company);
+                var brush = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex, isGradient);
+                if (brush == null) return FallbackBrush;
+                if (brush.CanFreeze) brush.Freeze();
                 return brush;
             }
             catch

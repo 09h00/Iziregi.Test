@@ -47,6 +47,68 @@
             </Style.Triggers>
         </Style>
 
+        <!-- ✅ Boutons arrondis + bordure noire, section "zones de texte" (25.07.2026,
+             demande de Joe). Preserve le Content existant (texte simple ou StackPanel
+             personnalisé comme FontColorButton/FillColorButton). -->
+        <Style x:Key="TextZoneToolButtonStyle" TargetType="Button">
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TextZoneToolToggleStyle" TargetType="ToggleButton">
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#DBEAFE"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SmallBlueButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="#2563EB"/>
             <Setter Property="Foreground" Value="White"/>
@@ -266,7 +328,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="OverridesDefaultStyle" Value="True"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -289,7 +351,7 @@
                                     <ContentPresenter Grid.Column="0"
 									                  Margin="4,0,0,0"
 									                  VerticalAlignment="Center"
-									                  HorizontalAlignment="Stretch"
+									                  HorizontalAlignment="Center"
 									                  Content="{TemplateBinding SelectionBoxItem}">
                                         <ContentPresenter.ContentTemplate>
                                             <DataTemplate>
@@ -473,38 +535,6 @@
                     <Setter Property="BorderThickness" Value="2"/>
                 </Trigger>
             </Style.Triggers>
-        </Style>
-
-        <Style x:Key="CompanyColorSwatchButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="18"/>
-            <Setter Property="Height" Value="18"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="2"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-						        Background="{TemplateBinding Background}"
-						        BorderBrush="#D1D5DB"
-						        BorderThickness="1"
-						        CornerRadius="999"
-						        SnapsToDevicePixels="True"/>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
-                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
-                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
         </Style>
 
     </UserControl.Resources>
@@ -884,6 +914,8 @@
                                                 </Border.Style>
 
                                                 <ComboBox Style="{StaticResource CompanyComboStyle}"
+												          VerticalAlignment="Center"
+												          Height="20"
 												          ItemsSource="{Binding DataContext.Companies, RelativeSource={RelativeSource AncestorType=UserControl}}"
 												          SelectedItem="{Binding Company, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
                                                     <ComboBox.Foreground>
@@ -1103,7 +1135,12 @@
 						          IsReadOnly="False">
                             <DataGrid.Columns>
 
-                                <DataGridTemplateColumn x:Name="PlanningCompanyColumn" Header="Entreprise" MinWidth="150" Width="Auto">
+                                <DataGridTemplateColumn x:Name="PlanningCompanyColumn" MinWidth="150" Width="Auto">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="4" Padding="0">
@@ -1130,6 +1167,8 @@
                                                 </Border.Style>
 
                                                 <ComboBox Style="{StaticResource CompanyComboStyle}"
+												          VerticalAlignment="Center"
+												          Height="20"
 												          ItemsSource="{Binding DataContext.Companies, RelativeSource={RelativeSource AncestorType=UserControl}}"
 												          SelectedItem="{Binding Company, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
                                                     <ComboBox.Foreground>
@@ -1459,7 +1498,7 @@
 							        Click="ImageFavoritesButton_Click"/>
 
                             <Button x:Name="AddImageToFavoritesButton"
-                                    Content="☆ Ajouter aux favoris"
+                                    Content="☆ Ajouter Image aux favoris"
 							        Style="{StaticResource SmallBlueButtonStyle}"
 							        DockPanel.Dock="Right"
 							        Margin="8,0,0,0"
@@ -1622,7 +1661,7 @@
                                                 <Border Width="{Binding Width}"
 												        Height="{Binding Size}"
 												        CornerRadius="6"
-												        Background="{Binding ColorHex}"
+												        Background="{Binding ColorBrush}"
 												        BorderBrush="#D1D5DB"
 												        BorderThickness="1"
 												        PreviewMouseLeftButtonDown="PlacedSticker_PreviewMouseLeftButtonDown"
@@ -1670,29 +1709,6 @@
 								           Margin="0,0,0,6"
 								           HorizontalAlignment="Center"/>
 
-                                <WrapPanel Grid.Row="1"
-								           Margin="0,0,0,6"
-								           HorizontalAlignment="Center">
-                                    <ItemsControl ItemsSource="{Binding CompanyColorMap}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <WrapPanel/>
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Style="{StaticResource CompanyColorSwatchButtonStyle}"
-												        Background="{Binding Value}"
-												        ToolTip="{Binding Key}"
-												        Click="CompanyColorSwatch_Click"/>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </WrapPanel>
-
-                                <Border Grid.Row="2" Height="1" Background="#E5E7EB" Margin="0,0,0,6"/>
-
                                 <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
                                     <ItemsControl ItemsSource="{Binding Stickers}">
                                         <ItemsControl.ItemsPanel>
@@ -1706,7 +1722,7 @@
                                                 <Button Margin="2"
 												        Height="26"
 												        Width="42"
-												        Background="{Binding ColorHex}"
+												        Background="{Binding ColorBrush}"
 												        BorderBrush="#D1D5DB"
 												        BorderThickness="1"
 												        HorizontalAlignment="Center"
@@ -1802,8 +1818,10 @@
 						        CornerRadius="10"
 						        Padding="8"
 						        Margin="0,0,0,10">
+                            <StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -1828,7 +1846,8 @@
 								          SelectionChanged="FontSizeCombo_SelectionChanged"/>
 
                                 <ToggleButton Grid.Column="4" x:Name="BoldToggle" Width="40" Height="28" Margin="0,0,8,0"
-								              Background="White" Foreground="#111827" BorderBrush="#D1D5DB"
+								              Style="{StaticResource TextZoneToolToggleStyle}"
+								              Background="White" Foreground="#111827"
 								              Click="BoldToggle_Click"
 								              ToolTip="Gras (police)">
                                     <TextBlock Text="G" FontSize="17" FontWeight="Bold"
@@ -1836,7 +1855,8 @@
                                 </ToggleButton>
 
                                 <ToggleButton Grid.Column="5" x:Name="ItalicToggle" Width="40" Height="28" Margin="0,0,8,0"
-								              Background="White" Foreground="#111827" BorderBrush="#D1D5DB"
+								              Style="{StaticResource TextZoneToolToggleStyle}"
+								              Background="White" Foreground="#111827"
 								              Click="ItalicToggle_Click"
 								              ToolTip="Italique (police)">
                                     <TextBlock Text="I" FontSize="14" FontStyle="Italic" FontWeight="Normal"
@@ -1844,7 +1864,8 @@
                                 </ToggleButton>
 
                                 <ToggleButton Grid.Column="6" x:Name="UnderlineToggle" Width="40" Height="28" Margin="0,0,16,0"
-								              Background="White" Foreground="#111827" BorderBrush="#D1D5DB"
+								              Style="{StaticResource TextZoneToolToggleStyle}"
+								              Background="White" Foreground="#111827"
 								              Click="UnderlineToggle_Click"
 								              ToolTip="Souligné (police)">
                                     <TextBlock Text="S" FontSize="14" FontWeight="Normal" TextDecorations="Underline"
@@ -1852,8 +1873,9 @@
                                 </ToggleButton>
 
                                 <Button Grid.Column="7" x:Name="FontColorButton" Width="56" Height="28" Margin="0,0,8,0"
+								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
-								        Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Background="White"
 								        Click="FontColorButton_Click"
 								        ToolTip="Couleur du texte (police)">
                                     <StackPanel>
@@ -1876,8 +1898,9 @@
                                 </Button>
 
                                 <Button Grid.Column="8" x:Name="FillColorButton" Width="56" Height="28"
+								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
-								        Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Background="White"
 								        Click="FillColorButton_Click"
 								        ToolTip="Couleur de remplissage (fond)">
                                     <StackPanel>
@@ -1903,26 +1926,54 @@
                                      "Police" (19.07.2026, 2e demande de Joe), même look que les autres
                                      boutons de cette barre (fond blanc, bordure grise, hauteur 28). -->
                                 <Button Grid.Column="9" Content="Sélectionner tout" Height="28"
+								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="16,0,8,0" Padding="10,0"
-								        Background="White" Foreground="#111827" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Background="White" Foreground="#111827"
 								        Click="TextZoneSelectAll_Click"
 								        ToolTip="Sélectionner tout le texte de la zone active"/>
 
                                 <Button Grid.Column="10" Content="Copier" Height="28"
+								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="0,0,8,0" Padding="10,0"
-								        Background="White" Foreground="#111827" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Background="White" Foreground="#111827"
 								        Click="TextZoneCopy_Click"
 								        ToolTip="Copier le texte sélectionné"/>
 
                                 <Button Grid.Column="11" Content="Coller" Height="28"
+								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Padding="10,0"
-								        Background="White" Foreground="#111827" BorderBrush="#D1D5DB" BorderThickness="1"
+								        Background="White" Foreground="#111827"
 								        Click="TextZonePaste_Click"
 								        ToolTip="Coller dans la zone active"/>
+
+                                <Button Grid.Column="12" Content="🖼 Insérer image" Height="28"
+								        Style="{StaticResource TextZoneToolButtonStyle}"
+								        HorizontalAlignment="Left"
+								        Margin="16,0,0,0" Padding="10,0"
+								        Background="White" Foreground="#111827"
+								        Click="InsertImageIntoActiveTextZone_Click"
+								        ToolTip="Insérer une image (PNG, JPG...) dans la zone active. Ctrl + molette sur l'image pour la redimensionner."/>
+
                             </Grid>
+
+                            <Border x:Name="ResizeImageHintBorder"
+                                    Background="#FEF3C7"
+                                    BorderBrush="#FCD34D"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,4"
+                                    Margin="0,8,0,0"
+                                    HorizontalAlignment="Left"
+                                    Visibility="Collapsed">
+                                <TextBlock FontSize="11" TextWrapping="Wrap">
+                                    <Run Text="💡" FontFamily="Segoe UI Emoji"/>
+                                    <Run Text=" Ctrl + molette sur l'image pour la redimensionner" Foreground="#92400E"/>
+                                </TextBlock>
+                            </Border>
+                            </StackPanel>
                         </Border>
 
                         <Grid Grid.Row="2">
@@ -1961,7 +2012,8 @@
                                         <RichTextBox x:Name="Rtb0" Grid.Row="1"
 										            Style="{StaticResource TextZoneRichTextBoxStyle}"
 										            GotFocus="Rtb_GotFocus"
-										            TextChanged="Rtb_TextChanged"/>
+										            TextChanged="Rtb_TextChanged"
+										            PreviewMouseWheel="Rtb_PreviewMouseWheel"/>
                                     </Grid>
                                 </Border>
 
@@ -1984,7 +2036,8 @@
                                         <RichTextBox x:Name="Rtb3" Grid.Row="1"
 										            Style="{StaticResource TextZoneRichTextBoxStyle}"
 										            GotFocus="Rtb_GotFocus"
-										            TextChanged="Rtb_TextChanged"/>
+										            TextChanged="Rtb_TextChanged"
+										            PreviewMouseWheel="Rtb_PreviewMouseWheel"/>
                                     </Grid>
                                 </Border>
                             </StackPanel>
@@ -2009,7 +2062,8 @@
                                         <RichTextBox x:Name="Rtb1" Grid.Row="1"
 										            Style="{StaticResource TextZoneRichTextBoxStyle}"
 										            GotFocus="Rtb_GotFocus"
-										            TextChanged="Rtb_TextChanged"/>
+										            TextChanged="Rtb_TextChanged"
+										            PreviewMouseWheel="Rtb_PreviewMouseWheel"/>
                                     </Grid>
                                 </Border>
 
@@ -2032,7 +2086,8 @@
                                         <RichTextBox x:Name="Rtb2" Grid.Row="1"
 										            Style="{StaticResource TextZoneRichTextBoxStyle}"
 										            GotFocus="Rtb_GotFocus"
-										            TextChanged="Rtb_TextChanged"/>
+										            TextChanged="Rtb_TextChanged"
+										            PreviewMouseWheel="Rtb_PreviewMouseWheel"/>
                                     </Grid>
                                 </Border>
                             </StackPanel>

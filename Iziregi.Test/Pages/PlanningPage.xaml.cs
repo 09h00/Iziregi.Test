@@ -160,9 +160,89 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             _isPageActive = true;
             LoadLists();
             OnPropertyChanged(nameof(CompanyColorMap));
+            SyncCompanyColorStickers();
             // Mise à jour UI
             try { this.Dispatcher?.Invoke(() => { this.UpdateLayout(); }); } catch { }
             _isPageActive = prev;
+        }
+        catch
+        {
+            // non bloquant
+        }
+    }
+
+    // ✅ 25.07.2026, demande de Joe : chaque intervenant coloré devient automatiquement
+    // disponible dans la banque de stickers (même couleur, même dégradé "Mix" si actif),
+    // sans étape manuelle. Les stickers n'ont PAS vocation à porter un nom -- leur étiquette
+    // reste un numéro libre saisi par Joe (ex: numérotation de tâche) -- donc l'association
+    // sticker <-> intervenant se fait via un champ interne invisible (StickerItem.CompanyName),
+    // jamais via le Label. Un intervenant déjà lié à un sticker voit juste sa couleur mise à
+    // jour ; sinon le premier emplacement NON lié (CompanyName vide) est utilisé, sans toucher
+    // à son étiquette existante.
+    private void SyncCompanyColorStickers()
+    {
+        try
+        {
+            var pid = Db.GetCurrentProjectId();
+            if (!pid.HasValue || pid.Value <= 0) return;
+
+            var colorMap = Db.GetCompanyColorMap(pid.Value);
+            if (colorMap.Count == 0) return;
+
+            var gradientMap = Db.GetCompanyGradientMap(pid.Value);
+            var wasLoading = _isLoadingStickerBank;
+            _isLoadingStickerBank = true; // évite une sauvegarde par sticker modifié ci-dessous
+
+            var changed = false;
+
+            // ✅ Nettoyage ponctuel (25.07.2026) : une version précédente de cette fonction,
+            // dans la même session, avait écrit le nom (en lettres) directement dans le Label
+            // -- corrigé depuis (lien via CompanyName, Label jamais touché), mais les anciennes
+            // étiquettes-lettres laissées par ce bug doivent être effacées. Un vrai numéro de
+            // tâche saisi par Joe est toujours numérique, donc sans risque de confusion.
+            foreach (var s in Stickers)
+            {
+                if (!string.IsNullOrEmpty(s.Label) && s.Label.All(char.IsLetter))
+                {
+                    s.Label = "";
+                    changed = true;
+                }
+            }
+
+            foreach (var kv in colorMap)
+            {
+                var companyName = kv.Key;
+                var hex = kv.Value;
+                if (string.IsNullOrWhiteSpace(companyName) || string.IsNullOrWhiteSpace(hex))
+                    continue;
+
+                var isGradient = gradientMap.Contains(companyName);
+
+                var existing = Stickers.FirstOrDefault(s => string.Equals(s.CompanyName, companyName, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                {
+                    if (!string.Equals(existing.ColorHex, hex, StringComparison.OrdinalIgnoreCase) || existing.IsGradient != isGradient)
+                    {
+                        existing.ColorHex = hex;
+                        existing.IsGradient = isGradient;
+                        changed = true;
+                    }
+                    continue;
+                }
+
+                var freeSlot = Stickers.FirstOrDefault(s => string.IsNullOrWhiteSpace(s.CompanyName));
+                if (freeSlot != null)
+                {
+                    freeSlot.CompanyName = companyName;
+                    freeSlot.ColorHex = hex;
+                    freeSlot.IsGradient = isGradient;
+                    changed = true;
+                }
+                // Sinon : banque pleine (20/20), on ne remplace pas un sticker existant.
+            }
+
+            _isLoadingStickerBank = wasLoading;
+            if (changed) SaveStickerBankToDisk();
         }
         catch
         {
@@ -201,6 +281,10 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         public string Label { get; set; } = "";
         public string ColorHex { get; set; } = "#F59E0B";
+        public bool IsGradient { get; set; } = false;
+        // ✅ Lien invisible sticker <-> intervenant (25.07.2026), jamais affiché : le Label
+        // reste un numéro libre saisi par Joe.
+        public string CompanyName { get; set; } = "";
     }
 
     private static string GetStickerBankFilePath(long? projectId)
@@ -231,7 +315,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (_isLoadingStickerBank) return;
         if (!_isPageActive) return;
 
-        if (e.PropertyName == nameof(StickerItem.ColorHex) || e.PropertyName == nameof(StickerItem.Label))
+        if (e.PropertyName == nameof(StickerItem.ColorHex) || e.PropertyName == nameof(StickerItem.Label) || e.PropertyName == nameof(StickerItem.IsGradient))
         {
             SaveStickerBankToDisk();
         }
@@ -259,7 +343,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                         Stickers.Add(new StickerItem
                         {
                             Label = it?.Label ?? "",
-                            ColorHex = string.IsNullOrWhiteSpace(it?.ColorHex) ? "#F59E0B" : it!.ColorHex
+                            ColorHex = string.IsNullOrWhiteSpace(it?.ColorHex) ? "#F59E0B" : it!.ColorHex,
+                            IsGradient = it?.IsGradient ?? false,
+                            CompanyName = it?.CompanyName ?? ""
                         });
                     }
 
@@ -314,7 +400,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Stickers = Stickers.Select(s => new StickerState
                 {
                     Label = s?.Label ?? "",
-                    ColorHex = string.IsNullOrWhiteSpace(s?.ColorHex) ? "#F59E0B" : s!.ColorHex
+                    ColorHex = string.IsNullOrWhiteSpace(s?.ColorHex) ? "#F59E0B" : s!.ColorHex,
+                    IsGradient = s?.IsGradient ?? false,
+                    CompanyName = s?.CompanyName ?? ""
                 }).ToList()
             };
 
@@ -1221,6 +1309,50 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         _activeRtb = rtb;
         UpdateToolbarFromSelection();
+        UpdateResizeImageHintVisibility();
+    }
+
+    // ✅ Astuce Ctrl+molette (26.07.2026, demande de Joe) : affichée uniquement si la zone
+    // actuellement active contient une image, pas en permanence.
+    private void UpdateResizeImageHintVisibility()
+    {
+        if (ResizeImageHintBorder == null) return;
+        ResizeImageHintBorder.Visibility = _activeRtb?.Document != null && DocumentHasImage(_activeRtb.Document)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static bool DocumentHasImage(FlowDocument doc) => FindFirstInlineUIContainer(doc.Blocks) != null;
+
+    private static InlineUIContainer? FindFirstInlineUIContainer(IEnumerable<Block> blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is Paragraph p)
+            {
+                var found = FindFirstInlineUIContainerInInlines(p.Inlines);
+                if (found != null) return found;
+            }
+            else if (block is Section sec)
+            {
+                var found = FindFirstInlineUIContainer(sec.Blocks);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static InlineUIContainer? FindFirstInlineUIContainerInInlines(IEnumerable<Inline> inlines)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is InlineUIContainer iuc) return iuc;
+            if (inline is Span span)
+            {
+                var found = FindFirstInlineUIContainerInInlines(span.Inlines);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private void UpdateToolbarFromSelection()
@@ -1327,20 +1459,244 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         _activeRtb.Focus();
     }
 
+    // ✅ Insertion d'image dans une zone de texte (25.07.2026, demande de Joe) : PNG/photo
+    // uniquement (pas de PDF -- pas une image, ne peut pas s'incruster dans du texte). Même
+    // stockage stable que les images posées sur le plan (CopyImageIntoAppStorage), pour ne
+    // pas perdre l'image si le fichier source est déplacé/supprimé.
+    private void InsertImageIntoActiveTextZone_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_activeRtb == null)
+            {
+                System.Windows.MessageBox.Show(
+                    "Clique d'abord dans une zone de texte pour y insérer une image.",
+                    "Insérer une image", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var ofd = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Insérer une image",
+                Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif"
+            };
+            if (ofd.ShowDialog() != true) return;
+
+            var storedPath = CopyAndCompressImageForRichText(ofd.FileName);
+
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(storedPath, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+
+            new InlineUIContainer(CreateResizableInlineImage(bmp), _activeRtb.CaretPosition);
+            _activeRtb.Focus();
+        }
+        catch (Exception ex)
+        {
+            LogPlanningError("InsertImageIntoActiveTextZone_Click", ex);
+        }
+    }
+
+    // ✅ Compression à l'insertion (26.07.2026, demande de Joe) : une photo de téléphone non
+    // retouchée peut faire plusieurs Mo pour un affichage qui ne dépassera jamais ~220px de
+    // large dans le texte -> réduit à 1600px de long côté max (largement suffisant à l'écran
+    // et à l'impression) avant stockage, pour ne pas alourdir inutilement le disque/la
+    // mémoire. Ne touche PAS CopyImageIntoAppStorage (images du plan) : ces images doivent
+    // rester en pleine résolution pour la clarté du plan imprimé. Dupliqué dans
+    // TaskDescriptionWindow.xaml.cs (champ Descriptif) pour la même raison que le reste.
+    private const int RichTextImageMaxDimension = 1600;
+
+    private static string CopyAndCompressImageForRichText(string sourcePath)
+    {
+        var dir = GetPlanImagesDir(Db.GetCurrentProjectId());
+        Directory.CreateDirectory(dir);
+        var ext = Path.GetExtension(sourcePath);
+        if (string.IsNullOrWhiteSpace(ext)) ext = ".png";
+        var destPath = Path.Combine(dir, $"{Guid.NewGuid():N}{ext}");
+
+        try
+        {
+            var decoder = BitmapDecoder.Create(new Uri(sourcePath, UriKind.Absolute), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+
+            if (frame.PixelWidth > RichTextImageMaxDimension || frame.PixelHeight > RichTextImageMaxDimension)
+            {
+                var scale = (double)RichTextImageMaxDimension / Math.Max(frame.PixelWidth, frame.PixelHeight);
+                var scaled = new TransformedBitmap(frame, new ScaleTransform(scale, scale));
+
+                BitmapEncoder encoder = ext.ToLowerInvariant() switch
+                {
+                    ".jpg" or ".jpeg" => new JpegBitmapEncoder { QualityLevel = 85 },
+                    ".gif" => new GifBitmapEncoder(),
+                    ".bmp" => new BmpBitmapEncoder(),
+                    _ => new PngBitmapEncoder()
+                };
+                encoder.Frames.Add(BitmapFrame.Create(scaled));
+
+                using var fs = new FileStream(destPath, FileMode.Create);
+                encoder.Save(fs);
+                return destPath;
+            }
+        }
+        catch { /* fallback : copie brute ci-dessous */ }
+
+        File.Copy(sourcePath, destPath, overwrite: false);
+        return destPath;
+    }
+
+    // ============================================================
+    // Images redimensionnables dans le texte enrichi (26.07.2026, demande de Joe) :
+    // redimensionnement par Ctrl+molette au-dessus de l'image. Deux approches par bouton
+    // (poignée glissée, puis boutons cliquables －/＋) ont été essayées avant celle-ci et
+    // toutes les deux échouaient en pratique : le RichTextBox capture la souris dès le clic
+    // pour gérer sa propre sélection de texte, ce qui empêche tout contrôle enfant (Thumb ou
+    // Button) posé sur l'image de recevoir un clic ou un glisser-déposer complet — vérifié
+    // par un test avec clic souris simulé (aucune réaction, confirmé par Joe en pratique
+    // aussi). Ctrl+molette contourne le problème : c'est un événement écouté directement sur
+    // le RichTextBox lui-même (pas sur un enfant), donc pas de conflit de capture souris.
+    // Duplique aussi dans TaskDescriptionWindow.xaml.cs (champ Descriptif), qui n'a pas
+    // accès à ces membres privés de PlanningPage.
+    // ============================================================
+
+    private const double InlineImageMinSize = 30;
+    private const double InlineImageMaxSize = 600;
+
+    private static FrameworkElement CreateResizableInlineImage(BitmapImage bmp)
+    {
+        double w = bmp.PixelWidth > 0 ? bmp.PixelWidth : 220;
+        double h = bmp.PixelHeight > 0 ? bmp.PixelHeight : 220;
+        if (w > 220 || h > 220)
+        {
+            var scale = 220 / Math.Max(w, h);
+            w *= scale; h *= scale;
+        }
+
+        var image = new System.Windows.Controls.Image
+        {
+            Source = bmp,
+            Width = w,
+            Height = h,
+            Stretch = Stretch.Fill,
+            ToolTip = "Ctrl + molette pour redimensionner"
+        };
+
+        // ✅ Le Grid doit avoir une taille EXPLICITE (identique à l'image) et ne pas
+        // s'étirer (HorizontalAlignment/VerticalAlignment = Left/Top) : sinon, inséré dans
+        // le flux de texte, il s'étire sur toute la largeur de ligne restante et la
+        // hauteur de ligne réservée devient incohérente (image qui semble "coupée").
+        var grid = new Grid
+        {
+            Width = w,
+            Height = h,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top
+        };
+        grid.Children.Add(image);
+        return grid;
+    }
+
+    // ✅ Appelé depuis PreviewMouseWheel du RichTextBox (Rtb_PreviewMouseWheel) : trouve
+    // l'image sous le curseur (via un test de collision, pas via un contrôle enfant qui ne
+    // recevrait pas l'événement) et la redimensionne si Ctrl est enfoncé.
+    private static bool TryResizeInlineImageUnderCursor(WpfRichTextBox rtb, System.Windows.Point position, int wheelDelta)
+    {
+        var hit = VisualTreeHelper.HitTest(rtb, position);
+        var image = FindAncestorOrSelf<System.Windows.Controls.Image>(hit?.VisualHit);
+        if (image?.Parent is not Grid grid) return false;
+
+        var factor = wheelDelta > 0 ? 1.15 : 0.85;
+        var newW = Math.Clamp(image.Width * factor, InlineImageMinSize, InlineImageMaxSize);
+        var newH = Math.Clamp(image.Height * factor, InlineImageMinSize, InlineImageMaxSize);
+        image.Width = grid.Width = newW;
+        image.Height = grid.Height = newH;
+        return true;
+    }
+
+    private static T? FindAncestorOrSelf<T>(DependencyObject? d) where T : DependencyObject
+    {
+        while (d != null)
+        {
+            if (d is T match) return match;
+            d = VisualTreeHelper.GetParent(d);
+        }
+        return null;
+    }
+
+    // ✅ Après désérialisation XAML (SaveRtbToZoneXaml/RestoreZoneXamlToRtb), efface
+    // d'éventuelles anciennes poignées/boutons de redimensionnement (Thumb ou boutons －/＋,
+    // laissés par de précédentes versions de cette fonctionnalité qui ne fonctionnaient pas)
+    // pour ne garder que l'image.
+    private static void RewireResizableInlineImages(FlowDocument doc)
+    {
+        foreach (var block in doc.Blocks)
+            RewireResizableInlineImagesInBlock(block);
+    }
+
+    private static void RewireResizableInlineImagesInBlock(Block block)
+    {
+        if (block is Paragraph p)
+        {
+            foreach (var inline in p.Inlines)
+                RewireResizableInlineImagesInInline(inline);
+        }
+        else if (block is Section sec)
+        {
+            foreach (var b in sec.Blocks)
+                RewireResizableInlineImagesInBlock(b);
+        }
+    }
+
+    private static void RewireResizableInlineImagesInInline(Inline inline)
+    {
+        if (inline is InlineUIContainer iuc)
+        {
+            if (iuc.Child is Grid grid)
+            {
+                var image = grid.Children.OfType<System.Windows.Controls.Image>().FirstOrDefault();
+                if (image != null)
+                {
+                    var stale = grid.Children.OfType<FrameworkElement>().Where(c => !ReferenceEquals(c, image)).ToList();
+                    foreach (var s in stale) grid.Children.Remove(s);
+                    image.ToolTip = "Ctrl + molette pour redimensionner";
+                }
+            }
+            // ✅ Images insérées AVANT ce mécanisme (image seule, pas encore enveloppée dans
+            // le Grid redimensionnable) : mise à niveau automatique vers le nouveau format.
+            else if (iuc.Child is System.Windows.Controls.Image oldImage && oldImage.Source is BitmapImage oldBmp)
+            {
+                iuc.Child = CreateResizableInlineImage(oldBmp);
+            }
+        }
+        else if (inline is Span span)
+        {
+            foreach (var child in span.Inlines)
+                RewireResizableInlineImagesInInline(child);
+        }
+    }
+
     private void CompactRichTextBoxDocument(WpfRichTextBox rtb)
     {
         if (rtb.Document == null)
             rtb.Document = new FlowDocument();
 
         rtb.Document.LineHeight = RtbDefaultLineHeight;
-        rtb.Document.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        // ✅ MaxHeight (pas BlockLineHeight) : BlockLineHeight fige TOUTES les lignes à
+        // exactement RtbDefaultLineHeight (14px), y compris celle contenant une image
+        // insérée (25.07.2026) — bien plus haute que 14px -> l'image (et donc les boutons
+        // －/＋ ancrés dans son coin) se retrouvait quasi entièrement coupée. MaxHeight garde
+        // le texte normal compact tout en laissant une ligne grandir pour accueillir un
+        // élément plus grand qu'elle contient. Bug signalé par Joe le 26.07.2026.
+        rtb.Document.LineStackingStrategy = LineStackingStrategy.MaxHeight;
         rtb.Document.PagePadding = new Thickness(0);
 
         foreach (var p in rtb.Document.Blocks.OfType<Paragraph>())
         {
             p.Margin = ParagraphZeroMargin;
             p.LineHeight = RtbDefaultLineHeight;
-            p.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            p.LineStackingStrategy = LineStackingStrategy.MaxHeight;
         }
     }
 
@@ -1355,7 +1711,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             {
                 Margin = ParagraphZeroMargin,
                 LineHeight = RtbDefaultLineHeight,
-                LineStackingStrategy = LineStackingStrategy.BlockLineHeight
+                LineStackingStrategy = LineStackingStrategy.MaxHeight
             };
             rtb.Document.Blocks.Add(p);
         }
@@ -1409,6 +1765,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         EnsureRtbHasAtLeastOneParagraph(rtb);
         CompactRichTextBoxDocument(rtb);
+        RewireResizableInlineImages(doc);
     }
 
     private int GetZoneIndexFromRtb(WpfRichTextBox rtb)
@@ -1581,31 +1938,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         {
             Label = source.Label,
             ColorHex = source.ColorHex,
+            IsGradient = source.IsGradient,
             Size = StickerDropDefaultSize,
             Width = StickerDropDefaultWidth,
             X = Math.Max(0, x - StickerDropDefaultWidth / 2),
             Y = Math.Max(0, y - StickerDropDefaultSize / 2),
         });
-    }
-
-    private void CompanyColorSwatch_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (_selectedBankSticker == null)
-                return;
-
-            if (sender is FrameworkElement fe && fe.DataContext is KeyValuePair<string, string> kv)
-            {
-                var hex = (kv.Value ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(hex)) return;
-
-                _selectedBankSticker.ColorHex = hex;
-            }
-        }
-        catch
-        {
-        }
     }
 
     // ✅ NEW: drag au simple clic, édition au double-clic
@@ -1897,8 +2235,25 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         CompactRichTextBoxDocument(rtb);
         SaveRtbToZoneXaml(rtb);
 
+        if (ReferenceEquals(rtb, _activeRtb)) UpdateResizeImageHintVisibility();
+
         if (_rtbInternalUpdate) return;
         if (ReferenceEquals(rtb, _activeRtb)) UpdateToolbarFromSelection();
+    }
+
+    // ✅ Redimensionnement d'image par Ctrl+molette (26.07.2026) : voir le commentaire au-
+    // dessus de CreateResizableInlineImage pour pourquoi ce n'est pas un bouton/poignée.
+    private void Rtb_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!_isPageActive) return;
+        if (sender is not WpfRichTextBox rtb) return;
+        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
+
+        if (TryResizeInlineImageUnderCursor(rtb, e.GetPosition(rtb), e.Delta))
+        {
+            SaveRtbToZoneXaml(rtb);
+            e.Handled = true;
+        }
     }
 
     private void FontFamilyCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2045,7 +2400,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (sender is not WpfButton btn || btn.DataContext is not TaskRow row) return;
 
         var win = new TaskDescriptionWindow(
-            row.Ref, row.Company, row.Building, row.Floor, row.Category, row.Reserve, row.Urgent, row.Done, row.Todo,
+            row.Ref, row.Company, row.Building, row.Floor, row.Category, row.Reserve, row.Urgent, row.Done, row.Todo, row.TodoDocumentXaml,
             CompanyLabel, BuildingLabel, FloorLabel, TaskCategoryLabel, TaskUrgencyLabel,
             showCompany: TaskCompanyColumn.Visibility == Visibility.Visible,
             showBuilding: TaskBuildingColumn.Visibility == Visibility.Visible,
@@ -2059,6 +2414,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (win.ShowDialog() == true)
         {
             row.Todo = win.ResultText;
+            row.TodoDocumentXaml = win.ResultDocumentXaml;
             SaveProjectTasks();
         }
     }
@@ -2361,7 +2717,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 X = s.X,
                 Y = s.Y,
                 Size = s.Size,
-                Width = s.Width
+                Width = s.Width,
+                IsGradient = s.IsGradient
             }).ToList(),
             PlacedImageStates = PlacedPlanImages.Select(i => new PlacedImageState
             {
@@ -2471,6 +2828,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                         Building = r.Building,
                         Floor = r.Floor,
                         Todo = r.Todo,
+                        TodoDocumentXaml = r.TodoDocumentXaml,
                         Category = r.Category,
                         Reserve = r.Reserve,
                         Urgent = r.Urgent,
@@ -2543,6 +2901,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Building = r.Building,
                 Floor = r.Floor,
                 Todo = r.Todo,
+                TodoDocumentXaml = r.TodoDocumentXaml,
                 Category = r.Category,
                 Reserve = r.Reserve,
                 Urgent = r.Urgent,
@@ -2616,7 +2975,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                             X = s.X,
                             Y = s.Y,
                             Size = s.Size,
-                            Width = s.Width
+                            Width = s.Width,
+                            IsGradient = s.IsGradient
                         });
 
                     foreach (var i in state.PlacedImageStates)
@@ -2848,6 +3208,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         LoadLists();
         EnsureStickerBankLoadedOrInitialized();
+        SyncCompanyColorStickers();
         EnsureImageFavoritesLoaded();
 
         // ✅ Tâches : indépendantes de la semaine, chargées une seule fois par instance de
@@ -3401,8 +3762,14 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         private string _label = "";
         private string _colorHex = "#F59E0B";
+        private bool _isGradient = false;
+        private string _companyName = "";
 
         public string Label { get => _label; set => SetField(ref _label, value); }
+
+        // ✅ Lien invisible sticker <-> intervenant (25.07.2026), jamais montré dans l'UI --
+        // le Label reste un numéro libre saisi par Joe, distinct de cette association.
+        public string CompanyName { get => _companyName; set => SetField(ref _companyName, value); }
 
         public string ColorHex
         {
@@ -3411,8 +3778,25 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             {
                 if (!SetField(ref _colorHex, value)) return;
                 OnPropertyChanged(nameof(TextColorHex));
+                OnPropertyChanged(nameof(ColorBrush));
             }
         }
+
+        // ✅ Sticker "Mix" (25.07.2026, demande de Joe) : suit le meme systeme degrade
+        // optionnel que les couleurs entreprise/categorie (ColorGradientHelper).
+        public bool IsGradient
+        {
+            get => _isGradient;
+            set
+            {
+                if (!SetField(ref _isGradient, value)) return;
+                OnPropertyChanged(nameof(ColorBrush));
+            }
+        }
+
+        public System.Windows.Media.Brush ColorBrush =>
+            Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(ColorHex, IsGradient)
+            ?? System.Windows.Media.Brushes.Transparent;
 
         public string TextColorHex => GetContrastingTextColorHex(ColorHex);
 
@@ -3451,6 +3835,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         private string _label = "";
         private string _colorHex = "#F59E0B";
+        private bool _isGradient = false;
         private double _x;
         private double _y;
         private double _size = StickerDropDefaultSize;
@@ -3468,8 +3853,23 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             {
                 if (!SetField(ref _colorHex, value)) return;
                 OnPropertyChanged(nameof(TextColorHex));
+                OnPropertyChanged(nameof(ColorBrush));
             }
         }
+
+        public bool IsGradient
+        {
+            get => _isGradient;
+            set
+            {
+                if (!SetField(ref _isGradient, value)) return;
+                OnPropertyChanged(nameof(ColorBrush));
+            }
+        }
+
+        public System.Windows.Media.Brush ColorBrush =>
+            Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(ColorHex, IsGradient)
+            ?? System.Windows.Media.Brushes.Transparent;
 
         public double X { get => _x; set => SetField(ref _x, value); }
         public double Y { get => _y; set => SetField(ref _y, value); }
@@ -3591,6 +3991,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         private string _building = "";
         private string _floor = "";
         private string _todo = "";
+        // ✅ Descriptif enrichi (25.07.2026, demande de Joe) : Todo reste le texte brut
+        // (aperçu 1 ligne dans la grille, recherche/tri) ; ce champ stocke la mise en forme
+        // + images éventuelles (même mécanisme que les zones de texte du plan), édité
+        // uniquement via TaskDescriptionWindow. Vide -> pas de contenu enrichi (juste Todo).
+        private string _todoDocumentXaml = "";
         private string _category = "";
         private string _reserve = "";
         private string _urgent = "";
@@ -3602,6 +4007,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string Building { get => _building; set => SetField(ref _building, value); }
         public string Floor { get => _floor; set => SetField(ref _floor, value); }
         public string Todo { get => _todo; set => SetField(ref _todo, value); }
+        public string TodoDocumentXaml { get => _todoDocumentXaml; set => SetField(ref _todoDocumentXaml, value); }
         public string Category { get => _category; set => SetField(ref _category, value); }
         public string Reserve { get => _reserve; set => SetField(ref _reserve, value); }
         public string Urgent { get => _urgent; set => SetField(ref _urgent, value); }
@@ -3696,6 +4102,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string Building { get; set; } = "";
         public string Floor { get; set; } = "";
         public string Todo { get; set; } = "";
+        public string TodoDocumentXaml { get; set; } = "";
         public string Category { get; set; } = "";
         public string Reserve { get; set; } = "";
         public string Urgent { get; set; } = "";
@@ -3725,6 +4132,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // ✅ Absent des anciens fichiers (avant les stickers rectangulaires) : la valeur
         // par défaut ci-dessous s'applique alors automatiquement à la désérialisation.
         public double Width { get; set; } = StickerDropDefaultWidth;
+        public bool IsGradient { get; set; } = false;
     }
 
     private sealed class PlacedImageState
@@ -3842,8 +4250,9 @@ public sealed class CompanyNameToBrushConverter : IMultiValueConverter
             if (string.IsNullOrWhiteSpace(hex))
                 return WpfBrushes.Transparent;
 
-            var c = (WpfColor)WpfColorConverter.ConvertFromString(hex.Trim());
-            return new WpfSolidColorBrush(c);
+            var pid = Db.GetCurrentProjectId();
+            var isGradient = pid.HasValue && pid.Value > 0 && Db.GetCompanyIsGradient(pid.Value, name.Trim());
+            return Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex.Trim(), isGradient) ?? WpfBrushes.Transparent;
         }
         catch
         {
@@ -3904,8 +4313,9 @@ public sealed class CellTextAndCompanyToBrushConverter : IMultiValueConverter
             if (!map.TryGetValue(company.Trim(), out var hex) || string.IsNullOrWhiteSpace(hex))
                 return WpfBrushes.Transparent;
 
-            var c = (WpfColor)WpfColorConverter.ConvertFromString(hex.Trim());
-            return new WpfSolidColorBrush(c);
+            var pid = Db.GetCurrentProjectId();
+            var isGradient = pid.HasValue && pid.Value > 0 && Db.GetCompanyIsGradient(pid.Value, company.Trim());
+            return Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex.Trim(), isGradient) ?? WpfBrushes.Transparent;
         }
         catch
         {

@@ -247,6 +247,10 @@ public static class Db
         TryAddColumn(con, "Requesters", "ProjectId", "INTEGER");
         TryAddColumn(con, "Reserves", "ProjectId", "INTEGER");
 
+        // ✅ Degrade optionnel en plus de la couleur pleine (25.07.2026, demande de Joe).
+        TryAddColumn(con, "CompanyColors", "IsGradient", "INTEGER NOT NULL DEFAULT 0");
+        TryAddColumn(con, "TaskCategoryColors", "IsGradient", "INTEGER NOT NULL DEFAULT 0");
+
         // ✅ IMPORTANT :
         // Les tables ont été créées historiquement avec "Name UNIQUE".
         // Ça empêche d’avoir la même valeur dans 2 projets.
@@ -708,6 +712,17 @@ public static class Db
         SetSetting(MakeLabelKey(field, projectId), value);
     }
 
+    // ✅ Page par défaut au démarrage, par dossier (25.07.2026, demande de Joe) : vide =
+    // Dashboard (comportement historique, inchangé si jamais configuré).
+    public static string GetDefaultStartupPage(long projectId)
+        => projectId > 0 ? (GetSetting(MakeLabelKey("DefaultStartupPage", projectId)) ?? "") : "";
+
+    public static void SetDefaultStartupPage(long projectId, string pageKey)
+    {
+        if (projectId <= 0) return;
+        SetSetting(MakeLabelKey("DefaultStartupPage", projectId), (pageKey ?? "").Trim());
+    }
+
     // Champs "Demande" (libellés par défaut demandés)
     public static string GetLabelReserve(long projectId) => GetLabel(projectId, "Reserve", "Concerne");
     public static void SetLabelReserve(long projectId, string value) => SetLabel(projectId, "Reserve", value);
@@ -969,7 +984,22 @@ public static class Db
         );
     }
 
-    public static void SetCompanyColorHex(long projectId, string companyName, string colorHex)
+    public static bool GetCompanyIsGradient(long projectId, string companyName)
+    {
+        companyName = (companyName ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(companyName))
+            return false;
+
+        using var con = Open();
+        con.Open();
+
+        return con.ExecuteScalar<long>(
+            "SELECT IsGradient FROM CompanyColors WHERE ProjectId=@ProjectId AND CompanyName=@CompanyName;",
+            new { ProjectId = projectId, CompanyName = companyName }
+        ) == 1;
+    }
+
+    public static void SetCompanyColorHex(long projectId, string companyName, string colorHex, bool isGradient = false)
     {
         companyName = (companyName ?? "").Trim();
         colorHex = (colorHex ?? "").Trim();
@@ -981,10 +1011,10 @@ public static class Db
         con.Open();
 
         con.Execute("""
-            INSERT INTO CompanyColors(ProjectId, CompanyName, ColorHex)
-            VALUES (@ProjectId, @CompanyName, @ColorHex)
-            ON CONFLICT(ProjectId, CompanyName) DO UPDATE SET ColorHex=excluded.ColorHex;
-        """, new { ProjectId = projectId, CompanyName = companyName, ColorHex = colorHex });
+            INSERT INTO CompanyColors(ProjectId, CompanyName, ColorHex, IsGradient)
+            VALUES (@ProjectId, @CompanyName, @ColorHex, @IsGradient)
+            ON CONFLICT(ProjectId, CompanyName) DO UPDATE SET ColorHex=excluded.ColorHex, IsGradient=excluded.IsGradient;
+        """, new { ProjectId = projectId, CompanyName = companyName, ColorHex = colorHex, IsGradient = isGradient ? 1 : 0 });
     }
 
     public static void DeleteCompanyColor(long projectId, string companyName)
@@ -1059,6 +1089,31 @@ public static class Db
         return dict;
     }
 
+    // ✅ Noms d'entreprises pour lesquelles le degrade est active (25.07.2026, demande de Joe).
+    public static HashSet<string> GetCompanyGradientMap(long projectId)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (projectId <= 0)
+            return set;
+
+        using var con = Open();
+        con.Open();
+
+        var names = con.Query<string>(
+            "SELECT CompanyName FROM CompanyColors WHERE ProjectId=@ProjectId AND IsGradient=1;",
+            new { ProjectId = projectId }
+        );
+
+        foreach (var n in names)
+        {
+            var name = (n ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(name))
+                set.Add(name);
+        }
+
+        return set;
+    }
+
     // =========================
     // ✅ Couleurs Catégories de tâches — par projet (indépendant des couleurs
     // d'entreprises, demande de Joe, 17.07.2026 : même mécanisme, en miroir exact).
@@ -1078,7 +1133,22 @@ public static class Db
         );
     }
 
-    public static void SetTaskCategoryColorHex(long projectId, string categoryName, string colorHex)
+    public static bool GetTaskCategoryIsGradient(long projectId, string categoryName)
+    {
+        categoryName = (categoryName ?? "").Trim();
+        if (projectId <= 0 || string.IsNullOrWhiteSpace(categoryName))
+            return false;
+
+        using var con = Open();
+        con.Open();
+
+        return con.ExecuteScalar<long>(
+            "SELECT IsGradient FROM TaskCategoryColors WHERE ProjectId=@ProjectId AND CategoryName=@CategoryName;",
+            new { ProjectId = projectId, CategoryName = categoryName }
+        ) == 1;
+    }
+
+    public static void SetTaskCategoryColorHex(long projectId, string categoryName, string colorHex, bool isGradient = false)
     {
         categoryName = (categoryName ?? "").Trim();
         colorHex = (colorHex ?? "").Trim();
@@ -1090,10 +1160,10 @@ public static class Db
         con.Open();
 
         con.Execute("""
-            INSERT INTO TaskCategoryColors(ProjectId, CategoryName, ColorHex)
-            VALUES (@ProjectId, @CategoryName, @ColorHex)
-            ON CONFLICT(ProjectId, CategoryName) DO UPDATE SET ColorHex=excluded.ColorHex;
-        """, new { ProjectId = projectId, CategoryName = categoryName, ColorHex = colorHex });
+            INSERT INTO TaskCategoryColors(ProjectId, CategoryName, ColorHex, IsGradient)
+            VALUES (@ProjectId, @CategoryName, @ColorHex, @IsGradient)
+            ON CONFLICT(ProjectId, CategoryName) DO UPDATE SET ColorHex=excluded.ColorHex, IsGradient=excluded.IsGradient;
+        """, new { ProjectId = projectId, CategoryName = categoryName, ColorHex = colorHex, IsGradient = isGradient ? 1 : 0 });
     }
 
     public static void DeleteTaskCategoryColor(long projectId, string categoryName)
@@ -1166,6 +1236,31 @@ public static class Db
         }
 
         return dict;
+    }
+
+    // ✅ Noms de categories pour lesquelles le degrade est active (25.07.2026, demande de Joe).
+    public static HashSet<string> GetTaskCategoryGradientMap(long projectId)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (projectId <= 0)
+            return set;
+
+        using var con = Open();
+        con.Open();
+
+        var names = con.Query<string>(
+            "SELECT CategoryName FROM TaskCategoryColors WHERE ProjectId=@ProjectId AND IsGradient=1;",
+            new { ProjectId = projectId }
+        );
+
+        foreach (var n in names)
+        {
+            var name = (n ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(name))
+                set.Add(name);
+        }
+
+        return set;
     }
 
     // =========================

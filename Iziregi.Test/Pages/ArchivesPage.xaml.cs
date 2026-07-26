@@ -84,6 +84,7 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
 
         // ✅ couleurs entreprises par projet
         var colorMap = Db.GetCompanyColorMap(projectId);
+        var gradientMap = Db.GetCompanyGradientMap(projectId);
 
         _allRows = list.Select(w =>
         {
@@ -93,8 +94,8 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
 
             colorMap.TryGetValue(company, out var hex);
 
-            var bg = BrushFromHexOrDefault(hex, MediaBrushes.Transparent);
-            var fg = GetTextBrushForBackground(bg);
+            var fg = GetTextBrushForBackground(BrushFromHexOrDefault(hex, MediaBrushes.Transparent));
+            var bg = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex, gradientMap.Contains(company)) ?? MediaBrushes.Transparent;
 
             return new WorkOrderRow
             {
