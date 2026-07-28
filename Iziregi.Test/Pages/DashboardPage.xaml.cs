@@ -3,6 +3,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -100,6 +101,12 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     {
         public string Value { get; set; } = "";
 
+        // ✅ Nombre de bons ayant cette valeur (28.07.2026, demande de Joe), affiché à côté
+        // de chaque case dans le popup de filtre plutôt qu'en compteurs permanents sur la
+        // page (trop de valeurs possibles pour Intervenants/Demandé par notamment).
+        public int Count { get; set; }
+        public string DisplayText => $"{Value}  ({Count})";
+
         private bool _isChecked = true;
         public bool IsChecked
         {
@@ -153,6 +160,15 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         _ => null
     };
 
+    // ✅ Libellés propres à chaque colonne date (28.07.2026, demande de Joe) plutôt qu'un
+    // générique "Renseigné/Non renseigné" pour toutes.
+    private static (string Filled, string Empty) GetDateFilterCountLabels(string columnKey) => columnKey switch
+    {
+        "DistributedDate" => ("Distribué", "Non distribué"),
+        "PerformedDate" => ("Effectué", "Non effectué"),
+        _ => ("Renseigné", "Non renseigné")
+    };
+
     private void ColumnFilterButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement fe || fe.Tag is not string columnKey) return;
@@ -171,6 +187,11 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             var hasRange = _activeDateRangeFilters.TryGetValue(columnKey, out var range);
             DateFromPicker.SelectedDate = hasRange ? range.From : null;
             DateToPicker.SelectedDate = hasRange ? range.To : null;
+
+            var withDate = _allWorkOrders.Count(w => GetDateValue(w, columnKey).HasValue);
+            var withoutDate = _allWorkOrders.Count - withDate;
+            var (filledLabel, emptyLabel) = GetDateFilterCountLabels(columnKey);
+            DateFilterCountsTextBlock.Text = $"{filledLabel}  ({withDate})    {emptyLabel}  ({withoutDate})";
         }
         else
         {
@@ -188,10 +209,14 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
                     .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
+            var counts = _allWorkOrders
+                .GroupBy(w => kind == ColumnKind.Status ? GetStatusLabel(w) : GetColumnValue(w, columnKey), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
             var active = _activeValueFilters.TryGetValue(columnKey, out var set) ? set : null;
 
             _filterPopupOptions = allValues
-                .Select(v => new FilterOption { Value = v, IsChecked = active == null || active.Contains(v) })
+                .Select(v => new FilterOption { Value = v, Count = counts.TryGetValue(v, out var c) ? c : 0, IsChecked = active == null || active.Contains(v) })
                 .ToList();
 
             FilterOptionsItemsControl.ItemsSource = _filterPopupOptions;
@@ -386,16 +411,11 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         RefreshBatchSelectionUi();
     }
 
-    private void ClearFilters_Click(object sender, RoutedEventArgs e)
-    {
-        ResetFiltersAndSortToDefault();
-        UpdateFilterButtonIndicators();
-        ApplyFilters();
-    }
-
     // ✅ État par défaut : Créé le décroissant, sans bordure bleue (24.07.2026, demande de Joe) —
-    // utilisé par "Effacer filtres" et par "Rafraîchir" (voir Refresh_Click), distinct d'un tri
-    // choisi explicitement (qui, lui, affiche la bordure même si c'est le même Créé le décroissant).
+    // utilisé par "Rafraîchir" (voir Refresh_Click), distinct d'un tri choisi explicitement
+    // (qui, lui, affiche la bordure même si c'est le même Créé le décroissant). Le bouton
+    // "Effacer filtres" séparé a été retiré le 28.07.2026 (redondant avec "Rafraîchir", qui
+    // fait tout ce qu'il faisait en plus de recharger les données).
     private void ResetFiltersAndSortToDefault()
     {
         _activeValueFilters.Clear();
@@ -760,6 +780,77 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
         // ✅ synchronise la bordure du preview avec la sélection
         UpdatePreviewBorderFromSelection();
+
+        UpdateDashboardCounters();
+    }
+
+    // ✅ Compteurs bons actifs/archivés + tâches en cours (28.07.2026, demande de Joe).
+    private void UpdateDashboardCounters()
+    {
+        try
+        {
+            if (ProjectComboBox?.SelectedItem is not Project selectedProject)
+            {
+                if (ActiveWorkOrdersCountRun != null) ActiveWorkOrdersCountRun.Text = "0";
+                if (ArchivedWorkOrdersCountRun != null) ArchivedWorkOrdersCountRun.Text = "0";
+                if (TasksInProgressCountRun != null) TasksInProgressCountRun.Text = "0";
+                return;
+            }
+
+            if (ActiveWorkOrdersCountRun != null)
+                ActiveWorkOrdersCountRun.Text = _allWorkOrders.Count.ToString(CultureInfo.InvariantCulture);
+
+            if (ArchivedWorkOrdersCountRun != null)
+                ArchivedWorkOrdersCountRun.Text = Db.GetArchivedWorkOrdersCount(selectedProject.Id).ToString(CultureInfo.InvariantCulture);
+
+            if (TasksInProgressCountRun != null)
+                TasksInProgressCountRun.Text = CountInProgressPlanningTasks(selectedProject.Id).ToString(CultureInfo.InvariantCulture);
+        }
+        catch { }
+    }
+
+    // ✅ Duplique volontairement le chemin du fichier tâches de PlanningPage.xaml.cs
+    // (GetProjectTasksFilePath), qui est privé à cette autre classe. Une tâche est
+    // considérée "en cours" si au moins une de ses colonnes contient quelque chose — Ref
+    // (numéro auto) et Done (case à cocher, pas du texte "écrit") sont volontairement
+    // exclus de ce test.
+    private sealed class DashboardTaskRowProbe
+    {
+        public string Company { get; set; } = "";
+        public string Building { get; set; } = "";
+        public string Floor { get; set; } = "";
+        public string Todo { get; set; } = "";
+        public string TodoDocumentXaml { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string Reserve { get; set; } = "";
+        public string Urgent { get; set; } = "";
+    }
+
+    private static int CountInProgressPlanningTasks(long projectId)
+    {
+        try
+        {
+            var filePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Iziregi", "Planning", $"planning-tasks-{projectId}.json");
+
+            if (!File.Exists(filePath)) return 0;
+
+            var json = File.ReadAllText(filePath);
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var rows = JsonSerializer.Deserialize<System.Collections.Generic.List<DashboardTaskRowProbe>>(json, opts) ?? new();
+
+            return rows.Count(r =>
+                !string.IsNullOrWhiteSpace(r.Company) ||
+                !string.IsNullOrWhiteSpace(r.Building) ||
+                !string.IsNullOrWhiteSpace(r.Floor) ||
+                !string.IsNullOrWhiteSpace(r.Todo) ||
+                !string.IsNullOrWhiteSpace(r.TodoDocumentXaml) ||
+                !string.IsNullOrWhiteSpace(r.Category) ||
+                !string.IsNullOrWhiteSpace(r.Reserve) ||
+                !string.IsNullOrWhiteSpace(r.Urgent));
+        }
+        catch { return 0; }
     }
 
     private void RefreshWorkOrders()
@@ -1329,17 +1420,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     }
 
     private void ViewWorkOrder_Click(object sender, RoutedEventArgs e)
-    {
-        if (!EnsureNotDirtyOrWarn()) return;
-
-        var wo = GetRowWorkOrder(sender) ?? GetSelectedWorkOrder(WorkOrdersGrid);
-        if (wo == null) return;
-
-        OpenWorkOrderWindow(wo, createMode: false);
-        RefreshAll();
-    }
-
-    private void EditWorkOrder_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureNotDirtyOrWarn()) return;
 

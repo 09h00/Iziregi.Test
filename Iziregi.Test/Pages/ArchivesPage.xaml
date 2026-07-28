@@ -401,7 +401,7 @@
 							<ItemsControl x:Name="FilterOptionsItemsControl">
 								<ItemsControl.ItemTemplate>
 									<DataTemplate>
-										<CheckBox Content="{Binding Value}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
+										<CheckBox Content="{Binding DisplayText}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
 									</DataTemplate>
 								</ItemsControl.ItemTemplate>
 							</ItemsControl>
@@ -411,6 +411,16 @@
 					<!-- ✅ Colonnes date (24.07.2026, demande de Joe) : tri croissant/décroissant à
 					     cocher (mutuellement exclusifs) + sélection d'une plage de dates (début/fin). -->
 					<StackPanel x:Name="DateFilterPanel" Visibility="Collapsed">
+						<!-- ✅ Compteurs (28.07.2026, demande de Joe) : équivalent pour les colonnes
+						     date des comptages par valeur des autres colonnes (une date étant
+						     quasi toujours unique, on compte "renseigné" vs "non renseigné", avec
+						     un libellé propre à chaque colonne). -->
+						<TextBlock x:Name="DateFilterCountsTextBlock"
+						           Foreground="#374151"
+						           FontSize="12"
+						           TextWrapping="Wrap"
+						           Margin="0,0,0,8"/>
+
 						<CheckBox x:Name="DateAscCheckBox" Content="Trier par ordre croissant" Click="DateAscCheckBox_Click" Margin="0,0,0,4"/>
 						<CheckBox x:Name="DateDescCheckBox" Content="Trier par ordre décroissant" Click="DateDescCheckBox_Click" Margin="0,0,0,8"/>
 
@@ -451,7 +461,7 @@
 
 			<Grid>
 	<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-		<TextBlock Text="Archives"
+		<TextBlock Text="Archives des bons"
 		           FontSize="18"
 		           FontWeight="SemiBold"
 		           Foreground="#111827"

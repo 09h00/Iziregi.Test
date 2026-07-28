@@ -542,13 +542,23 @@
     <Grid Background="White" ClipToBounds="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <!-- ✅ Titre de page (28.07.2026, demande de Joe : même police que les autres pages,
+             ex. "Comptabilité"). -->
+        <TextBlock Grid.Row="0"
+                   Text="Planning"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Foreground="#111827"
+                   Margin="0,0,0,12"/>
+
         <!-- ✅ Sélection de semaine + dates déplacées ici (19.07.2026, 2e demande de Joe) :
-             cette Row="0" est HORS du ScrollViewer (voir MainScrollViewer, Row="1") -> zone
+             cette Row="1" est HORS du ScrollViewer (voir MainScrollViewer, Row="2") -> zone
              figée, toujours visible au scroll, même ligne que "Générer PDF". -->
-        <Grid Grid.Row="0" Margin="0,0,0,12">
+        <Grid Grid.Row="1" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -621,7 +631,7 @@
                     Click="ExportPdfButton_Click"/>
         </Grid>
 
-        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -654,6 +664,17 @@
 							           FontWeight="SemiBold"
 							           Foreground="#111827"
 							           DockPanel.Dock="Left"/>
+
+                            <!-- ✅ Ignore temporairement le filtre par semaine (28.07.2026, demande
+                                 de Joe) : pour retrouver/nettoyer des tâches devenues invisibles
+                                 dans toutes les semaines (résidu d'un bug de date corrigé depuis,
+                                 voir TaskRowVisibleInCurrentWeek). -->
+                            <CheckBox x:Name="ShowAllWeeksTasksCheckBox"
+                                      Content="Afficher toutes les semaines"
+                                      DockPanel.Dock="Left"
+                                      Margin="16,0,0,0"
+                                      VerticalAlignment="Center"
+                                      Click="ShowAllWeeksTasksCheckBox_Click"/>
 
                             <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
                                  (mémorisé entre les sessions via Db.GetTasksVisibleColumns/
@@ -974,7 +995,8 @@
                                                 <CheckBox x:Name="TaskDoneCheckBox"
 												          HorizontalAlignment="Center"
 												          VerticalAlignment="Center"
-												          IsChecked="{Binding Done, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+												          IsChecked="{Binding Done, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+												          Click="TaskDoneCheckBox_Click"/>
                                             </Border>
                                             <DataTemplate.Triggers>
                                                 <DataTrigger Binding="{Binding Done}" Value="True">
@@ -1530,42 +1552,74 @@
                                     CornerRadius="8"
                                     Padding="10"
                                     Effect="{StaticResource CardShadowEffect}">
-                                <StackPanel Width="230">
+                                <StackPanel Width="360">
                                     <TextBlock Text="Images favorites" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
                                     <TextBlock Text="Clique une image pour l'ajouter au plan."
                                                FontSize="10" Foreground="#6B7280" Margin="0,0,0,6"/>
-                                    <ItemsControl x:Name="ImageFavoritesItemsControl" ItemsSource="{Binding ImageFavorites}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <WrapPanel Orientation="Horizontal"/>
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Grid Margin="3" Width="56" Height="56">
-                                                    <Border BorderBrush="#D1D5DB"
-                                                            BorderThickness="1"
-                                                            CornerRadius="4"
-                                                            Background="#FAFAFA">
-                                                        <Image Source="{Binding ImageSource}"
-                                                               Stretch="UniformToFill"
-                                                               Cursor="Hand"
-                                                               MouseLeftButtonUp="ImageFavoriteThumbnail_MouseLeftButtonUp"/>
-                                                    </Border>
-                                                    <Button Content="✕"
-                                                            Width="16" Height="16"
-                                                            Padding="0"
-                                                            FontSize="9"
-                                                            ToolTip="Retirer des favoris"
-                                                            HorizontalAlignment="Right"
-                                                            VerticalAlignment="Top"
-                                                            Margin="0,-4,-4,0"
-                                                            Style="{StaticResource SmallBlackButtonStyle}"
-                                                            Click="ImageFavoriteRemove_Click"/>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                    <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl x:Name="ImageFavoritesItemsControl" ItemsSource="{Binding ImageFavorites}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel Orientation="Horizontal"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="4" Width="84" Height="104">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="84"/>
+                                                            <RowDefinition Height="*"/>
+                                                        </Grid.RowDefinitions>
+
+                                                        <Border Grid.Row="0"
+                                                                BorderBrush="#D1D5DB"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Background="#FAFAFA">
+                                                            <Image Source="{Binding ImageSource}"
+                                                                   Stretch="UniformToFill"
+                                                                   Cursor="Hand"
+                                                                   MouseLeftButtonUp="ImageFavoriteThumbnail_MouseLeftButtonUp"/>
+                                                        </Border>
+
+                                                        <!-- ✅ Nom du favori (28.07.2026, demande de Joe) : pour les distinguer
+                                                             une fois réduits en vignette, sans dépendre du seul visuel. -->
+                                                        <TextBlock Grid.Row="1"
+                                                                   Text="{Binding Name}"
+                                                                   FontSize="10"
+                                                                   Foreground="#374151"
+                                                                   TextAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   TextWrapping="Wrap"
+                                                                   MaxHeight="28"
+                                                                   Margin="0,2,0,0"/>
+
+                                                        <StackPanel Grid.Row="0"
+                                                                    Orientation="Horizontal"
+                                                                    HorizontalAlignment="Right"
+                                                                    VerticalAlignment="Top"
+                                                                    Margin="0,-5,-5,0">
+                                                            <Button Content="✎"
+                                                                    Width="18" Height="18"
+                                                                    Padding="0"
+                                                                    FontSize="9"
+                                                                    Margin="0,0,2,0"
+                                                                    ToolTip="Renommer"
+                                                                    Style="{StaticResource SmallBlackButtonStyle}"
+                                                                    Click="ImageFavoriteRename_Click"/>
+                                                            <Button Content="✕"
+                                                                    Width="18" Height="18"
+                                                                    Padding="0"
+                                                                    FontSize="10"
+                                                                    ToolTip="Retirer des favoris"
+                                                                    Style="{StaticResource SmallBlackButtonStyle}"
+                                                                    Click="ImageFavoriteRemove_Click"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
                                 </StackPanel>
                             </Border>
                         </Popup>

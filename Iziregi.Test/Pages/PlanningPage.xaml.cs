@@ -20,6 +20,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using System.Xml;
+using Microsoft.VisualBasic;
 using Iziregi.Test.Data;
 using Iziregi.Test.Services;
 
@@ -92,6 +93,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private readonly ObservableCollection<TaskRow> _taskRows = new();
     private readonly ObservableCollection<PlanningRow> _planningRows = new();
+
+    // ✅ Vue filtrée de _taskRows (28.07.2026, demande de Joe) : une tâche "Effectué" ne se
+    // reporte plus dans les semaines SUIVANT celle où elle a été cochée (voir
+    // TaskRowVisibleInCurrentWeek). _taskRows reste la source de vérité complète (ajout/
+    // suppression/édition inchangés) ; seul l'affichage de TasksDataGrid passe par cette vue.
+    private ICollectionView? _taskRowsView;
 
     // ✅ jour de départ configurable (par l’utilisateur)
     private DayOfWeek _weekStartDay = DayOfWeek.Monday;
@@ -250,6 +257,87 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         }
     }
 
+    // ✅ Voir le champ _taskRowsView : filtre les tâches "Effectué" hors des semaines qui
+    // suivent celle où elles ont été terminées (28.07.2026, demande de Joe). Reconstruit la
+    // vue à chaque appel plutôt que de réutiliser une instance mise en cache : plus robuste
+    // face aux détachements/réattachements répétés d'ItemsSource déjà pratiqués ailleurs sur
+    // cette page (RecreateDataGridItemsSources).
+    private void AttachTaskRowsView()
+    {
+        // ✅ PAS de IsLiveFiltering (28.07.2026) : ça re-filtre/revirtualise la grille EN
+        // PLEIN MILIEU d'une interaction utilisateur dès qu'une propriété suivie change
+        // (ex. cocher "Effectué"), ce qui pouvait décaler les conteneurs de lignes recyclés
+        // par le DataGrid et faire "sauter" la case à cocher de sélection d'une autre ligne
+        // (bug signalé par Joe : "je ne peux cliquer que dans certaines cases"). Le filtre
+        // n'est donc réévalué qu'à des moments précis et maîtrisés : changement de semaine
+        // (ApplyPlanningHeadersAndSyncDatePickers) et coche "Effectué" (TaskDoneCheckBox_Click).
+        var view = CollectionViewSource.GetDefaultView(_taskRows);
+        view.Filter = TaskRowVisibleInCurrentWeek;
+
+        _taskRowsView = view;
+        TasksDataGrid.ItemsSource = view;
+    }
+
+    private bool TaskRowVisibleInCurrentWeek(object obj)
+    {
+        if (obj is not TaskRow r) return true;
+
+        var viewedWeekStart = SnapToStartOfWeek(_startDay, _weekStartDay);
+
+        // ✅ Borne basse (28.07.2026, demande de Joe) : pas de report dans les semaines
+        // PRÉCÉDANT celle où la tâche a été créée. Null (tâches créées avant cet ajout) ->
+        // pas de borne basse, comportement historique conservé.
+        if (r.CreatedWeekStart.HasValue && viewedWeekStart < SnapToStartOfWeek(r.CreatedWeekStart.Value, _weekStartDay))
+            return false;
+
+        // ✅ Borne haute : pas de report dans les semaines SUIVANT celle où "Effectué" a été
+        // coché.
+        if (r.Done && r.DoneAt.HasValue)
+        {
+            var doneWeekStart = SnapToStartOfWeek(r.DoneAt.Value, _weekStartDay);
+
+            // ✅ Garde-fou (28.07.2026, résidu de bug constaté : "invisible dans toutes les
+            // semaines") : DoneAt ne peut pas être antérieur à CreatedWeekStart (une tâche ne
+            // peut pas être terminée avant d'avoir été créée) -- si des données anciennes/
+            // incohérentes existent malgré tout, on ne laisse jamais la borne haute passer
+            // sous la borne basse, ce qui rendrait la tâche mathématiquement invisible
+            // partout.
+            if (r.CreatedWeekStart.HasValue)
+            {
+                var createdWeekStart = SnapToStartOfWeek(r.CreatedWeekStart.Value, _weekStartDay);
+                if (doneWeekStart < createdWeekStart) doneWeekStart = createdWeekStart;
+            }
+
+            if (viewedWeekStart > doneWeekStart) return false;
+        }
+
+        return true;
+    }
+
+    // ✅ Bascule "Afficher toutes les semaines" (28.07.2026, demande de Joe) : désactive
+    // temporairement le filtre par semaine pour voir/gérer absolument toutes les tâches,
+    // y compris celles devenues invisibles partout à cause d'un bug de date déjà corrigé.
+    private void ShowAllWeeksTasksCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (_taskRowsView == null) return;
+
+        _taskRowsView.Filter = ShowAllWeeksTasksCheckBox.IsChecked == true
+            ? null
+            : TaskRowVisibleInCurrentWeek;
+    }
+
+    // ✅ Recalcule la visibilité "Effectué" au moment précis du clic plutôt que via un
+    // rafraîchissement automatique (IsLiveFiltering) qui perturbait d'autres cases de la
+    // grille en cours d'interaction (voir commentaire dans AttachTaskRowsView). Différé via
+    // Dispatcher pour laisser le binding TwoWay de la case terminer sa mise à jour d'abord.
+    private void TaskDoneCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try { _taskRowsView?.Refresh(); } catch { }
+        }), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
     // Force re-création des ItemsSource des DataGrids pour reconstruire les cellules
     public void RecreateDataGridItemsSources()
     {
@@ -265,7 +353,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             // petite pause d'UI pour s'assurer que WPF détruit les containers
             try { System.Threading.Thread.Sleep(10); } catch { }
 
-            TasksDataGrid.ItemsSource = _taskRows;
+            AttachTaskRowsView();
             PlanningDataGrid.ItemsSource = _planningRows;
 
             TasksDataGrid.Dispatcher?.Invoke(() => { TasksDataGrid.UpdateLayout(); });
@@ -425,6 +513,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     private sealed class ImageFavoriteState
     {
         public string FilePath { get; set; } = "";
+        public string Name { get; set; } = "";
     }
 
     private sealed class ImageFavoritesBankState
@@ -482,7 +571,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                     bmp.EndInit();
                     bmp.Freeze();
 
-                    ImageFavorites.Add(new ImageFavoriteItem { FilePath = path, ImageSource = bmp });
+                    ImageFavorites.Add(new ImageFavoriteItem { FilePath = path, ImageSource = bmp, Name = f?.Name ?? "" });
                 }
                 catch { }
             }
@@ -507,7 +596,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             var state = new ImageFavoritesBankState
             {
                 Version = 1,
-                Favorites = ImageFavorites.Select(f => new ImageFavoriteState { FilePath = f?.FilePath ?? "" }).ToList()
+                Favorites = ImageFavorites.Select(f => new ImageFavoriteState { FilePath = f?.FilePath ?? "", Name = f?.Name ?? "" }).ToList()
             };
 
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
@@ -602,15 +691,17 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             bmp.EndInit();
             bmp.Freeze();
 
-            ImageFavorites.Add(new ImageFavoriteItem { FilePath = destPath, ImageSource = bmp });
+            var newFavorite = new ImageFavoriteItem { FilePath = destPath, ImageSource = bmp };
+            ImageFavorites.Add(newFavorite);
             SaveImageFavoritesToDisk();
 
-            // ✅ Popup de confirmation (19.07.2026, demande de Joe) — déclenché uniquement
-            // par un clic explicite sur le bouton, donc pas concerné par le piège des
-            // popups modales au démarrage (voir CLAUDE.md).
-            System.Windows.MessageBox.Show(
-                "Image enregistrée dans les favoris.",
-                "Favoris", MessageBoxButton.OK, MessageBoxImage.Information);
+            // ✅ Nom demandé directement à l'ajout (28.07.2026, demande de Joe), plutôt
+            // qu'uniquement via le bouton "✎" après coup — remplace l'ancien popup de
+            // simple confirmation (19.07.2026), cette boîte de dialogue sert déjà de
+            // confirmation visuelle de l'ajout.
+            var name = Interaction.InputBox("Nom de l'image (facultatif) :", "Ajouter aux favoris", "").Trim();
+            if (!string.IsNullOrWhiteSpace(name))
+                TryApplyFavoriteName(newFavorite, name);
         }
         catch (Exception ex)
         {
@@ -664,6 +755,45 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             ImageFavorites.Remove(fav);
             SaveImageFavoritesToDisk();
         }
+    }
+
+    // ✅ Nommer les favoris (28.07.2026, demande de Joe) : pour mieux les distinguer dans le
+    // popup une fois réduits en vignette. Même InputBox que "Renommer" dans ListsPage.xaml.cs.
+    private void ImageFavoriteRename_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not ImageFavoriteItem fav) return;
+
+        var newName = Interaction.InputBox("Nom de l'image :", "Renommer", fav.Name).Trim();
+        if (string.IsNullOrWhiteSpace(newName)) return;
+
+        TryApplyFavoriteName(fav, newName);
+    }
+
+    // ✅ Comme l'enregistrement d'un fichier (28.07.2026, demande de Joe) : si un autre
+    // favori porte déjà ce nom, prévient et demande confirmation avant de le remplacer
+    // (l'ancien favori est retiré de la liste, mais son fichier reste sur le disque, comme
+    // pour "Retirer des favoris" — voir ImageFavoriteRemove_Click).
+    private bool TryApplyFavoriteName(ImageFavoriteItem target, string name)
+    {
+        var conflict = ImageFavorites.FirstOrDefault(f =>
+            !ReferenceEquals(f, target) &&
+            !string.IsNullOrWhiteSpace(f.Name) &&
+            string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        if (conflict != null)
+        {
+            var result = System.Windows.MessageBox.Show(
+                $"Ce nom existe déjà ({name}). Voulez-vous le remplacer ?",
+                "Favoris", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes) return false;
+
+            ImageFavorites.Remove(conflict);
+        }
+
+        target.Name = name;
+        SaveImageFavoritesToDisk();
+        return true;
     }
 
     // ============================================================
@@ -2362,7 +2492,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             var nextRef = (_taskRows.Count == 0)
                 ? 1
                 : _taskRows.Select(x => int.TryParse(x.Ref, out var n) ? n : 0).DefaultIfEmpty(0).Max() + 1;
-            _taskRows.Add(new TaskRow { Ref = nextRef.ToString() });
+            // ✅ Semaine de création (28.07.2026, demande de Joe) : symétrique de DoneAt, une
+            // tâche créée en semaine 31 ne se répercute plus dans les semaines PRÉCÉDENTES
+            // (voir TaskRowVisibleInCurrentWeek). Null pour les tâches déjà existantes avant
+            // cet ajout -- elles gardent leur comportement historique (visibles partout).
+            _taskRows.Add(new TaskRow { Ref = nextRef.ToString(), CreatedWeekStart = SnapToStartOfWeek(_startDay, _weekStartDay) });
         }
 
         TasksDataGrid.ScrollIntoView(_taskRows.Last());
@@ -2377,6 +2511,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         if (!_isPageActive) return;
 
+        // ✅ Fix (28.07.2026, demande de Joe : "parfois elle supprime, parfois non") : sans
+        // valider la cellule/ligne en cours d'édition d'abord, supprimer une ligne pendant
+        // que le DataGrid est encore en mode édition peut échouer silencieusement pour
+        // certaines lignes selon l'état exact — même précaution que SaveProjectTasks().
+        try { TasksDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); TasksDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+
         var toRemove = _taskRows.Where(r => r.IsSelected).ToList();
 
         if (toRemove.Count == 0)
@@ -2384,6 +2524,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             toRemove = TasksDataGrid.SelectedItems.Cast<object>().OfType<TaskRow>().ToList();
             if (toRemove.Count == 0 && TasksDataGrid.SelectedItem is TaskRow one) toRemove.Add(one);
         }
+
+        if (toRemove.Count == 0) return;
 
         foreach (var r in toRemove)
             _taskRows.Remove(r);
@@ -2832,7 +2974,13 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                         Category = r.Category,
                         Reserve = r.Reserve,
                         Urgent = r.Urgent,
-                        Done = r.Done
+                        // ✅ Done déclenche un effet de bord (met DoneAt = DateTime.Now) — DoneAt
+                        // DOIT être réassigné après coup pour restaurer la vraie date sauvegardée
+                        // plutôt que la date du jour (l'ordre du bloc d'initialisation suit l'ordre
+                        // d'écriture ci-dessous, pas l'ordre de déclaration de la classe).
+                        Done = r.Done,
+                        DoneAt = r.DoneAt,
+                        CreatedWeekStart = r.CreatedWeekStart
                     });
 
                 return;
@@ -2905,7 +3053,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Category = r.Category,
                 Reserve = r.Reserve,
                 Urgent = r.Urgent,
-                Done = r.Done
+                Done = r.Done,
+                DoneAt = r.DoneAt,
+                CreatedWeekStart = r.CreatedWeekStart
             }).ToList();
 
             var json = JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true });
@@ -3073,6 +3223,14 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     private void ApplyPlanningHeadersAndSyncDatePickers()
     {
         if (!_isPageActive) return;
+
+        // ✅ Repère statique (28.07.2026, demande de Joe) : voir TaskRow.CurrentViewedWeekStart.
+        TaskRow.CurrentViewedWeekStart = SnapToStartOfWeek(_startDay, _weekStartDay);
+
+        // ✅ La semaine affichée (_startDay) a pu changer avant cet appel (navigation semaine
+        // précédente/suivante, sélecteur de date...) : réévalue quelles tâches "Effectué"
+        // doivent rester masquées pour cette semaine (28.07.2026, demande de Joe).
+        try { _taskRowsView?.Refresh(); } catch { }
 
         // 0 = Entreprise
         // 1 = D1
@@ -3689,7 +3847,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             _activeRtb = null;
         };
 
-        TasksDataGrid.ItemsSource = _taskRows;
+        AttachTaskRowsView();
         PlanningDataGrid.ItemsSource = _planningRows;
         // Forcer récréation des brushes lors du changement de projet :
         // on s'assure que les converters reçoivent une nouvelle instance du dictionnaire
@@ -3937,9 +4095,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         private string _filePath = "";
         private ImageSource? _imageSource;
+        private string _name = "";
 
         public string FilePath { get => _filePath; set => SetField(ref _filePath, value); }
         public ImageSource? ImageSource { get => _imageSource; set => SetField(ref _imageSource, value); }
+        public string Name { get => _name; set => SetField(ref _name, value); }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -4001,6 +4161,25 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         private string _urgent = "";
         private bool _done;
         private bool _isSelected;
+        // ✅ Date à laquelle "Effectué" a été coché (28.07.2026, demande de Joe) : sert à ne
+        // plus reporter la tâche dans les semaines SUIVANT celle où elle a été terminée (voir
+        // TaskRowVisibleInCurrentWeek). Effacée si la case est décochée (redevient "en cours",
+        // visible partout comme avant).
+        private DateTime? _doneAt;
+
+        // ✅ Semaine actuellement consultée dans le Planning (28.07.2026, demande de Joe :
+        // "tâche disparue") — maintenu à jour par PlanningPage (ApplyPlanningHeadersAndSync
+        // DatePickers) à chaque changement de semaine. "Effectué" peut être coché en
+        // consultant N'IMPORTE QUELLE semaine (passée ou future), pas forcément celle
+        // d'aujourd'hui : DoneAt doit refléter CETTE semaine-là, pas la date réelle du jour,
+        // sinon la tâche pouvait disparaître immédiatement (comparée à la mauvaise semaine).
+        public static DateTime? CurrentViewedWeekStart;
+
+        // ✅ Semaine de création (28.07.2026, demande de Joe) : symétrique de DoneAt — une
+        // tâche ne se répercute plus dans les semaines PRÉCÉDANT celle-ci non plus. Null pour
+        // les tâches créées avant cet ajout (comportement historique conservé : visibles
+        // partout, y compris dans le passé).
+        private DateTime? _createdWeekStart;
 
         public string Ref { get => _ref; set => SetField(ref _ref, value); }
         public string Company { get => _company; set => SetField(ref _company, value); }
@@ -4011,6 +4190,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string Category { get => _category; set => SetField(ref _category, value); }
         public string Reserve { get => _reserve; set => SetField(ref _reserve, value); }
         public string Urgent { get => _urgent; set => SetField(ref _urgent, value); }
+        public DateTime? CreatedWeekStart { get => _createdWeekStart; set => SetField(ref _createdWeekStart, value); }
 
         // ✅ Une tâche marquée "Effectué" n'a plus besoin d'indicateur d'urgence — on
         // l'efface automatiquement dès que la case est cochée.
@@ -4019,10 +4199,20 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             get => _done;
             set
             {
-                if (SetField(ref _done, value) && value)
+                if (!SetField(ref _done, value)) return;
+                if (value)
+                {
                     Urgent = "";
+                    DoneAt = CurrentViewedWeekStart ?? DateTime.Now;
+                }
+                else
+                {
+                    DoneAt = null;
+                }
             }
         }
+
+        public DateTime? DoneAt { get => _doneAt; set => SetField(ref _doneAt, value); }
 
         // ✅ Sélection via case à cocher (colonne de gauche) pour suppression multiple — non persistée.
         public bool IsSelected { get => _isSelected; set => SetField(ref _isSelected, value); }
@@ -4107,6 +4297,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string Reserve { get; set; } = "";
         public string Urgent { get; set; } = "";
         public bool Done { get; set; }
+        public DateTime? DoneAt { get; set; }
+        public DateTime? CreatedWeekStart { get; set; }
     }
 
     private sealed class PlanningRowState

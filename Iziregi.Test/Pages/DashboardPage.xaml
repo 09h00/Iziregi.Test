@@ -147,6 +147,41 @@
             <Setter Property="Padding" Value="0"/>
         </Style>
 
+        <!-- ✅ IMPORTANT : pas de remplissage bleu dans les cellules à la sélection. Nommé
+             (x:Key) pour pouvoir être réutilisé via BasedOn par des CellStyle spécifiques à
+             une colonne (ex. colonne Sélection) SANS perdre cette règle (28.07.2026 : bug
+             réapparu car un CellStyle par colonne, sans BasedOn, remplace entièrement celui-
+             ci plutôt que de s'y ajouter). -->
+        <Style x:Key="GridCellBaseStyle" TargetType="DataGridCell">
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="BorderBrush" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="#111827"/>
+                </Trigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="Foreground" Value="#111827"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ✅ En-têtes gras/noir/bordure (même raison que GridCellBaseStyle ci-dessus : nommé
+             pour être réutilisable via BasedOn sans perdre ce style au passage). -->
+        <Style x:Key="GridColumnHeaderBaseStyle" TargetType="DataGridColumnHeader">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
         <!-- DataGrid -->
         <Style x:Key="GridStyle" TargetType="DataGrid">
             <Setter Property="AutoGenerateColumns" Value="False"/>
@@ -201,42 +236,10 @@
             </Setter>
 
             <!-- ✅ IMPORTANT : pas de remplissage bleu dans les cellules -->
-            <Setter Property="CellStyle">
-                <Setter.Value>
-                    <Style TargetType="DataGridCell">
-                        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                        <Setter Property="Padding" Value="6,0"/>
-                        <Setter Property="BorderBrush" Value="#E5E7EB"/>
-                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                        <Setter Property="Background" Value="Transparent"/>
-                        <Style.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="Foreground" Value="#111827"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter Property="Foreground" Value="#111827"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </Setter.Value>
-            </Setter>
+            <Setter Property="CellStyle" Value="{StaticResource GridCellBaseStyle}"/>
 
             <!-- ✅ En-têtes : gras + noir + bordure NOIRE -->
-            <Setter Property="ColumnHeaderStyle">
-                <Setter.Value>
-                    <Style TargetType="DataGridColumnHeader">
-                        <Setter Property="VerticalContentAlignment" Value="Center"/>
-                        <Setter Property="HorizontalContentAlignment" Value="Center"/>
-                        <Setter Property="Padding" Value="6,0"/>
-                        <Setter Property="BorderBrush" Value="#D1D5DB"/>
-                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                        <Setter Property="Foreground" Value="#111827"/>
-                        <Setter Property="FontWeight" Value="Bold"/>
-                    </Style>
-                </Setter.Value>
-            </Setter>
+            <Setter Property="ColumnHeaderStyle" Value="{StaticResource GridColumnHeaderBaseStyle}"/>
         </Style>
 
         <!-- Texte statut (base) -->
@@ -415,8 +418,18 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
+
+        <!-- ✅ Titre de page (28.07.2026, demande de Joe : même police que les autres pages,
+             ex. "Comptabilité"). -->
+        <TextBlock Grid.Row="0"
+                   Text="Tableau de bord"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Foreground="#111827"
+                   Margin="4,0,0,10"/>
 
         <!-- ✅ Popup de filtre façon Excel, porté depuis Archives (24.07.2026, demande de Joe). -->
         <Popup x:Name="ColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
@@ -441,7 +454,7 @@
                             <ItemsControl x:Name="FilterOptionsItemsControl">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <CheckBox Content="{Binding Value}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
+                                        <CheckBox Content="{Binding DisplayText}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -449,6 +462,16 @@
                     </StackPanel>
 
                     <StackPanel x:Name="DateFilterPanel" Visibility="Collapsed">
+                        <!-- ✅ Compteurs (28.07.2026, demande de Joe) : équivalent pour les colonnes
+                             date des comptages par valeur des autres colonnes (une date étant
+                             quasi toujours unique, on compte "renseigné" vs "non renseigné", avec
+                             un libellé propre à chaque colonne). -->
+                        <TextBlock x:Name="DateFilterCountsTextBlock"
+                                   Foreground="#374151"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8"/>
+
                         <CheckBox x:Name="DateAscCheckBox" Content="Trier par ordre croissant" Click="DateAscCheckBox_Click" Margin="0,0,0,4"/>
                         <CheckBox x:Name="DateDescCheckBox" Content="Trier par ordre décroissant" Click="DateDescCheckBox_Click" Margin="0,0,0,8"/>
 
@@ -476,7 +499,7 @@
         </Popup>
 
         <!-- BARRE COMPACTE -->
-        <Border Grid.Row="0"
+        <Border Grid.Row="1"
                 Background="White"
                 BorderBrush="#E5E7EB"
                 BorderThickness="1"
@@ -517,55 +540,105 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="220"/>
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="122"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Ligne 1 : Bons actifs + actions ... Nom, Adresse -->
-                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left">
                         <TextBlock Text="Bons actifs"
-                                   FontSize="18"
+                                   FontSize="13"
                                    FontWeight="SemiBold"
                                    Foreground="#111827"
-                                   Margin="0,0,10,0"/>
+                                   HorizontalAlignment="Left"
+                                   Margin="0,0,0,6"/>
 
-                        <Button x:Name="NewWorkOrderTopButton"
-                                Content="+ Nouveau bon"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                Click="NewWorkOrder_Click"
-                                VerticalContentAlignment="Center"
-                                HorizontalContentAlignment="Center"
-                                Padding="10,0"
-                                Margin="0,0,6,0"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="NewWorkOrderTopButton"
+                                    Content="+ Nouveau bon"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="NewWorkOrder_Click"
+                                    VerticalContentAlignment="Center"
+                                    HorizontalContentAlignment="Center"
+                                    Padding="10,0"
+                                    Margin="0,0,6,0"/>
 
-                        <Button x:Name="ArchiveSelectionButton"
-                                Content="Archiver sélection"
-                                Style="{StaticResource ArchiveSmallButtonStyle}"
-                                Click="ArchiveSelection_Click"
-                                IsEnabled="False"
-                                Margin="0,0,6,0"/>
+                            <Button x:Name="ArchiveSelectionButton"
+                                    Content="Archiver sélection"
+                                    Style="{StaticResource ArchiveSmallButtonStyle}"
+                                    Click="ArchiveSelection_Click"
+                                    IsEnabled="False"
+                                    Margin="0,0,6,0"/>
 
-                        <Button x:Name="TrashSelectionButton"
-                                Content="Corbeille sélection"
-                                Style="{StaticResource DangerSmallButtonStyle}"
-                                Click="TrashSelection_Click"
-                                IsEnabled="False"
-                                Margin="0,0,6,0"/>
+                            <Button x:Name="TrashSelectionButton"
+                                    Content="Déplacer dans la corbeille"
+                                    Style="{StaticResource DangerSmallButtonStyle}"
+                                    Click="TrashSelection_Click"
+                                    IsEnabled="False"
+                                    Margin="0,0,6,0"/>
 
-                        <Button x:Name="RefreshTopButton"
-                                Content="Rafraîchir"
-                                Style="{StaticResource SmallButtonStyle}"
-                                Click="Refresh_Click"
-                                Margin="0,0,6,0"/>
+                            <Button x:Name="RefreshTopButton"
+                                    Content="Rafraîchir"
+                                    Style="{StaticResource SmallButtonStyle}"
+                                    Click="Refresh_Click"/>
+                        </StackPanel>
+                    </StackPanel>
 
-                        <Button Content="Effacer filtres"
-                                Style="{StaticResource SmallButtonStyle}"
-                                Click="ClearFilters_Click"/>
+                    <!-- Ligne de séparation verticale entre "Bons actifs" et les compteurs -->
+                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                            Width="1"
+                            Background="Black"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Stretch"
+                            Margin="0,2,0,2"/>
+
+                    <!-- ✅ Compteurs (28.07.2026, demande de Joe) : colonne dédiée entre "Bons
+                         actifs" et "Banque de dossiers". Les 3 badges sont alignés (même
+                         largeur), le symbole "compteur" (jauge + aiguille, dessiné en
+                         vectoriel plutôt qu'un emoji ambigu selon les polices) est donc placé à
+                         gauche de la pile plutôt que dans le premier badge. Bons actifs/
+                         archivés + tâches en cours de la page Planning (une tâche "en cours" =
+                         au moins une info écrite dans une de ses colonnes, voir
+                         CountInProgressPlanningTasks). -->
+                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Top"
+                                Margin="16,0,16,0">
+                        <Grid Width="16" Height="16" Margin="0,7,8,0" VerticalAlignment="Top">
+                            <Ellipse Stroke="#111827" StrokeThickness="1.4" Fill="White"/>
+                            <Line X1="8" Y1="8" X2="11.5" Y2="4.5" Stroke="#111827" StrokeThickness="1.4"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Ellipse Width="3" Height="3" Fill="#111827"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Vertical">
+                            <Border Width="230" Background="#F3F4F6" CornerRadius="6" Padding="8,4" Margin="0,0,0,6">
+                                <TextBlock FontSize="14" Foreground="#111827">
+                                    <Run Text="Bons actifs : "/>
+                                    <Run x:Name="ActiveWorkOrdersCountRun" Text="0" FontWeight="SemiBold"/>
+                                </TextBlock>
+                            </Border>
+                            <Border Width="230" Background="#F3F4F6" CornerRadius="6" Padding="8,4" Margin="0,0,0,6">
+                                <TextBlock FontSize="14" Foreground="#111827">
+                                    <Run Text="Bons archivés : "/>
+                                    <Run x:Name="ArchivedWorkOrdersCountRun" Text="0" FontWeight="SemiBold"/>
+                                </TextBlock>
+                            </Border>
+                            <Border Width="230" Background="#DBEAFE" CornerRadius="6" Padding="8,4">
+                                <TextBlock FontSize="14" Foreground="#111827">
+                                    <Run Text="Tâches planning en cours : "/>
+                                    <Run x:Name="TasksInProgressCountRun" Text="0" FontWeight="SemiBold"/>
+                                </TextBlock>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- ✅ Dossier, sur une seule colonne, disposé comme dans les bons/PDF -->
-                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="2" VerticalAlignment="Top">
+                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="4" VerticalAlignment="Top">
                         <TextBlock x:Name="ProjectNameEditTextBox"
                                    FontSize="14"
                                    FontWeight="SemiBold"
@@ -590,8 +663,8 @@
                                    Margin="0,12,0,0"/>
                     </StackPanel>
 
-                    <!-- Ligne de séparation verticale entre boutons/filtres et infos dossier -->
-                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                    <!-- Ligne de séparation verticale entre les compteurs et infos dossier -->
+                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="3"
                             Width="1"
                             Background="Black"
                             HorizontalAlignment="Center"
@@ -687,7 +760,7 @@
                     <!-- ✅ Accès Banque de projets : en haut à droite -->
                     <Button x:Name="ManageProjectsButton"
                         Grid.Row="0"
-                        Grid.Column="4"
+                        Grid.Column="6"
                         Width="122"
                         Height="48"
                         Style="{StaticResource ProjectBankButtonStyle}"
@@ -712,7 +785,7 @@
         </Border>
 
         <!-- TABLEAU DE BORD -->
-        <Border Grid.Row="1"
+        <Border Grid.Row="2"
                 Background="White"
                 BorderBrush="#E5E7EB"
                 BorderThickness="1"
@@ -731,7 +804,24 @@
                     <DataGrid.Columns>
 
                         <!-- Sélection -->
-                        <DataGridTemplateColumn Width="28" IsReadOnly="True">
+                        <DataGridTemplateColumn Width="24" IsReadOnly="True" CanUserSort="False">
+                            <!-- ✅ Centre explicitement le contenu de la cellule (28.07.2026, demande de
+                                 Joe) : sans ça, DataGridCell garde son alignement par défaut et la case
+                                 à cocher reste collée à gauche même si elle a elle-même Center. -->
+                            <DataGridTemplateColumn.CellStyle>
+                                <Style TargetType="DataGridCell" BasedOn="{StaticResource GridCellBaseStyle}">
+                                    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                </Style>
+                            </DataGridTemplateColumn.CellStyle>
+                            <!-- ✅ Centre aussi la case "tout sélectionner" de l'en-tête (28.07.2026,
+                                 demande de Joe) : le CellStyle ci-dessus ne s'applique qu'aux cellules
+                                 de données, pas à l'en-tête de colonne. -->
+                            <DataGridTemplateColumn.HeaderStyle>
+                                <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridColumnHeaderBaseStyle}">
+                                    <Setter Property="Padding" Value="0"/>
+                                </Style>
+                            </DataGridTemplateColumn.HeaderStyle>
                             <DataGridTemplateColumn.HeaderTemplate>
                                 <DataTemplate>
                                     <CheckBox x:Name="SelectAllWorkOrdersCheckBox"
@@ -777,7 +867,7 @@
 
                         <!-- Demandé par -->
                         <DataGridTextColumn Width="SizeToCells"
-                                            MinWidth="90"
+                                            MinWidth="94"
                                             Binding="{Binding RequestedBy}"
                                             ElementStyle="{StaticResource GridTextCellStyle}"
                                             IsReadOnly="True"
@@ -1215,28 +1305,20 @@
                         </DataGridTemplateColumn>
 
                         <!-- Actions -->
-                        <DataGridTemplateColumn Header="Actions" Width="112" IsReadOnly="True">
+                        <DataGridTemplateColumn Header="Actions" Width="64" IsReadOnly="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button ToolTip="Modifier"
-                                                Style="{StaticResource SmallButtonStyle}"
-                                                Click="EditWorkOrder_Click"
-                                                Margin="0,0,4,0">
-                                            <Path Data="{StaticResource IconEditGeometry}"
-                                                  Width="12" Height="12" Stretch="Uniform"
-                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                                        </Button>
                                         <Button ToolTip="Archiver"
                                                 Style="{StaticResource SmallButtonStyle}"
                                                 Click="ArchiveWorkOrder_Click"
-                                                Margin="0,0,4,0">
+                                                Margin="0,0,1,0">
                                             <Path Data="{StaticResource IconArchiveGeometry}"
                                                   Width="12" Height="12" Stretch="Uniform"
                                                   Fill="Transparent" StrokeThickness="1.3" StrokeLineJoin="Round"
                                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                                         </Button>
-                                        <Button ToolTip="Corbeille"
+                                        <Button ToolTip="Déplacer dans la corbeille"
                                                 Style="{StaticResource DangerSmallButtonStyle}"
                                                 Click="TrashWorkOrder_Click">
                                             <Path Data="{StaticResource IconTrashGeometry}"

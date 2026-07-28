@@ -1511,6 +1511,21 @@ public static class Db
         return rows.Select(MapWorkOrderRow).ToList();
     }
 
+    // ✅ Compteur Dashboard (28.07.2026, demande de Joe) : évite de charger toutes les
+    // colonnes (dont SignaturePng) juste pour compter.
+    public static int GetArchivedWorkOrdersCount(long projectId)
+    {
+        using var con = Open();
+        con.Open();
+
+        return con.ExecuteScalar<int>("""
+            SELECT COUNT(*) FROM WorkOrders
+            WHERE COALESCE(IsTrashed, 0) = 0
+              AND COALESCE(IsArchived, 0) = 1
+              AND ProjectId = @Id;
+        """, new { Id = projectId });
+    }
+
     public static List<WorkOrder> GetWorkOrdersForAccounting()
     {
         using var con = Open();

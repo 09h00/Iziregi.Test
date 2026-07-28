@@ -146,6 +146,12 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
     {
         public string Value { get; set; } = "";
 
+        // ✅ Nombre de bons ayant cette valeur (28.07.2026, demande de Joe), affiché à côté
+        // de chaque case dans le popup de filtre plutôt qu'en compteurs permanents sur la
+        // page (trop de valeurs possibles pour Intervenants/Demandé par notamment).
+        public int Count { get; set; }
+        public string DisplayText => $"{Value}  ({Count})";
+
         private bool _isChecked = true;
         public bool IsChecked
         {
@@ -203,6 +209,15 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
         _ => null
     };
 
+    // ✅ Libellés propres à chaque colonne date (28.07.2026, demande de Joe) plutôt qu'un
+    // générique "Renseigné/Non renseigné" pour toutes.
+    private static (string Filled, string Empty) GetDateFilterCountLabels(string columnKey) => columnKey switch
+    {
+        "DistributedDate" => ("Distribué", "Non distribué"),
+        "PerformedDate" => ("Effectué", "Non effectué"),
+        _ => ("Renseigné", "Non renseigné")
+    };
+
     private void ColumnFilterButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement fe || fe.Tag is not string columnKey) return;
@@ -221,6 +236,11 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
             var hasRange = _activeDateRangeFilters.TryGetValue(columnKey, out var range);
             DateFromPicker.SelectedDate = hasRange ? range.From : null;
             DateToPicker.SelectedDate = hasRange ? range.To : null;
+
+            var withDate = _allRows.Count(r => GetDateValue(r, columnKey).HasValue);
+            var withoutDate = _allRows.Count - withDate;
+            var (filledLabel, emptyLabel) = GetDateFilterCountLabels(columnKey);
+            DateFilterCountsTextBlock.Text = $"{filledLabel}  ({withDate})    {emptyLabel}  ({withoutDate})";
         }
         else
         {
@@ -240,10 +260,14 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
                     .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
+            var counts = _allRows
+                .GroupBy(r => kind == ColumnKind.Status ? GetStatusLabel(r.WorkOrder) : GetColumnValue(r, columnKey), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
             var active = _activeValueFilters.TryGetValue(columnKey, out var set) ? set : null;
 
             _filterPopupOptions = allValues
-                .Select(v => new FilterOption { Value = v, IsChecked = active == null || active.Contains(v) })
+                .Select(v => new FilterOption { Value = v, Count = counts.TryGetValue(v, out var c) ? c : 0, IsChecked = active == null || active.Contains(v) })
                 .ToList();
 
             FilterOptionsItemsControl.ItemsSource = _filterPopupOptions;
