@@ -135,8 +135,8 @@
                     <Button x:Name="NavAccountingButton" Content="Comptabilité" Click="NavAccounting_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavArchivesButton" Content="Archives" Click="NavArchives_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavTrashButton" Content="Corbeille" Click="NavTrash_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <Button x:Name="NavListsButton" Content="Listes" Click="NavLists_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavPlanningButton" Content="Planning" Click="NavPlanning_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <Button x:Name="NavListsButton" Content="Listes" Click="NavLists_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavArchitectIdentityButton" Content="Identité Société" Click="NavArchitectIdentity_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavSettingsButton" Content="Paramètres" Click="NavSettings_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <!-- ✅ Aide (24.07.2026, demande de Joe) : ouvre la page d'aide (mode d'emploi PDF)

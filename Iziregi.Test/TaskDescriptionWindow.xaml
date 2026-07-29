@@ -243,6 +243,56 @@
                     <TextBlock Text="S" FontSize="13" TextDecorations="Underline" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </ToggleButton>
 
+                <!-- ✅ Couleur de police / surlignage (28.07.2026, demande de Joe) : même
+                     principe que dans les zones de texte du Planning. -->
+                <Button x:Name="FontColorButton" Width="56" Height="28" Margin="0,0,8,0"
+                        Style="{StaticResource TextZoneToolButtonStyle}"
+                        Background="White"
+                        Click="FontColorButton_Click"
+                        ToolTip="Couleur du texte (police)">
+                    <StackPanel>
+                        <Border BorderThickness="2"
+                                CornerRadius="4"
+                                Padding="0"
+                                HorizontalAlignment="Center"
+                                BorderBrush="{Binding ElementName=FontColorSwatch, Path=Background}">
+                            <TextBlock Text="A"
+                                       Foreground="#111827"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Margin="2,-1,2,0"/>
+                        </Border>
+                        <TextBlock Text="Texte" Foreground="#6B7280" FontSize="9" HorizontalAlignment="Center" Margin="0,-1,0,0"/>
+                        <Border x:Name="FontColorSwatch" Height="3" Background="#EF4444" CornerRadius="2" Margin="0,1,0,0"/>
+                    </StackPanel>
+                </Button>
+
+                <Button x:Name="FillColorButton" Width="56" Height="28" Margin="0,0,16,0"
+                        Style="{StaticResource TextZoneToolButtonStyle}"
+                        Background="White"
+                        Click="FillColorButton_Click"
+                        ToolTip="Couleur de surlignage (fond)">
+                    <StackPanel>
+                        <Border BorderThickness="2"
+                                CornerRadius="4"
+                                Padding="0"
+                                HorizontalAlignment="Center"
+                                BorderBrush="{Binding ElementName=FillColorSwatch, Path=Background}">
+                            <TextBlock Text="▧"
+                                       Foreground="#111827"
+                                       FontSize="14"
+                                       FontWeight="Normal"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Margin="4,-1,4,0"/>
+                        </Border>
+                        <TextBlock Text="Surlign." Foreground="#6B7280" FontSize="9" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                        <Border x:Name="FillColorSwatch" Height="3" Background="#FDE047" CornerRadius="2" Margin="0,1,0,0"/>
+                    </StackPanel>
+                </Button>
+
                 <Button Content="🖼 Insérer image" Height="28"
                         Style="{StaticResource TextZoneToolButtonStyle}"
                         Padding="10,0"

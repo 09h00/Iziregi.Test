@@ -1546,28 +1546,6 @@ public partial class MainWindow : Window
         try { (MainContent.Content as PlanningPage)?.FlushPendingChanges(); } catch { }
     }
 
-    // ✅ Page Listes : les noms de champs/listes se modifient directement dans des
-    // TextBox (plus de bouton "Enregistrer" dédié par section) — si l'utilisateur change
-    // de page sans avoir cliqué "Enregistrer", on lui demande explicitement quoi faire
-    // plutôt que de perdre silencieusement la saisie. Retourne false pour annuler la
-    // navigation (choix "Annuler").
-    private bool ConfirmLeaveListsPageIfDirty()
-    {
-        if (MainContent.Content is ListsPage lp && lp.HasUnsavedLabelChanges)
-        {
-            var result = WpfMessageBox.Show(
-                "Des noms de champs/listes modifiés n'ont pas été enregistrés.\n\nEnregistrer avant de quitter cette page ?",
-                "Modifications non enregistrées",
-                MessageBoxButton.YesNoCancel,
-                MessageBoxImage.Warning);
-
-            if (result == MessageBoxResult.Cancel) return false;
-            if (result == MessageBoxResult.Yes) lp.SaveLabelsNow();
-        }
-
-        return true;
-    }
-
     // ✅ Modernisation du look (13.07.2026) : met en évidence l'onglet de navigation
     // correspondant à la page actuellement affichée (fond bleu, texte blanc), les autres
     // repassent au style neutre. Appelé au début de chaque Show*() ci-dessous.
@@ -1602,6 +1580,25 @@ public partial class MainWindow : Window
             case "Planning": ShowPlanning(); break;
             default: ShowDashboard(); break;
         }
+    }
+
+    // ✅ Rétabli (28.07.2026, demande de Joe) : la page Listes s'enregistre désormais via un
+    // bouton "Enregistrer" global (voir ListsPage.HasUnsavedChanges/SaveAllNow) plutôt
+    // qu'automatiquement -- prévient donc à nouveau une sortie de page avec des changements
+    // en attente.
+    private bool ConfirmLeaveListsPageIfDirty()
+    {
+        if (MainContent.Content is ListsPage lp && lp.HasUnsavedChanges)
+        {
+            var result = System.Windows.MessageBox.Show(
+                this,
+                "Des modifications non enregistrées seront perdues. Quitter quand même ?",
+                "Modifications non enregistrées",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+            return result == System.Windows.MessageBoxResult.Yes;
+        }
+        return true;
     }
 
     internal void ShowDashboard()

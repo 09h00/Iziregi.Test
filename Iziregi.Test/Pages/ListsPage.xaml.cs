@@ -4,12 +4,18 @@ using System.Linq;
 using System.Windows;
 using MessageBox = System.Windows.MessageBox;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Iziregi.Test.Data;
 using Microsoft.VisualBasic;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 using Forms = System.Windows.Forms;
 using MediaBrushes = System.Windows.Media.Brushes;
+using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
+using WpfKey = System.Windows.Input.Key;
 
 namespace Iziregi.Test.Pages;
 
@@ -18,26 +24,72 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     private readonly MainWindow _host;
 
     // =========================
-    // ✅ Noms de champs/listes : modifications non enregistrées (déclenche une confirmation
-    // à la sortie de la page — voir ConfirmLeaveListsPageIfDirty dans MainWindow).
+    // ✅ Libellés + listes : édition directe, mais un seul bouton "Enregistrer" global
+    // valide tout (28.07.2026, demande de Joe — remplace l'auto-enregistrement du
+    // 28.07.2026 précédent). _labelsDirty/_listsDirty pilotent l'état du bouton
+    // Enregistrer et l'avertissement à la sortie de la page (voir HasUnsavedChanges,
+    // utilisé par MainWindow.ConfirmLeaveListsPageIfDirty).
     // =========================
     private bool _isLoadingLabels = false;
     private bool _labelsDirty = false;
+    private bool _listsDirty = false;
 
-    public bool HasUnsavedLabelChanges => _labelsDirty;
+    public bool HasUnsavedChanges => _labelsDirty || _listsDirty;
 
     private void AnyLabelTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         if (_isLoadingLabels) return;
         _labelsDirty = true;
+        RefreshCommonButtonsState();
+    }
+
+    // ✅ Valeurs par défaut (28.07.2026, demande de Joe) : elles aussi différées, écrites
+    // seulement par SaveAllNow -- ce changement doit juste activer le bouton Enregistrer.
+    private void AnyDefaultComboBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (_isLoadingLabels) return;
+        _listsDirty = true;
+        RefreshCommonButtonsState();
     }
 
     // ✅ Cliquer dans un champ de libellé (au-dessus d'une liste) désactive la liste
     // active — sinon la bordure bleue de la liste restait allumée EN MÊME TEMPS que la
     // bordure de focus du libellé, donnant l'impression de deux éléments sélectionnés.
-    private void AnyLabelTextBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.None);
+    private void AnyLabelTextBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        SetActiveList(ActiveListKind.None);
+        if (sender is System.Windows.Controls.TextBox tb)
+            _lastLabelValues[tb] = tb.Text ?? "";
+    }
 
-    public void SaveLabelsNow() => SaveLabelsCore();
+    // ✅ Doublon entre libellés (28.07.2026, demande de Joe) : deux champs ne peuvent pas
+    // porter le même nom -- avertit et rétablit l'ancien texte si c'est le cas.
+    private void AnyLabelTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox tb) return;
+        var text = (tb.Text ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        var others = new[]
+        {
+            LabelReserveTextBox, LabelRequestedByTextBox, LabelPerformedByTextBox, LabelPlaceTextBox,
+            LabelEtageTextBox, LabelDeadlineTextBox, LabelPlanningTextZoneTextBox, LabelTaskCategoryTextBox,
+            LabelTaskUrgencyTextBox
+        };
+
+        var duplicate = others.FirstOrDefault(o => o != null && !ReferenceEquals(o, tb)
+            && string.Equals((o.Text ?? "").Trim(), text, StringComparison.OrdinalIgnoreCase));
+
+        if (duplicate != null)
+        {
+            MessageBox.Show($"« {text} » est déjà utilisé comme nom de champ ailleurs.", "Doublon", MessageBoxButton.OK, MessageBoxImage.Warning);
+            tb.Text = _lastLabelValues.TryGetValue(tb, out var prev) ? prev : "";
+        }
+    }
+
+    // ✅ Valeur de chaque champ de libellé au moment où il a reçu le focus (28.07.2026) :
+    // permet de restaurer l'ancien texte en cas de doublon détecté au LostFocus.
+    private readonly Dictionary<System.Windows.Controls.TextBox, string> _lastLabelValues = new();
 
     // =========================
     // Liste active
@@ -57,11 +109,263 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
 
     private ActiveListKind _activeList = ActiveListKind.None;
 
+    // ✅ Édition directe (28.07.2026, demande de Joe) : "ce qui est sélectionné" est soit une
+    // LIGNE précise (_activeRowItem non null -- l'utilisateur édite ou vient d'éditer ce
+    // nom), soit LA LISTE ENTIÈRE (_activeRowItem == null -- clic dans le vide de la liste).
+    // Détermine le comportement de Supprimer/Copier (une ligne vs toute la liste).
+    private EditableListItem? _activeRowItem;
+
     private void SetActiveList(ActiveListKind kind)
     {
         _activeList = kind;
         RefreshCommonButtonsState();
         RefreshActiveListBorders();
+    }
+
+    // =========================
+    // ✅ Édition directe des listes (28.07.2026, demande de Joe) : chaque ligne de liste est
+    // un TextBox modifiable en place (voir ListsPage.xaml, EditableRowTextBoxStyle) au lieu
+    // d'un texte simple + bouton Ajouter/Renommer séparé. Rien n'est écrit en base tant que
+    // "Enregistrer" n'est pas cliqué (voir SaveAllNow) -- les listes ci-dessous ne sont que
+    // l'état en mémoire en cours d'édition.
+    // =========================
+    private sealed class EditableListItem : INotifyPropertyChanged
+    {
+        // Null = ligne créée pendant cette session d'édition, pas encore en base.
+        public string? OriginalName { get; set; }
+
+        private string _name = "";
+        public string Name
+        {
+            get => _name;
+            set { if (_name != value) { _name = value; OnPropertyChanged(); } }
+        }
+
+        private System.Windows.Media.Brush _colorBrush = MediaBrushes.Transparent;
+        public System.Windows.Media.Brush ColorBrush
+        {
+            get => _colorBrush;
+            set { if (_colorBrush != value) { _colorBrush = value; OnPropertyChanged(); } }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private readonly ObservableCollection<EditableListItem> _reservesItems = new();
+    private readonly ObservableCollection<EditableListItem> _requestersItems = new();
+    private readonly ObservableCollection<EditableListItem> _companiesItems = new();
+    private readonly ObservableCollection<EditableListItem> _placesItems = new();
+    private readonly ObservableCollection<EditableListItem> _etagesItems = new();
+    private readonly ObservableCollection<EditableListItem> _planningTextZonesItems = new();
+    private readonly ObservableCollection<EditableListItem> _taskCategoriesItems = new();
+    private readonly ObservableCollection<EditableListItem> _taskUrgenciesItems = new();
+
+    // Instantané des noms tels que chargés depuis la base, pour calculer au moment
+    // d'"Enregistrer" ce qui a été ajouté/renommé/supprimé (voir SaveAllNow).
+    private List<string> _reservesOriginal = new();
+    private List<string> _requestersOriginal = new();
+    private List<string> _companiesOriginal = new();
+    private List<string> _placesOriginal = new();
+    private List<string> _etagesOriginal = new();
+    private List<string> _planningTextZonesOriginal = new();
+    private List<string> _taskCategoriesOriginal = new();
+    private List<string> _taskUrgenciesOriginal = new();
+
+    private ObservableCollection<EditableListItem>? GetActiveItemsCollection() => _activeList switch
+    {
+        ActiveListKind.Reserves => _reservesItems,
+        ActiveListKind.Requesters => _requestersItems,
+        ActiveListKind.Companies => _companiesItems,
+        ActiveListKind.Places => _placesItems,
+        ActiveListKind.Etages => _etagesItems,
+        ActiveListKind.PlanningTextZones => _planningTextZonesItems,
+        ActiveListKind.TaskCategories => _taskCategoriesItems,
+        ActiveListKind.TaskUrgencies => _taskUrgenciesItems,
+        _ => null
+    };
+
+    private System.Windows.Controls.ListBox? GetActiveListBox() => _activeList switch
+    {
+        ActiveListKind.Reserves => ReservesListBox,
+        ActiveListKind.Requesters => RequestersListBox,
+        ActiveListKind.Companies => CompaniesListBox,
+        ActiveListKind.Places => PlacesListBox,
+        ActiveListKind.Etages => EtagesListBox,
+        ActiveListKind.PlanningTextZones => PlanningTextZonesListBox,
+        ActiveListKind.TaskCategories => TaskCategoriesListBox,
+        ActiveListKind.TaskUrgencies => TaskUrgenciesListBox,
+        _ => null
+    };
+
+    private (ObservableCollection<EditableListItem> Collection, ActiveListKind Kind)[] AllLists() => new[]
+    {
+        (_reservesItems, ActiveListKind.Reserves),
+        (_requestersItems, ActiveListKind.Requesters),
+        (_companiesItems, ActiveListKind.Companies),
+        (_placesItems, ActiveListKind.Places),
+        (_etagesItems, ActiveListKind.Etages),
+        (_planningTextZonesItems, ActiveListKind.PlanningTextZones),
+        (_taskCategoriesItems, ActiveListKind.TaskCategories),
+        (_taskUrgenciesItems, ActiveListKind.TaskUrgencies),
+    };
+
+    private (ObservableCollection<EditableListItem>? Collection, ActiveListKind? Kind) FindOwningCollection(EditableListItem item)
+    {
+        foreach (var (collection, kind) in AllLists())
+            if (collection.Contains(item))
+                return (collection, kind);
+
+        return (null, null);
+    }
+
+    // =========================
+    // ✅ Édition directe des lignes (28.07.2026, demande de Joe) : clic sur une ligne pour
+    // l'éditer, Entrée/flèche bas pour passer à la suivante (crée une nouvelle ligne vide en
+    // bas si besoin), flèche haut pour remonter. Vider une ligne la supprime (les suivantes
+    // remontent).
+    // =========================
+
+    private void ListItemTextBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox tb) return;
+        if (tb.DataContext is not EditableListItem item) return;
+
+        var (_, kind) = FindOwningCollection(item);
+        if (kind.HasValue) SetActiveList(kind.Value);
+        _activeRowItem = item;
+        RefreshCommonButtonsState();
+
+        if (kind == ActiveListKind.Companies) RefreshSelectedCompanyColorPreview();
+        else if (kind == ActiveListKind.TaskCategories) RefreshSelectedTaskCategoryColorPreview();
+    }
+
+    private void ListItemTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox tb) return;
+        if (tb.DataContext is not EditableListItem item) return;
+
+        var (collection, _) = FindOwningCollection(item);
+        if (collection == null) return;
+
+        var text = (item.Name ?? "").Trim();
+        item.Name = text;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            // ✅ Ligne vidée : supprimée (sauf si c'est déjà LA ligne vide finale — rien à
+            // faire), les lignes suivantes remontent automatiquement (ObservableCollection).
+            var idx = collection.IndexOf(item);
+            if (idx >= 0 && idx < collection.Count - 1)
+            {
+                collection.RemoveAt(idx);
+                _listsDirty = true;
+            }
+        }
+        else
+        {
+            // ✅ Doublon (28.07.2026, demande de Joe) : pas deux fois le même nom dans la
+            // même liste -- avertit et rétablit l'ancien texte (ou supprime la ligne si
+            // c'était une ligne toute neuve).
+            var duplicate = collection.FirstOrDefault(x => !ReferenceEquals(x, item)
+                && string.Equals((x.Name ?? "").Trim(), text, StringComparison.OrdinalIgnoreCase));
+
+            if (duplicate != null)
+            {
+                MessageBox.Show($"« {text} » existe déjà dans cette liste.", "Doublon", MessageBoxButton.OK, MessageBoxImage.Warning);
+                item.Name = item.OriginalName ?? "";
+                if (string.IsNullOrWhiteSpace(item.Name))
+                {
+                    var idx = collection.IndexOf(item);
+                    if (idx >= 0 && idx < collection.Count - 1) collection.RemoveAt(idx);
+                }
+                return;
+            }
+
+            // ✅ Dernière ligne remplie -> garantit toujours une ligne vide finale pour
+            // continuer à taper (équivalent de "Ajouter").
+            if (collection.Count > 0 && ReferenceEquals(collection[^1], item))
+                collection.Add(new EditableListItem());
+
+            _listsDirty = true;
+        }
+
+        RefreshCommonButtonsState();
+    }
+
+    private void ListItemTextBox_PreviewKeyDown(object sender, WpfKeyEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox tb) return;
+        if (tb.DataContext is not EditableListItem item) return;
+
+        if (e.Key == WpfKey.Enter || e.Key == WpfKey.Down)
+        {
+            e.Handled = true;
+            MoveToAdjacentRow(item, +1);
+        }
+        else if (e.Key == WpfKey.Up)
+        {
+            e.Handled = true;
+            MoveToAdjacentRow(item, -1);
+        }
+    }
+
+    private void MoveToAdjacentRow(EditableListItem item, int direction)
+    {
+        var (collection, kind) = FindOwningCollection(item);
+        if (collection == null || !kind.HasValue) return;
+
+        var listBox = GetActiveListBox();
+        if (listBox == null) return;
+
+        var idx = collection!.IndexOf(item);
+        if (idx < 0) return;
+
+        // ✅ Si on descend depuis la dernière ligne et qu'elle contient du texte, garantit
+        // qu'une ligne vide existe en dessous AVANT de calculer l'index cible : c'est NOUS
+        // qui déclenchons le changement de focus ici, le LostFocus normal (qui ferait la
+        // même chose) n'a pas encore eu lieu à ce stade.
+        if (direction > 0 && idx == collection.Count - 1 && !string.IsNullOrWhiteSpace(item.Name))
+            collection.Add(new EditableListItem());
+
+        var targetIdx = idx + direction;
+        if (targetIdx < 0 || targetIdx >= collection.Count) return;
+
+        FocusRowAtIndex(listBox, targetIdx);
+    }
+
+    private static void FocusRowAtIndex(System.Windows.Controls.ListBox listBox, int index)
+    {
+        if (index < 0 || index >= listBox.Items.Count) return;
+
+        void TryFocus()
+        {
+            var container = listBox.ItemContainerGenerator.ContainerFromIndex(index) as System.Windows.Controls.ListBoxItem;
+            var tb = container == null ? null : FindVisualChild<System.Windows.Controls.TextBox>(container);
+            if (tb != null)
+            {
+                tb.Focus();
+                tb.CaretIndex = tb.Text?.Length ?? 0;
+            }
+        }
+
+        listBox.ScrollIntoView(listBox.Items[index]);
+        listBox.UpdateLayout();
+        TryFocus();
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) return match;
+            var found = FindVisualChild<T>(child);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private void RefreshActiveListBorders()
@@ -105,78 +409,33 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         return pid.HasValue && pid.Value > 0;
     }
 
-    private string? GetSelectedCompanyName()
-    {
-        if (CompaniesListBox.SelectedItem is CompanyListItem cli)
-            return cli.Name;
+    // ✅ Édition directe (28.07.2026) : "sélectionné" = la ligne actuellement éditée
+    // (_activeRowItem), pas ListBox.SelectedItem (qui n'a plus vraiment de sens ici).
+    private string? GetSelectedCompanyName() =>
+        _activeList == ActiveListKind.Companies ? _activeRowItem?.Name : null;
 
-        return CompaniesListBox.SelectedItem as string;
-    }
-
-    // ✅ Couleurs Catégories (17.07.2026) : TaskCategoriesListBox est maintenant lié à des
-    // TaskCategoryListItem (comme CompaniesListBox), pas de simples chaînes -- même
-    // mécanisme de secours que GetSelectedCompanyName ci-dessus.
-    private string? GetSelectedTaskCategoryName()
-    {
-        if (TaskCategoriesListBox.SelectedItem is TaskCategoryListItem tci)
-            return tci.Name;
-
-        return TaskCategoriesListBox.SelectedItem as string;
-    }
-
-    private string? GetActiveSelectedItemText()
-    {
-        return _activeList switch
-        {
-            ActiveListKind.Reserves => ReservesListBox?.SelectedItem as string,
-            ActiveListKind.Requesters => RequestersListBox?.SelectedItem as string,
-            ActiveListKind.Companies => GetSelectedCompanyName(),
-            ActiveListKind.Places => PlacesListBox?.SelectedItem as string,
-            ActiveListKind.Etages => EtagesListBox?.SelectedItem as string,
-            ActiveListKind.PlanningTextZones => PlanningTextZonesListBox?.SelectedItem as string,
-            ActiveListKind.TaskCategories => GetSelectedTaskCategoryName(),
-            ActiveListKind.TaskUrgencies => TaskUrgenciesListBox?.SelectedItem as string,
-            _ => null
-        };
-    }
-
-    private string GetActiveDefaultText()
-    {
-        return _activeList switch
-        {
-            ActiveListKind.Reserves => (DefaultReserveComboBox?.Text ?? ""),
-            ActiveListKind.Requesters => (DefaultRequesterComboBox?.Text ?? ""),
-            ActiveListKind.Companies => (DefaultCompanyComboBox?.Text ?? ""),
-            ActiveListKind.Places => (DefaultPlaceComboBox?.Text ?? ""),
-            ActiveListKind.Etages => (DefaultEtageComboBox?.Text ?? ""),
-            ActiveListKind.PlanningTextZones => (DefaultPlanningTextZoneComboBox?.Text ?? ""),
-            ActiveListKind.TaskCategories => (DefaultTaskCategoryComboBox?.Text ?? ""),
-            ActiveListKind.TaskUrgencies => (DefaultTaskUrgencyComboBox?.Text ?? ""),
-            _ => ""
-        };
-    }
+    // ✅ Couleurs Catégories (17.07.2026) : même mécanisme que GetSelectedCompanyName ci-dessus.
+    private string? GetSelectedTaskCategoryName() =>
+        _activeList == ActiveListKind.TaskCategories ? _activeRowItem?.Name : null;
 
     private void RefreshCommonButtonsState()
     {
-        if (CommonAddButton == null || CommonRenameButton == null || CommonDeleteButton == null || CommonSetDefaultButton == null
-            || CommonCopyButton == null || CommonPasteButton == null)
+        if (CommonDeleteButton == null || CommonCopyButton == null || CommonPasteButton == null || CommonSaveButton == null)
             return;
 
         var hasProject = HasCurrentProject();
         var hasActiveList = _activeList != ActiveListKind.None;
-        var selected = (GetActiveSelectedItemText() ?? "").Trim();
+        var collection = GetActiveItemsCollection();
+        var hasAnyContent = collection?.Any(x => !string.IsNullOrWhiteSpace(x.Name)) == true;
 
-        CommonAddButton.IsEnabled = hasProject && hasActiveList;
-        CommonRenameButton.IsEnabled = hasProject && hasActiveList && !string.IsNullOrWhiteSpace(selected);
-        CommonDeleteButton.IsEnabled = hasProject && hasActiveList && !string.IsNullOrWhiteSpace(selected);
-
-        // Toujours activé si une liste est active :
-        // - si item sélectionné => utilise le nom
-        // - sinon => utilise le texte du ComboBox (peut être vide => efface)
-        CommonSetDefaultButton.IsEnabled = hasProject && hasActiveList;
-
-        CommonCopyButton.IsEnabled = hasProject && hasActiveList;
+        // ✅ Édition directe (28.07.2026) : Supprimer/Copier restent actifs dès qu'une liste
+        // est active (une ligne précise OU la liste entière peut être ciblée -- voir
+        // _activeRowItem), pas seulement si une ligne précise est sélectionnée.
+        CommonDeleteButton.IsEnabled = hasProject && hasActiveList && (_activeRowItem != null || hasAnyContent);
+        CommonCopyButton.IsEnabled = hasProject && hasActiveList && (_activeRowItem != null || hasAnyContent);
         CommonPasteButton.IsEnabled = hasProject && hasActiveList && _listClipboard != null && _listClipboard.Items.Count > 0;
+
+        CommonSaveButton.IsEnabled = HasUnsavedChanges;
 
         if (ActiveListLabel != null)
         {
@@ -212,44 +471,21 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
 
     private static ListClipboardPayload? _listClipboard;
 
-    // =========================
-    // Item Entreprise (pastille + nom)
-    // =========================
-    private sealed class CompanyListItem
-    {
-        public string Name { get; }
-        public System.Windows.Media.Brush ColorBrush { get; }
-
-        public CompanyListItem(string name, System.Windows.Media.Brush colorBrush)
-        {
-            Name = name;
-            ColorBrush = colorBrush;
-        }
-
-        public override string ToString() => Name;
-    }
-
-    // =========================
-    // Item Catégorie (pastille + nom) — indépendant des entreprises, 17.07.2026.
-    // =========================
-    private sealed class TaskCategoryListItem
-    {
-        public string Name { get; }
-        public System.Windows.Media.Brush ColorBrush { get; }
-
-        public TaskCategoryListItem(string name, System.Windows.Media.Brush colorBrush)
-        {
-            Name = name;
-            ColorBrush = colorBrush;
-        }
-
-        public override string ToString() => Name;
-    }
-
     public ListsPage(MainWindow host)
     {
         InitializeComponent();
         _host = host;
+
+        // ✅ Lié une seule fois : ReloadCore ne fait plus que vider/remplir ces mêmes
+        // collections (PopulateItems), jamais réassigner ItemsSource (28.07.2026).
+        ReservesListBox.ItemsSource = _reservesItems;
+        RequestersListBox.ItemsSource = _requestersItems;
+        CompaniesListBox.ItemsSource = _companiesItems;
+        PlacesListBox.ItemsSource = _placesItems;
+        EtagesListBox.ItemsSource = _etagesItems;
+        PlanningTextZonesListBox.ItemsSource = _planningTextZonesItems;
+        TaskCategoriesListBox.ItemsSource = _taskCategoriesItems;
+        TaskUrgenciesListBox.ItemsSource = _taskUrgenciesItems;
     }
 
     public void Reload()
@@ -261,19 +497,45 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         _labelsDirty = false;
     }
 
+    // ✅ Remplit une liste éditable + son instantané "original" (28.07.2026, demande de
+    // Joe) : une ligne vide finale est toujours ajoutée (on y tape pour créer une entrée,
+    // voir ListItemTextBox_LostFocus / PreviewKeyDown).
+    private static void PopulateItems(
+        ObservableCollection<EditableListItem> collection,
+        List<string> names,
+        List<string> originalSnapshot,
+        Func<string, System.Windows.Media.Brush>? colorFor = null)
+    {
+        collection.Clear();
+        originalSnapshot.Clear();
+        originalSnapshot.AddRange(names);
+
+        foreach (var name in names)
+            collection.Add(new EditableListItem
+            {
+                OriginalName = name,
+                Name = name,
+                ColorBrush = colorFor?.Invoke(name) ?? MediaBrushes.Transparent
+            });
+
+        collection.Add(new EditableListItem());
+    }
+
     private void ReloadCore()
     {
+        _activeRowItem = null;
+
         var projectIdNullable = Db.GetCurrentProjectId();
         if (!projectIdNullable.HasValue || projectIdNullable.Value <= 0)
         {
-            ReservesListBox.ItemsSource = null;
-            RequestersListBox.ItemsSource = null;
-            CompaniesListBox.ItemsSource = null;
-            PlacesListBox.ItemsSource = null;
-            EtagesListBox.ItemsSource = null;
-            PlanningTextZonesListBox.ItemsSource = null;
-            TaskCategoriesListBox.ItemsSource = null;
-            TaskUrgenciesListBox.ItemsSource = null;
+            _reservesItems.Clear(); _reservesOriginal.Clear();
+            _requestersItems.Clear(); _requestersOriginal.Clear();
+            _companiesItems.Clear(); _companiesOriginal.Clear();
+            _placesItems.Clear(); _placesOriginal.Clear();
+            _etagesItems.Clear(); _etagesOriginal.Clear();
+            _planningTextZonesItems.Clear(); _planningTextZonesOriginal.Clear();
+            _taskCategoriesItems.Clear(); _taskCategoriesOriginal.Clear();
+            _taskUrgenciesItems.Clear(); _taskUrgenciesOriginal.Clear();
 
             DefaultReserveComboBox.ItemsSource = null;
             DefaultRequesterComboBox.ItemsSource = null;
@@ -327,22 +589,14 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         var taskCategories = Db.GetTaskCategories(projectId);
         var taskUrgencies = Db.GetTaskUrgencies(projectId);
 
-        ReservesListBox.ItemsSource = reserves;
-        RequestersListBox.ItemsSource = requesters;
-
-        CompaniesListBox.ItemsSource = companies
-            .Select(name => new CompanyListItem(name, BuildCompanyColorBrush(projectId, name)))
-            .ToList();
-
-        PlacesListBox.ItemsSource = places;
-        EtagesListBox.ItemsSource = etages;
-        PlanningTextZonesListBox.ItemsSource = planningTextZones;
-
-        TaskCategoriesListBox.ItemsSource = taskCategories
-            .Select(name => new TaskCategoryListItem(name, BuildTaskCategoryColorBrush(projectId, name)))
-            .ToList();
-
-        TaskUrgenciesListBox.ItemsSource = taskUrgencies;
+        PopulateItems(_reservesItems, reserves, _reservesOriginal);
+        PopulateItems(_requestersItems, requesters, _requestersOriginal);
+        PopulateItems(_companiesItems, companies, _companiesOriginal, name => BuildCompanyColorBrush(projectId, name));
+        PopulateItems(_placesItems, places, _placesOriginal);
+        PopulateItems(_etagesItems, etages, _etagesOriginal);
+        PopulateItems(_planningTextZonesItems, planningTextZones, _planningTextZonesOriginal);
+        PopulateItems(_taskCategoriesItems, taskCategories, _taskCategoriesOriginal, name => BuildTaskCategoryColorBrush(projectId, name));
+        PopulateItems(_taskUrgenciesItems, taskUrgencies, _taskUrgenciesOriginal);
 
         var reserveDefaults = Db.WithEmptyOption(reserves);
         var requesterDefaults = Db.WithEmptyOption(requesters);
@@ -443,174 +697,103 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     private void ReservesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.Reserves);
+        _activeRowItem = null;
         ReservesListBox.Focus();
     }
 
     private void RequestersListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.Requesters);
+        _activeRowItem = null;
         RequestersListBox.Focus();
     }
 
     private void CompaniesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.Companies);
+        _activeRowItem = null;
         CompaniesListBox.Focus();
     }
 
     private void PlacesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.Places);
+        _activeRowItem = null;
         PlacesListBox.Focus();
     }
 
     private void EtagesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.Etages);
+        _activeRowItem = null;
         EtagesListBox.Focus();
     }
 
     private void PlanningTextZonesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.PlanningTextZones);
+        _activeRowItem = null;
         PlanningTextZonesListBox.Focus();
     }
 
     private void TaskCategoriesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.TaskCategories);
+        _activeRowItem = null;
         TaskCategoriesListBox.Focus();
     }
 
     private void TaskUrgenciesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         SetActiveList(ActiveListKind.TaskUrgencies);
+        _activeRowItem = null;
         TaskUrgenciesListBox.Focus();
     }
 
     // =========================
-    // Barre commune
+    // ✅ Barre commune (28.07.2026, demande de Joe) : Ajouter/Renommer/Définir par défaut
+    // supprimés (édition directe dans les lignes + ComboBox de valeur par défaut déjà
+    // éditable au-dessus de chaque liste). Supprimer/Copier/Coller agissent sur ce qui est
+    // "sélectionné" (_activeRowItem = une ligne, sinon la liste entière), purement en
+    // mémoire -- rien n'est écrit en base tant que "Enregistrer" n'est pas cliqué.
     // =========================
-    private void CommonAdd_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var projectId = RequireCurrentProjectId();
-
-            var title = _activeList switch
-            {
-                ActiveListKind.Reserves => $"Ajouter ({Db.GetLabelReserve(projectId)})",
-                ActiveListKind.Requesters => $"Ajouter ({Db.GetLabelRequestedBy(projectId)})",
-                ActiveListKind.Companies => $"Ajouter ({Db.GetLabelPerformedBy(projectId)})",
-                ActiveListKind.Places => $"Ajouter ({Db.GetLabelPlace(projectId)})",
-                ActiveListKind.Etages => $"Ajouter ({Db.GetLabelEtage(projectId)})",
-                ActiveListKind.PlanningTextZones => $"Ajouter ({Db.GetLabelPlanningTextZone(projectId)})",
-                ActiveListKind.TaskCategories => $"Ajouter ({Db.GetLabelTaskCategory(projectId)})",
-                ActiveListKind.TaskUrgencies => $"Ajouter ({Db.GetLabelTaskUrgency(projectId)})",
-                _ => "Ajouter"
-            };
-
-            var name = Interaction.InputBox("Nom :", title, "").Trim();
-            if (string.IsNullOrWhiteSpace(name))
-                return;
-
-            switch (_activeList)
-            {
-                case ActiveListKind.Reserves: Db.InsertReserve(projectId, name); break;
-                case ActiveListKind.Requesters: Db.InsertRequester(projectId, name); break;
-                case ActiveListKind.Companies: Db.InsertCompany(projectId, name); break;
-                case ActiveListKind.Places: Db.InsertPlace(projectId, name); break;
-                case ActiveListKind.Etages: Db.InsertEtage(projectId, name); break;
-                case ActiveListKind.PlanningTextZones: Db.InsertPlanningTextZone(projectId, name); break;
-                case ActiveListKind.TaskCategories: Db.InsertTaskCategory(projectId, name); break;
-                case ActiveListKind.TaskUrgencies: Db.InsertTaskUrgency(projectId, name); break;
-                default: return;
-            }
-
-            Reload();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private void CommonRename_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var projectId = RequireCurrentProjectId();
-
-            var oldName = GetActiveSelectedItemText();
-            if (string.IsNullOrWhiteSpace(oldName))
-                return;
-
-            var title = _activeList switch
-            {
-                ActiveListKind.Reserves => $"Renommer ({Db.GetLabelReserve(projectId)})",
-                ActiveListKind.Requesters => $"Renommer ({Db.GetLabelRequestedBy(projectId)})",
-                ActiveListKind.Companies => $"Renommer ({Db.GetLabelPerformedBy(projectId)})",
-                ActiveListKind.Places => $"Renommer ({Db.GetLabelPlace(projectId)})",
-                ActiveListKind.Etages => $"Renommer ({Db.GetLabelEtage(projectId)})",
-                ActiveListKind.PlanningTextZones => $"Renommer ({Db.GetLabelPlanningTextZone(projectId)})",
-                ActiveListKind.TaskCategories => $"Renommer ({Db.GetLabelTaskCategory(projectId)})",
-                ActiveListKind.TaskUrgencies => $"Renommer ({Db.GetLabelTaskUrgency(projectId)})",
-                _ => "Renommer"
-            };
-
-            var newName = Interaction.InputBox("Nouveau nom :", title, oldName).Trim();
-            if (string.IsNullOrWhiteSpace(newName) || newName == oldName)
-                return;
-
-            switch (_activeList)
-            {
-                case ActiveListKind.Reserves: Db.RenameReserve(projectId, oldName, newName); break;
-                case ActiveListKind.Requesters: Db.RenameRequester(projectId, oldName, newName); break;
-                case ActiveListKind.Companies: Db.RenameCompany(projectId, oldName, newName); break;
-                case ActiveListKind.Places: Db.RenamePlace(projectId, oldName, newName); break;
-                case ActiveListKind.Etages: Db.RenameEtage(projectId, oldName, newName); break;
-                case ActiveListKind.PlanningTextZones: Db.RenamePlanningTextZone(projectId, oldName, newName); break;
-                case ActiveListKind.TaskCategories: Db.RenameTaskCategory(projectId, oldName, newName); break;
-                case ActiveListKind.TaskUrgencies: Db.RenameTaskUrgency(projectId, oldName, newName); break;
-                default: return;
-            }
-
-            Reload();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Erreur renommage", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
     private void CommonDelete_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var projectId = RequireCurrentProjectId();
+            if (!HasCurrentProject()) return;
 
-            var name = GetActiveSelectedItemText();
-            if (string.IsNullOrWhiteSpace(name))
-                return;
+            var collection = GetActiveItemsCollection();
+            if (collection == null) return;
 
-            var ok = MessageBox.Show($"Supprimer « {name} » ?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (ok != MessageBoxResult.Yes)
-                return;
-
-            switch (_activeList)
+            if (_activeRowItem != null)
             {
-                case ActiveListKind.Reserves: Db.DeleteReserve(projectId, name); break;
-                case ActiveListKind.Requesters: Db.DeleteRequester(projectId, name); break;
-                case ActiveListKind.Companies: Db.DeleteCompany(projectId, name); break;
-                case ActiveListKind.Places: Db.DeletePlace(projectId, name); break;
-                case ActiveListKind.Etages: Db.DeleteEtage(projectId, name); break;
-                case ActiveListKind.PlanningTextZones: Db.DeletePlanningTextZone(projectId, name); break;
-                case ActiveListKind.TaskCategories: Db.DeleteTaskCategory(projectId, name); break;
-                case ActiveListKind.TaskUrgencies: Db.DeleteTaskUrgency(projectId, name); break;
-                default: return;
+                var name = (_activeRowItem.Name ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(name)) return;
+
+                var ok = MessageBox.Show($"Supprimer « {name} » ?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (ok != MessageBoxResult.Yes) return;
+
+                collection.Remove(_activeRowItem);
+                if (!collection.Any(x => string.IsNullOrWhiteSpace(x.Name)))
+                    collection.Add(new EditableListItem());
+
+                _activeRowItem = null;
+                _listsDirty = true;
+            }
+            else
+            {
+                if (!collection.Any(x => !string.IsNullOrWhiteSpace(x.Name))) return;
+
+                var ok = MessageBox.Show("Supprimer toute la liste ?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (ok != MessageBoxResult.Yes) return;
+
+                collection.Clear();
+                collection.Add(new EditableListItem());
+                _listsDirty = true;
             }
 
-            Reload();
+            RefreshCommonButtonsState();
         }
         catch (Exception ex)
         {
@@ -618,94 +801,50 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         }
     }
 
-    private void CommonSetDefault_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var projectId = RequireCurrentProjectId();
-
-            var value = GetActiveDefaultText() ?? "";
-
-            // value peut être "" => efface le défaut
-            switch (_activeList)
-            {
-                case ActiveListKind.Reserves: Db.SetDefaultReserve(projectId, value); break;
-                case ActiveListKind.Requesters: Db.SetDefaultRequester(projectId, value); break;
-                case ActiveListKind.Companies: Db.SetDefaultCompany(projectId, value); break;
-                case ActiveListKind.Places: Db.SetDefaultPlace(projectId, value); break;
-                case ActiveListKind.Etages: Db.SetDefaultEtage(projectId, value); break;
-                case ActiveListKind.PlanningTextZones: Db.SetDefaultPlanningTextZone(projectId, value); break;
-                case ActiveListKind.TaskCategories: Db.SetDefaultTaskCategory(projectId, value); break;
-                case ActiveListKind.TaskUrgencies: Db.SetDefaultTaskUrgency(projectId, value); break;
-            }
-
-            Reload();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Erreur défaut", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
     private void CommonCopy_Click(object sender, RoutedEventArgs e)
     {
         try
         {
+            if (!HasCurrentProject()) return;
             var projectId = RequireCurrentProjectId();
 
-            var items = _activeList switch
-            {
-                ActiveListKind.Reserves => Db.GetReserves(projectId),
-                ActiveListKind.Requesters => Db.GetRequesters(projectId),
-                ActiveListKind.Companies => Db.GetCompanies(projectId),
-                ActiveListKind.Places => Db.GetPlaces(projectId),
-                ActiveListKind.Etages => Db.GetEtages(projectId),
-                ActiveListKind.PlanningTextZones => Db.GetPlanningTextZones(projectId),
-                ActiveListKind.TaskCategories => Db.GetTaskCategories(projectId),
-                ActiveListKind.TaskUrgencies => Db.GetTaskUrgencies(projectId),
-                _ => new List<string>()
-            };
+            var collection = GetActiveItemsCollection();
+            if (collection == null) return;
 
-            items = items.Select(s => (s ?? "").Trim())
-                         .Where(s => !string.IsNullOrWhiteSpace(s))
-                         .Distinct(StringComparer.OrdinalIgnoreCase)
-                         .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
-                         .ToList();
+            // ✅ "Copier la liste" copie ce qui est sélectionné : une ligne précise
+            // (_activeRowItem) ou, sinon, toute la liste (28.07.2026, demande de Joe).
+            List<string> names = _activeRowItem != null && !string.IsNullOrWhiteSpace(_activeRowItem.Name)
+                ? new List<string> { _activeRowItem.Name.Trim() }
+                : collection.Select(x => (x.Name ?? "").Trim())
+                            .Where(x => !string.IsNullOrWhiteSpace(x))
+                            .ToList();
 
-            var payload = new ListClipboardPayload
-            {
-                Kind = _activeList,
-                SourceProjectId = projectId
-            };
-            payload.Items.AddRange(items);
+            if (names.Count == 0) return;
+
+            var payload = new ListClipboardPayload { Kind = _activeList, SourceProjectId = projectId };
+            payload.Items.AddRange(names);
 
             if (_activeList == ActiveListKind.Companies)
             {
-                var colors = Db.GetCompanyColorMap(projectId);
-                foreach (var kv in colors)
+                foreach (var n in names)
                 {
-                    var name = (kv.Key ?? "").Trim();
-                    var hex = (kv.Value ?? "").Trim();
-                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(hex))
-                        payload.CompanyColorMap[name] = hex;
+                    var hex = Db.GetCompanyColorHex(projectId, n);
+                    if (!string.IsNullOrWhiteSpace(hex)) payload.CompanyColorMap[n] = hex;
                 }
             }
             else if (_activeList == ActiveListKind.TaskCategories)
             {
-                var colors = Db.GetTaskCategoryColorMap(projectId);
-                foreach (var kv in colors)
+                foreach (var n in names)
                 {
-                    var name = (kv.Key ?? "").Trim();
-                    var hex = (kv.Value ?? "").Trim();
-                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(hex))
-                        payload.TaskCategoryColorMap[name] = hex;
+                    var hex = Db.GetTaskCategoryColorHex(projectId, n);
+                    if (!string.IsNullOrWhiteSpace(hex)) payload.TaskCategoryColorMap[n] = hex;
                 }
             }
 
             _listClipboard = payload;
             RefreshCommonButtonsState();
 
-            MessageBox.Show($"{items.Count} éléments copiés.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"{names.Count} élément(s) copié(s).", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -717,79 +856,69 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     {
         try
         {
-            var targetProjectId = RequireCurrentProjectId();
+            if (!HasCurrentProject()) return;
+            var projectId = RequireCurrentProjectId();
 
-            if (_listClipboard == null || _listClipboard.Items.Count == 0)
-                return;
+            var collection = GetActiveItemsCollection();
+            if (collection == null) return;
+            if (_listClipboard == null || _listClipboard.Items.Count == 0) return;
 
-            var existing = _activeList switch
-            {
-                ActiveListKind.Reserves => Db.GetReserves(targetProjectId),
-                ActiveListKind.Requesters => Db.GetRequesters(targetProjectId),
-                ActiveListKind.Companies => Db.GetCompanies(targetProjectId),
-                ActiveListKind.Places => Db.GetPlaces(targetProjectId),
-                ActiveListKind.Etages => Db.GetEtages(targetProjectId),
-                ActiveListKind.PlanningTextZones => Db.GetPlanningTextZones(targetProjectId),
-                ActiveListKind.TaskCategories => Db.GetTaskCategories(targetProjectId),
-                ActiveListKind.TaskUrgencies => Db.GetTaskUrgencies(targetProjectId),
-                _ => new List<string>()
-            };
+            var existingNames = new HashSet<string>(
+                collection.Select(x => (x.Name ?? "").Trim()).Where(x => !string.IsNullOrWhiteSpace(x)),
+                StringComparer.OrdinalIgnoreCase);
 
-            existing = existing.Select(s => (s ?? "").Trim())
-                               .Where(s => !string.IsNullOrWhiteSpace(s))
-                               .Distinct(StringComparer.OrdinalIgnoreCase)
-                               .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
-                               .ToList();
+            // ✅ "pour combler le vide" (28.07.2026, demande de Joe) : remplit d'abord les
+            // lignes vides déjà présentes avant d'en ajouter de nouvelles.
+            var emptySlots = collection.Where(x => string.IsNullOrWhiteSpace(x.Name)).ToList();
 
-            int inserted = 0;
-            int skipped = 0;
+            int inserted = 0, skipped = 0;
+            var sameProject = _listClipboard.SourceProjectId == projectId;
 
             foreach (var raw in _listClipboard.Items)
             {
                 var name = (raw ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (existingNames.Contains(name)) { skipped++; continue; }
 
-                if (existing.Any(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase)))
+                EditableListItem target;
+                if (emptySlots.Count > 0)
                 {
-                    skipped++;
-                    continue;
+                    target = emptySlots[0];
+                    emptySlots.RemoveAt(0);
+                    target.Name = name;
+                }
+                else
+                {
+                    target = new EditableListItem { Name = name };
+                    collection.Insert(collection.Count > 0 ? collection.Count - 1 : 0, target);
                 }
 
-                switch (_activeList)
+                // ✅ Couleur copiée : appliquée tout de suite en base (les couleurs Entreprise/
+                // Catégorie restent en écriture immédiate, indépendamment du texte -- voir
+                // PickCompanyColor_Click), seulement si la source du presse-papier est le même
+                // projet.
+                if (sameProject && _activeList == ActiveListKind.Companies
+                    && _listClipboard.CompanyColorMap.TryGetValue(name, out var hex) && !string.IsNullOrWhiteSpace(hex))
                 {
-                    case ActiveListKind.Reserves: Db.InsertReserve(targetProjectId, name); break;
-                    case ActiveListKind.Requesters: Db.InsertRequester(targetProjectId, name); break;
-                    case ActiveListKind.Companies:
-                        Db.InsertCompany(targetProjectId, name);
-                        // N'applique la couleur copiée QUE si la source du clipboard est le même projet
-                        if (_listClipboard.SourceProjectId == targetProjectId)
-                        {
-                            if (_listClipboard.CompanyColorMap.TryGetValue(name, out var hex) && !string.IsNullOrWhiteSpace(hex))
-                                Db.SetCompanyColorHex(targetProjectId, name, hex);
-                        }
-                        break;
-                    case ActiveListKind.Places: Db.InsertPlace(targetProjectId, name); break;
-                    case ActiveListKind.Etages: Db.InsertEtage(targetProjectId, name); break;
-                    case ActiveListKind.PlanningTextZones: Db.InsertPlanningTextZone(targetProjectId, name); break;
-                    case ActiveListKind.TaskCategories:
-                        Db.InsertTaskCategory(targetProjectId, name);
-                        // N'applique la couleur copiée QUE si la source du clipboard est le même projet
-                        if (_listClipboard.SourceProjectId == targetProjectId)
-                        {
-                            if (_listClipboard.TaskCategoryColorMap.TryGetValue(name, out var catHex) && !string.IsNullOrWhiteSpace(catHex))
-                                Db.SetTaskCategoryColorHex(targetProjectId, name, catHex);
-                        }
-                        break;
-                    case ActiveListKind.TaskUrgencies: Db.InsertTaskUrgency(targetProjectId, name); break;
-                    default: continue;
+                    Db.SetCompanyColorHex(projectId, name, hex);
+                    target.ColorBrush = BuildCompanyColorBrush(projectId, name);
+                }
+                else if (sameProject && _activeList == ActiveListKind.TaskCategories
+                    && _listClipboard.TaskCategoryColorMap.TryGetValue(name, out var catHex) && !string.IsNullOrWhiteSpace(catHex))
+                {
+                    Db.SetTaskCategoryColorHex(projectId, name, catHex);
+                    target.ColorBrush = BuildTaskCategoryColorBrush(projectId, name);
                 }
 
-                existing.Add(name);
+                existingNames.Add(name);
                 inserted++;
             }
 
-            Reload();
+            if (collection.Count == 0 || !string.IsNullOrWhiteSpace(collection[^1].Name))
+                collection.Add(new EditableListItem());
+
+            if (inserted > 0) _listsDirty = true;
+            RefreshCommonButtonsState();
 
             MessageBox.Show($"Collage terminé.\n\nAjoutés : {inserted}\nDéjà présents : {skipped}", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -799,37 +928,101 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         }
     }
 
-    // =========================
-    // Libellés
-    // =========================
-    private void SaveLabels_Click(object sender, RoutedEventArgs e) => SaveLabelsCore();
-
-    private void SaveLabelsCore()
+    private void CommonSave_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var projectId = RequireCurrentProjectId();
-
-            Db.SetLabelReserve(projectId, (LabelReserveTextBox.Text ?? "").Trim());
-            Db.SetLabelRequestedBy(projectId, (LabelRequestedByTextBox.Text ?? "").Trim());
-            Db.SetLabelPerformedBy(projectId, (LabelPerformedByTextBox.Text ?? "").Trim());
-            Db.SetLabelPlace(projectId, (LabelPlaceTextBox.Text ?? "").Trim());
-            Db.SetLabelEtage(projectId, (LabelEtageTextBox.Text ?? "").Trim());
-            Db.SetLabelDeadline(projectId, (LabelDeadlineTextBox.Text ?? "").Trim());
-            Db.SetLabelPlanningTextZone(projectId, (LabelPlanningTextZoneTextBox.Text ?? "").Trim());
-            Db.SetLabelTaskCategory(projectId, (LabelTaskCategoryTextBox.Text ?? "").Trim());
-            Db.SetLabelTaskUrgency(projectId, (LabelTaskUrgencyTextBox.Text ?? "").Trim());
-
-            _labelsDirty = false;
-
-            MessageBox.Show("Libellés enregistrés.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
-
-            Reload();
+            SaveAllNow();
+            MessageBox.Show("Modifications enregistrées.", "OK", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(ex.Message, "Erreur enregistrement", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    // ✅ Enregistrement global (28.07.2026, demande de Joe) : un seul bouton valide les
+    // libellés + les 8 listes + les 8 valeurs par défaut en une fois. Chaque liste est
+    // diffée contre son instantané "original" par IDENTITÉ (EditableListItem.OriginalName,
+    // voir PopulateItems) pour distinguer un renommage d'un supprimer+ajouter.
+    public void SaveAllNow()
+    {
+        if (!HasCurrentProject()) return;
+        var projectId = RequireCurrentProjectId();
+
+        SaveLabels(projectId);
+
+        SaveListChanges(projectId, _reservesItems, _reservesOriginal, Db.InsertReserve, Db.RenameReserve, Db.DeleteReserve);
+        SaveListChanges(projectId, _requestersItems, _requestersOriginal, Db.InsertRequester, Db.RenameRequester, Db.DeleteRequester);
+        SaveListChanges(projectId, _companiesItems, _companiesOriginal, Db.InsertCompany, Db.RenameCompany, Db.DeleteCompany);
+        SaveListChanges(projectId, _placesItems, _placesOriginal, Db.InsertPlace, Db.RenamePlace, Db.DeletePlace);
+        SaveListChanges(projectId, _etagesItems, _etagesOriginal, Db.InsertEtage, Db.RenameEtage, Db.DeleteEtage);
+        SaveListChanges(projectId, _planningTextZonesItems, _planningTextZonesOriginal, Db.InsertPlanningTextZone, Db.RenamePlanningTextZone, Db.DeletePlanningTextZone);
+        SaveListChanges(projectId, _taskCategoriesItems, _taskCategoriesOriginal, Db.InsertTaskCategory, Db.RenameTaskCategory, Db.DeleteTaskCategory);
+        SaveListChanges(projectId, _taskUrgenciesItems, _taskUrgenciesOriginal, Db.InsertTaskUrgency, Db.RenameTaskUrgency, Db.DeleteTaskUrgency);
+
+        Db.SetDefaultReserve(projectId, DefaultReserveComboBox.Text ?? "");
+        Db.SetDefaultRequester(projectId, DefaultRequesterComboBox.Text ?? "");
+        Db.SetDefaultCompany(projectId, DefaultCompanyComboBox.Text ?? "");
+        Db.SetDefaultPlace(projectId, DefaultPlaceComboBox.Text ?? "");
+        Db.SetDefaultEtage(projectId, DefaultEtageComboBox.Text ?? "");
+        Db.SetDefaultPlanningTextZone(projectId, DefaultPlanningTextZoneComboBox.Text ?? "");
+        Db.SetDefaultTaskCategory(projectId, DefaultTaskCategoryComboBox.Text ?? "");
+        Db.SetDefaultTaskUrgency(projectId, DefaultTaskUrgencyComboBox.Text ?? "");
+
+        _listsDirty = false;
+        Reload();
+
+        try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
+    }
+
+    private static void SaveListChanges(
+        long projectId,
+        ObservableCollection<EditableListItem> collection,
+        List<string> originalSnapshot,
+        Action<long, string> insert,
+        Action<long, string, string> rename,
+        Action<long, string> delete)
+    {
+        var accountedOriginals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in collection.ToList())
+        {
+            var name = (item.Name ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            if (item.OriginalName == null)
+            {
+                insert(projectId, name);
+            }
+            else
+            {
+                accountedOriginals.Add(item.OriginalName);
+                if (!string.Equals(item.OriginalName, name, StringComparison.Ordinal))
+                    rename(projectId, item.OriginalName, name);
+            }
+        }
+
+        foreach (var original in originalSnapshot)
+            if (!accountedOriginals.Contains(original))
+                delete(projectId, original);
+    }
+
+    // =========================
+    // Libellés (voir SaveAllNow pour l'enregistrement global)
+    // =========================
+    private void SaveLabels(long projectId)
+    {
+        Db.SetLabelReserve(projectId, (LabelReserveTextBox.Text ?? "").Trim());
+        Db.SetLabelRequestedBy(projectId, (LabelRequestedByTextBox.Text ?? "").Trim());
+        Db.SetLabelPerformedBy(projectId, (LabelPerformedByTextBox.Text ?? "").Trim());
+        Db.SetLabelPlace(projectId, (LabelPlaceTextBox.Text ?? "").Trim());
+        Db.SetLabelEtage(projectId, (LabelEtageTextBox.Text ?? "").Trim());
+        Db.SetLabelDeadline(projectId, (LabelDeadlineTextBox.Text ?? "").Trim());
+        Db.SetLabelPlanningTextZone(projectId, (LabelPlanningTextZoneTextBox.Text ?? "").Trim());
+        Db.SetLabelTaskCategory(projectId, (LabelTaskCategoryTextBox.Text ?? "").Trim());
+        Db.SetLabelTaskUrgency(projectId, (LabelTaskUrgencyTextBox.Text ?? "").Trim());
+        _labelsDirty = false;
     }
 
     // =========================
@@ -943,13 +1136,10 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             var isGradient = CompanyGradientCheckBox?.IsChecked == true;
             Db.SetCompanyColorHex(projectId, companyName, hex, isGradient);
 
-            Reload();
-
-            // ✅ Reload() recree les items de CompaniesListBox (nouvelles instances) -> la
-            // selection precedente est perdue, ce qui reinitialisait visuellement la case
-            // "Degrade" juste apres l'avoir cochee (25.07.2026, signale par Joe).
-            CompaniesListBox.SelectedItem = (CompaniesListBox.ItemsSource as System.Collections.Generic.IEnumerable<CompanyListItem>)?
-                .FirstOrDefault(x => string.Equals(x.Name, companyName, StringComparison.OrdinalIgnoreCase));
+            // ✅ Édition directe (28.07.2026) : plus de Reload() ici -- ça effacerait les
+            // modifications de texte en cours dans les autres listes. On met juste à jour la
+            // pastille de la ligne concernée directement en mémoire.
+            if (_activeRowItem != null) _activeRowItem.ColorBrush = BuildCompanyColorBrush(projectId, companyName);
 
             SetSelectedCompanyColorPreview(hex, isGradient);
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
@@ -987,14 +1177,9 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             var isGradient = CompanyGradientCheckBox?.IsChecked == true;
             Db.SetCompanyColorHex(projectId, companyName, hex, isGradient);
 
-            // Forcer le reload de la page Planning pour prendre en compte la nouvelle couleur
-            Reload();
-
-            // ✅ Reload() recree les items de CompaniesListBox -> la selection (et donc le
-            // contraste du bouton "Couleur") se perdait juste apres avoir choisi une couleur
-            // (25.07.2026, signale par Joe). Meme correctif que CompanyGradientCheckBox_Changed.
-            CompaniesListBox.SelectedItem = (CompaniesListBox.ItemsSource as System.Collections.Generic.IEnumerable<CompanyListItem>)?
-                .FirstOrDefault(x => string.Equals(x.Name, companyName, StringComparison.OrdinalIgnoreCase));
+            // ✅ Édition directe (28.07.2026) : plus de Reload() -- met juste à jour la
+            // pastille de la ligne concernée en mémoire (voir CompanyGradientCheckBox_Changed).
+            if (_activeRowItem != null) _activeRowItem.ColorBrush = BuildCompanyColorBrush(projectId, companyName);
             SetSelectedCompanyColorPreview(hex, isGradient);
 
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
@@ -1016,11 +1201,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 return;
 
             Db.DeleteCompanyColor(projectId, companyName);
-            // Forcer le reload de la page Planning pour prendre en compte la suppression
-            Reload();
 
-            CompaniesListBox.SelectedItem = (CompaniesListBox.ItemsSource as System.Collections.Generic.IEnumerable<CompanyListItem>)?
-                .FirstOrDefault(x => string.Equals(x.Name, companyName, StringComparison.OrdinalIgnoreCase));
+            if (_activeRowItem != null) _activeRowItem.ColorBrush = BuildCompanyColorBrush(projectId, companyName);
             SetSelectedCompanyColorPreview(null, false);
 
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
@@ -1110,12 +1292,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             var isGradient = TaskCategoryGradientCheckBox?.IsChecked == true;
             Db.SetTaskCategoryColorHex(projectId, categoryName, hex, isGradient);
 
-            Reload();
-
-            // ✅ Reload() recree les items de TaskCategoriesListBox -> selection perdue,
-            // meme correctif que pour CompanyGradientCheckBox_Changed ci-dessus.
-            TaskCategoriesListBox.SelectedItem = (TaskCategoriesListBox.ItemsSource as System.Collections.Generic.IEnumerable<TaskCategoryListItem>)?
-                .FirstOrDefault(x => string.Equals(x.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+            // ✅ Édition directe (28.07.2026) : plus de Reload(), voir CompanyGradientCheckBox_Changed.
+            if (_activeRowItem != null) _activeRowItem.ColorBrush = BuildTaskCategoryColorBrush(projectId, categoryName);
 
             SetSelectedTaskCategoryColorPreview(hex, isGradient);
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
@@ -1153,13 +1331,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             var isGradient = TaskCategoryGradientCheckBox?.IsChecked == true;
             Db.SetTaskCategoryColorHex(projectId, categoryName, hex, isGradient);
 
-            // Forcer le reload de la page Planning pour prendre en compte la nouvelle couleur
-            Reload();
-
-            // ✅ Reload() recree les items de TaskCategoriesListBox -> meme correctif que
-            // PickCompanyColor_Click (25.07.2026, contraste du bouton "Couleur" perdu).
-            TaskCategoriesListBox.SelectedItem = (TaskCategoriesListBox.ItemsSource as System.Collections.Generic.IEnumerable<TaskCategoryListItem>)?
-                .FirstOrDefault(x => string.Equals(x.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+            // ✅ Édition directe (28.07.2026) : plus de Reload(), voir PickCompanyColor_Click.
+            if (_activeRowItem != null) _activeRowItem.ColorBrush = BuildTaskCategoryColorBrush(projectId, categoryName);
             SetSelectedTaskCategoryColorPreview(hex, isGradient);
 
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }
@@ -1181,11 +1354,8 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 return;
 
             Db.DeleteTaskCategoryColor(projectId, categoryName);
-            // Forcer le reload de la page Planning pour prendre en compte la suppression
-            Reload();
 
-            TaskCategoriesListBox.SelectedItem = (TaskCategoriesListBox.ItemsSource as System.Collections.Generic.IEnumerable<TaskCategoryListItem>)?
-                .FirstOrDefault(x => string.Equals(x.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+            if (_activeRowItem != null) _activeRowItem.ColorBrush = BuildTaskCategoryColorBrush(projectId, categoryName);
             SetSelectedTaskCategoryColorPreview(null, false);
 
             try { ((MainWindow)System.Windows.Application.Current.MainWindow).RefreshPlanning(); } catch { }

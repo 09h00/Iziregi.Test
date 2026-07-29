@@ -429,7 +429,7 @@
                    FontSize="18"
                    FontWeight="SemiBold"
                    Foreground="#111827"
-                   Margin="4,0,0,10"/>
+                   Margin="4,-3,0,-2"/>
 
         <!-- ✅ Popup de filtre façon Excel, porté depuis Archives (24.07.2026, demande de Joe). -->
         <Popup x:Name="ColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">

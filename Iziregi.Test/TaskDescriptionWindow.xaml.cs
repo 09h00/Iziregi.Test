@@ -266,6 +266,50 @@ public partial class TaskDescriptionWindow : Window
         _hasEdited = true;
     }
 
+    // ✅ Couleur de police / surlignage (28.07.2026, demande de Joe) : même mécanisme que
+    // FontColorButton_Click/FillColorButton_Click dans PlanningPage.xaml.cs (zones de texte).
+    private void FontColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dlg = new System.Windows.Forms.ColorDialog { FullOpen = true };
+
+            if (FontColorSwatch?.Background is System.Windows.Media.SolidColorBrush b)
+                dlg.Color = System.Drawing.Color.FromArgb(b.Color.R, b.Color.G, b.Color.B);
+
+            if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+            var c = System.Windows.Media.Color.FromRgb(dlg.Color.R, dlg.Color.G, dlg.Color.B);
+            FontColorSwatch!.Background = new System.Windows.Media.SolidColorBrush(c);
+
+            DescriptifRichTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new System.Windows.Media.SolidColorBrush(c));
+            DescriptifRichTextBox.Focus();
+            _hasEdited = true;
+        }
+        catch { }
+    }
+
+    private void FillColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dlg = new System.Windows.Forms.ColorDialog { FullOpen = true };
+
+            if (FillColorSwatch?.Background is System.Windows.Media.SolidColorBrush b)
+                dlg.Color = System.Drawing.Color.FromArgb(b.Color.R, b.Color.G, b.Color.B);
+
+            if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+            var c = System.Windows.Media.Color.FromRgb(dlg.Color.R, dlg.Color.G, dlg.Color.B);
+            FillColorSwatch!.Background = new System.Windows.Media.SolidColorBrush(c);
+
+            DescriptifRichTextBox.Selection.ApplyPropertyValue(TextElement.BackgroundProperty, new System.Windows.Media.SolidColorBrush(c));
+            DescriptifRichTextBox.Focus();
+            _hasEdited = true;
+        }
+        catch { }
+    }
+
     // ✅ Même mécanisme que CopyImageIntoAppStorage / InsertImageIntoActiveTextZone_Click
     // dans PlanningPage.xaml.cs (copie l'image dans le stockage de l'app, insertion via
     // InlineUIContainer), dupliqué ici car TaskDescriptionWindow est une fenêtre séparée
