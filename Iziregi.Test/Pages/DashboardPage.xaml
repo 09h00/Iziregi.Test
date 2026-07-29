@@ -35,8 +35,10 @@
                                               RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="border" Property="Opacity" Value="0.5"/>
@@ -77,9 +79,11 @@
                                               RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#1E40AF"/>
                                 <Setter TargetName="border" Property="BorderBrush" Value="#1E40AF"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
                                 <Setter Property="Foreground" Value="White"/>
                             </Trigger>
 
@@ -1362,6 +1366,11 @@
                         <ControlTemplate TargetType="Button">
                             <Border Background="#992563EB"
                                     CornerRadius="18">
+                                <!-- ✅ 29.07.2026 (Joe : flèche trop bas/à droite) : Path avec
+                                     Stretch="None" ne recentre pas parfaitement une géométrie dont
+                                     les coordonnées ne partent pas de (0,0) (l'empan du trait avec
+                                     bouts arrondis n'est pas compté dans le centrage automatique),
+                                     petit ajustement manuel pour compenser. -->
                                 <Path Data="M 9 21 L 18 12 L 27 21"
                                       Stretch="None"
                                       Stroke="White"
@@ -1370,7 +1379,8 @@
                                       StrokeEndLineCap="Round"
                                       StrokeLineJoin="Round"
                                       HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
+                                      VerticalAlignment="Center"
+                                      Margin="-7,-15,0,0"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">

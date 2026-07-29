@@ -69,8 +69,10 @@
                                               RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -134,9 +136,11 @@
 							                  Margin="{TemplateBinding Padding}"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#1D4ED8"/>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#1E40AF"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#1E40AF"/>
@@ -171,9 +175,11 @@
 							                  Margin="{TemplateBinding Padding}"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#374151"/>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#374151"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#4B5563"/>
@@ -527,6 +533,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="#D1D5DB"/>
             <Setter Property="Padding" Value="6"/>
+            <Setter Property="FontFamily" Value="Arial"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="MinHeight" Value="72"/>
             <Style.Triggers>
@@ -1156,6 +1163,18 @@
 						          BorderThickness="1"
 						          IsReadOnly="False">
                             <DataGrid.Columns>
+
+                                <!-- ✅ 29.07.2026 (demande de Joe) : case à cocher pour sélectionner
+                                     les lignes à supprimer, même principe que TaskSelectColumn. -->
+                                <DataGridTemplateColumn x:Name="PlanningSelectColumn" Header="" Width="28" CanUserResize="False">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
 
                                 <DataGridTemplateColumn x:Name="PlanningCompanyColumn" MinWidth="150" Width="Auto">
                                     <DataGridTemplateColumn.HeaderTemplate>
@@ -1850,6 +1869,15 @@
 
                             <!-- ✅ Sélectionner tout / Copier / Coller déplacés sur la ligne "Police"
                                  (19.07.2026, 2e demande de Joe) : voir TextZoneFontToolbar. -->
+
+                            <!-- ✅ 29.07.2026 (demande de Joe) : "Supprimer" vide juste le texte de la
+                                 zone sélectionnée, sans la masquer (contrairement à "Retirer zone de
+                                 texte" à droite qui masque aussi la zone). -->
+                            <Button Content="Supprimer"
+							        Style="{StaticResource SmallBlackButtonStyle}"
+							        DockPanel.Dock="Right"
+							        Margin="8,0,0,0"
+							        Click="TextZoneClear_Click"/>
 
                             <Button Content="Retirer zone de texte"
 							        Style="{StaticResource SmallBlackButtonStyle}"

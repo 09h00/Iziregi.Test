@@ -1536,6 +1536,44 @@ public partial class MainWindow : Window
         }
     }
 
+    // ✅ Contact (29.07.2026, demande de Joe) : même principe que NavHelp_Click ci-dessus.
+    private void NavContact_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"{baseUrl}/contact") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’ouvrir la page de contact.\n\n{ex.Message}",
+                "Contact",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    // ✅ CGV version d'essai (29.07.2026, demande de Joe) : même principe que NavHelp_Click.
+    private void NavCgvEssai_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"{baseUrl}/cgv-essai") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible d’ouvrir la page des CGV.\n\n{ex.Message}",
+                "CGV",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     // ✅ BUG (grilles/images/stickers du Planning perdus au changement de page) : on ne
     // peut pas se fier uniquement à l'événement Unloaded de PlanningPage pour sauvegarder
     // avant de quitter — pas assez fiable dans ce contexte. On force donc une sauvegarde
@@ -1586,17 +1624,27 @@ public partial class MainWindow : Window
     // bouton "Enregistrer" global (voir ListsPage.HasUnsavedChanges/SaveAllNow) plutôt
     // qu'automatiquement -- prévient donc à nouveau une sortie de page avec des changements
     // en attente.
+    // ✅ 29.07.2026 (demande de Joe) : message standard "Voulez-vous enregistrer les
+    // modifications ?" (Oui/Non/Annuler) plutôt qu'un simple "quitter quand même ?" --
+    // Oui enregistre puis quitte, Non quitte sans enregistrer, Annuler reste sur la page.
     private bool ConfirmLeaveListsPageIfDirty()
     {
         if (MainContent.Content is ListsPage lp && lp.HasUnsavedChanges)
         {
             var result = System.Windows.MessageBox.Show(
                 this,
-                "Des modifications non enregistrées seront perdues. Quitter quand même ?",
-                "Modifications non enregistrées",
-                System.Windows.MessageBoxButton.YesNo,
+                "Voulez-vous enregistrer les modifications ?",
+                "Listes",
+                System.Windows.MessageBoxButton.YesNoCancel,
                 System.Windows.MessageBoxImage.Warning);
-            return result == System.Windows.MessageBoxResult.Yes;
+
+            if (result == System.Windows.MessageBoxResult.Cancel)
+                return false;
+
+            if (result == System.Windows.MessageBoxResult.Yes)
+                lp.SaveAllNow();
+
+            return true;
         }
         return true;
     }

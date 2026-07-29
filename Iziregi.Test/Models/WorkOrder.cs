@@ -23,8 +23,10 @@ public class WorkOrder
     public string PerformedBy { get; set; } = "";
     public System.DateTime RequestDate { get; set; }
 
-    // ✅ Nouveau : délai (date)
-    public System.DateTime DeadlineDate { get; set; } = System.DateTime.Today;
+    // ✅ Délai (date). Pas de valeur par défaut (29.07.2026, demande de Joe) : default(DateTime)
+    // signifie "pas de délai renseigné" (voir DeadlineDatePicker dans WorkOrderWindow, et
+    // PdfService qui traite déjà default comme une case vide).
+    public System.DateTime DeadlineDate { get; set; }
 
     public string Reserve { get; set; } = "";
 

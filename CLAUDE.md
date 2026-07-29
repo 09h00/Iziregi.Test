@@ -72,6 +72,16 @@ donner une commande sans cette précision. Communication en français, tutoiemen
    version corrigée déjà installée.
 3. Éviter de dire "parfait" ou qu'un correctif est définitif avant confirmation réelle
    par un test de Joe.
+4. **Joe teste parfois l'exe installé (`%LOCALAPPDATA%\Iziregi\Iziregi.Test.exe`), pas le
+   build de dev** (`Iziregi.Test\bin\Debug\net8.0-windows\Iziregi.Test.exe`) : les deux ont
+   le même nom de processus (`Iziregi.Test.exe`), donc `tasklist` ne suffit pas à distinguer
+   lequel tourne — utiliser `Get-Process -Id <pid> | Select Path` pour vérifier. Si un
+   correctif semble "ne pas s'appliquer" après rebuild, vérifier ce point avant de chercher
+   ailleurs. Solution pendant une session de dev itérative : tuer l'instance installée et
+   relancer explicitement celle de `bin\Debug`.
+5. **Commentaires XAML** : `<!-- ... -->` ne tolère pas `--` à l'intérieur du texte (erreur
+   de compilation MC3000, "An XML comment cannot contain '--'"). Piège récurrent avec les
+   tirets doubles utilisés comme ponctuation en français — préférer une virgule ou un point.
 
 ## Export complet des données (17.07.2026)
 
@@ -131,3 +141,68 @@ sections), ProjectsWindow, ArchitectIdentityWindow, WorkOrderWindow.
   est mis à jour via `SetActiveNavButton()` (`MainWindow.xaml.cs`), appelé au début de chaque
   `Show*()`. Attention : `Button` est ambigu dans ce fichier (WPF + WinForms référencés) —
   qualifier en `System.Windows.Controls.Button`.
+
+## Page Listes : édition directe en ligne (28-29.07.2026)
+
+Refonte complète du modèle d'édition de `ListsPage`, demandée par Joe pour que les 8 listes
+de référence (Concerne/Demandé par/Bâtiment/Étage/Entreprise/Zone de texte planning/Cat./
+Urg. + la nouvelle liste Nom, voir plus bas) et les libellés de champs se modifient
+directement dans la page, sans fenêtres popup séparées.
+
+- **Modèle** : `EditableListItem` (`ListsPage.xaml.cs`), avec `OriginalName` (`null` = ligne
+  créée pendant la session, pas encore en base) et `Name` (éditable). Chaque liste est une
+  `ObservableCollection<EditableListItem>` liée UNE SEULE FOIS à son `ListBox.ItemsSource`
+  dans le constructeur ; `Reload()`/`ReloadCore()` ne font que vider/remplir cette même
+  collection (`PopulateItems`), jamais réassigner `ItemsSource`.
+- **Édition d'une ligne** : clic direct dans le `TextBox` de la ligne (bordure bleue au
+  focus). Entrée/flèche bas valide et passe à la ligne suivante (crée une ligne vide en bas
+  si on est déjà sur la dernière) ; flèche haut remonte. Vider une ligne la supprime, les
+  suivantes remontent automatiquement (`ObservableCollection`).
+- **Sélection** = soit une ligne précise (`_activeRowItem` non null), soit toute la liste
+  (`_activeRowItem == null`, clic dans le vide) — détermine la portée de Supprimer/Copier.
+- Boutons Ajouter/Renommer/Définir par défaut **supprimés** : le ComboBox "Sélection par
+  défaut" au-dessus de chaque liste (déjà éditable) fait office de "Définir par défaut".
+  Supprimer agit sur la ligne ou toute la liste (confirmation) ; "Copier la liste"/Coller
+  idem, Coller comble d'abord les lignes vides existantes avant d'en ajouter.
+- **Enregistrement différé** : rien n'est écrit en base pendant l'édition. Un seul bouton
+  "Enregistrer" global (`SaveAllNow`, bleu — `PrimaryButtonStyle`, **toujours cliquable**,
+  décision volontaire suite à un retour de Joe sur le clic en trop que demandait l'ancien
+  état désactivé) diffe chaque liste contre son instantané "original" par IDENTITÉ
+  (`SaveListChanges`, via `OriginalName`) pour distinguer un renommage d'un supprimer+ajouter,
+  puis écrit libellés + 8 listes + 8 valeurs par défaut en une fois. `HasUnsavedChanges`
+  (labels + listes) pilote le pop-up de confirmation en quittant la page sans enregistrer
+  (`MainWindow.ConfirmLeaveListsPageIfDirty`, 6 points d'appel : Dashboard/Comptabilité/
+  Archives/Corbeille/Planning/Identité Société).
+- **Doublons** : avertissement + annulation si un nom est dupliqué DANS la même liste, ou si
+  un libellé de champ est dupliqué entre les 9 champs — validation en mémoire au moment où le
+  champ perd le focus, avant tout enregistrement.
+- **Couleurs Entreprise/Cat.** restent en écriture immédiate en base (pas différées comme le
+  texte) — les handlers couleur (`PickCompanyColor_Click` etc.) ne font plus `Reload()`
+  après un changement de couleur (ça effacerait les éditions de texte en cours dans les
+  autres listes) : ils mettent juste à jour `ColorBrush` sur `_activeRowItem` directement.
+- **Piège résolu (29.07.2026)** : un `TextBox` de ligne ne remplissait QUE la largeur de son
+  texte (pas toute la ligne) → un clic à droite du texte manquait le champ, donnant
+  l'impression qu'"on ne peut rien écrire". Fix : `HorizontalAlignment="Stretch"` sur le
+  `TextBox` + `ItemContainerStyle` (`StretchListBoxItemStyle`, `HorizontalContentAlignment=
+  Stretch`, `Padding=0`) sur chaque `ListBox`. Pour le template avec pastille de couleur
+  (Entreprise/Cat.), le `StackPanel` horizontal a dû être remplacé par une `Grid` à 2
+  colonnes (Auto + `*`) car un `StackPanel` ne laisse pas un enfant remplir l'espace restant.
+
+### Liste "Nom" remplace le bloc "Délai" (29.07.2026, demande de Joe)
+
+Le champ "Délai" (`DeadlineDatePicker`, section Demande du bon) n'a jamais eu de liste
+associée dans la page Listes (juste un libellé). Joe a demandé de récupérer cet espace :
+- **Délai** : libellé figé "Délai" en dur dans `WorkOrderWindow.xaml` (plus personnalisable,
+  `Db.GetLabelDeadline`/`SetLabelDeadline` retirés). Plus de date pré-remplie par défaut :
+  `WorkOrder.DeadlineDate` n'a plus d'initialiseur (`default(DateTime)` = "pas de délai",
+  convention déjà utilisée par `PdfService`), le `DatePicker` affiche `null` (vide) tant
+  qu'aucune date n'a été choisie au lieu de proposer la date du jour.
+- **Nom** (section Validation du bon, `SignatureNameComboBox` — anciennement un `TextBox`
+  libre `SignatureNameTextBox`) : devient une ComboBox éditable alimentée par une nouvelle
+  liste de référence, table `SignatoryNames` (`ProjectId`, `Name`, sans contrainte UNIQUE
+  SQL — comme les autres listes, la détection de doublon est gérée côté application, pas en
+  base). CRUD `Db.GetSignatoryNames`/`InsertSignatoryName`/`RenameSignatoryName` (avec
+  propagation vers `WorkOrders.SignatureName` existants, comme `RenameEtage`)/
+  `DeleteSignatoryName`, libellé `Db.GetLabelSignatoryName`/`SetLabelSignatoryName` (défaut
+  "Nom", renommable par Joe via son champ libellé dans la page Listes), valeur par défaut
+  `Db.GetDefaultSignatoryName`/`SetDefaultSignatoryName`.

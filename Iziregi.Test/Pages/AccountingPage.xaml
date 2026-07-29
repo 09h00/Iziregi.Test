@@ -21,7 +21,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="8"
@@ -31,6 +32,47 @@
                                               VerticalAlignment="Center"
                                               RecognizesAccessKey="True"/>
                         </Border>
+                        <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ 29.07.2026 (demande de Joe) : bouton "Rafraîchir" sans couleur de fond, texte
+             noir, coins arrondis. -->
+        <Style x:Key="RefreshButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -53,16 +95,19 @@
                 <Button Content="Exporter CSV (détail)"
                         Width="190"
                         Margin="16,0,0,0"
+                        Style="{StaticResource RefreshButtonStyle}"
                         Click="ExportDetailsCsv_Click"/>
 
                 <Button Content="Exporter CSV (totaux entreprises)"
                         Width="260"
                         Margin="8,0,0,0"
+                        Style="{StaticResource RefreshButtonStyle}"
                         Click="ExportCompaniesCsv_Click"/>
 
                 <Button Content="Rafraîchir"
                         Width="120"
                         Margin="8,0,0,0"
+                        Style="{StaticResource RefreshButtonStyle}"
                         Click="Refresh_Click"/>
 
                 <!-- ✅ Afficher/Masquer le graphique des catégories (23.07.2026, demande de Joe). -->
@@ -70,6 +115,8 @@
                         Content="Masquer graphique catégories"
                         Width="210"
                         Margin="8,0,0,0"
+                        Foreground="Black"
+                        BorderBrush="Black"
                         Style="{StaticResource CategoryChartToggleButtonStyle}"
                         Click="ToggleCategoryChartButton_Click"/>
 

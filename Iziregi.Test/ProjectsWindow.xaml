@@ -74,9 +74,11 @@
                         </Border>
 
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#1D4ED8"/>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#1D4ED8"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
 
                             <Trigger Property="IsPressed" Value="True">
@@ -121,8 +123,10 @@
                         </Border>
 
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
 
                             <Trigger Property="IsEnabled" Value="False">

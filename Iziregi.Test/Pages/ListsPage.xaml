@@ -8,6 +8,41 @@
 
     <UserControl.Resources>
 
+        <!-- ✅ 29.07.2026 (Joe : "info-bulles pénibles à lire" puis "pas carrées, rectangles") :
+             style implicite (sans x:Key), s'applique automatiquement à toutes les info-bulles
+             de cette page sans devoir toucher chaque ToolTip="..." individuellement. Largeur
+             plafonnée + retour à la ligne (ContentTemplate) pour un bloc compact plutôt qu'une
+             longue bande sur une seule ligne. Carré (pas d'arrondi), fond jaune clair. -->
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="#FFF9C4"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#F2C94C"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MaxWidth" Value="260"/>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="0">
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SmallButtonStyle" TargetType="Button">
             <Setter Property="Height" Value="28"/>
             <Setter Property="Padding" Value="10,0"/>
@@ -33,6 +68,10 @@
 								RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="border" Property="Background" Value="#F9FAFB"/>
                                 <Setter TargetName="border" Property="BorderBrush" Value="#E5E7EB"/>
@@ -118,7 +157,7 @@
              réduit pour une ligne moins haute. -->
         <Style x:Key="EditableRowTextBoxStyle" TargetType="TextBox">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Padding" Value="4,0"/>
             <Setter Property="Margin" Value="0"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -189,20 +228,11 @@
     <Grid Margin="0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="6"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="8"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-			Text="Listes"
-			FontSize="18"
-			FontWeight="SemiBold"
-			Foreground="#111827"
-			Margin="0,-11,0,-3"/>
-
-        <Border Grid.Row="2"
+        <Border Grid.Row="0"
 			BorderBrush="#E5E7EB"
 			BorderThickness="1"
 			CornerRadius="10"
@@ -211,15 +241,19 @@
 			Effect="{StaticResource CardShadowEffect}">
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                    <TextBlock Text="Listes déroulantes"
+                    <!-- ✅ 29.07.2026 (Joe : gagner de la hauteur) : remplace le titre de page
+                         "Listes" séparé au-dessus, ce libellé fait maintenant double emploi. -->
+                    <TextBlock Text="Listes"
+						FontSize="18"
 						FontWeight="SemiBold"
+						Foreground="#111827"
 						VerticalAlignment="Center"
-						Margin="0,0,12,0"/>
+						Margin="0,0,16,0"/>
 
                     <Button x:Name="CommonDeleteButton" Content="Supprimer" Width="90" Margin="0,0,8,0" Click="CommonDelete_Click" Style="{StaticResource SmallButtonStyle}" Foreground="#DC2626" BorderBrush="#DC2626"/>
                     <Button x:Name="CommonCopyButton" Content="Copier la liste" Width="110" Margin="0,0,8,0" Click="CommonCopy_Click" Style="{StaticResource SmallButtonStyle}"/>
                     <Button x:Name="CommonPasteButton" Content="Coller" Width="90" Margin="0,0,16,0" Click="CommonPaste_Click" Style="{StaticResource SmallButtonStyle}"/>
-                    <Button x:Name="CommonSaveButton" Content="Enregistrer" Width="100" Click="CommonSave_Click" Style="{StaticResource SmallButtonStyle}" Foreground="#16A34A" BorderBrush="#16A34A" FontWeight="SemiBold"/>
+                    <Button x:Name="CommonSaveButton" Content="Enregistrer" Width="100" Click="CommonSave_Click" Style="{StaticResource PrimaryButtonStyle}"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -229,7 +263,7 @@
             </DockPanel>
         </Border>
 
-        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel>
         <Grid Height="478">
             <Grid.ColumnDefinitions>
@@ -247,9 +281,9 @@
             </Grid.ColumnDefinitions>
 
             <!-- Concerne -->
-            <GroupBox x:Name="ReservesGroupBox" Grid.Column="0">
+            <GroupBox x:Name="ReservesGroupBox" Grid.Column="0" ToolTip="Champ associé à:&#10;* 1er champ de la section « Demande » du BI.&#10;* 2è colonne du tableau de bord.">
                 <DockPanel>
-                    <TextBox x:Name="LabelReserveTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelReserveTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 1er champ de la section « Demande » du BI.&#10;* 2è colonne du tableau de bord."/>
                     <TextBlock DockPanel.Dock="Top" Text="(20 caractères max. sur le bon)" Foreground="#9CA3AF" FontSize="10" Margin="0,-6,0,8"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultReserveComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
@@ -270,9 +304,9 @@
             </GroupBox>
 
             <!-- Demandé par -->
-            <GroupBox x:Name="RequestersGroupBox" Grid.Column="2">
+            <GroupBox x:Name="RequestersGroupBox" Grid.Column="2" ToolTip="Champ associé à:&#10;* 2è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau de bord.">
                 <DockPanel>
-                    <TextBox x:Name="LabelRequestedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelRequestedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 2è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau de bord."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultRequesterComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 
@@ -292,9 +326,9 @@
             </GroupBox>
 
             <!-- Bâtiment -->
-            <GroupBox x:Name="PlacesGroupBox" Grid.Column="4">
+            <GroupBox x:Name="PlacesGroupBox" Grid.Column="4" ToolTip="Champ associé à:&#10;* 3è champ de la section « Demande » du BI.&#10;* 2è colonne du tableau des tâches.">
                 <DockPanel>
-                    <TextBox x:Name="LabelPlaceTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelPlaceTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 3è champ de la section « Demande » du BI.&#10;* 2è colonne du tableau des tâches."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultPlaceComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
                     <TextBox x:Name="NewPlaceTextBox" Visibility="Collapsed"/>
@@ -315,9 +349,9 @@
             </GroupBox>
 
             <!-- Étage -->
-            <GroupBox x:Name="EtagesGroupBox" Grid.Column="6">
+            <GroupBox x:Name="EtagesGroupBox" Grid.Column="6" ToolTip="Champ associé à:&#10;* 4è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau des tâches.">
                 <DockPanel>
-                    <TextBox x:Name="LabelEtageTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelEtageTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 4è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau des tâches."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultEtageComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
                     <TextBox x:Name="NewEtageTextBox" Visibility="Collapsed"/>
@@ -338,9 +372,9 @@
             </GroupBox>
 
             <!-- Entreprise -->
-            <GroupBox x:Name="CompaniesGroupBox" Grid.Column="8">
+            <GroupBox x:Name="CompaniesGroupBox" Grid.Column="8" ToolTip="Champ associé à:&#10;* 5è champ de la section « Demande » du BI.&#10;* 4è colonne du tableau de bord.&#10;* 7è colonne du tableau des tâches.&#10;* 1è colonne du tableau planning hebdo.">
                 <DockPanel>
-                    <TextBox x:Name="LabelPerformedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelPerformedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 5è champ de la section « Demande » du BI.&#10;* 4è colonne du tableau de bord.&#10;* 7è colonne du tableau des tâches.&#10;* 1è colonne du tableau planning hebdo."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultCompanyComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 
@@ -378,11 +412,27 @@
                 </DockPanel>
             </GroupBox>
 
-            <!-- Délai (pas de liste associée : juste le nom du champ) -->
-            <GroupBox x:Name="DeadlineGroupBox" Grid.Column="10">
+            <!-- ✅ 29.07.2026 (demande de Joe) : remplace le bloc "Délai" (champ date sans
+                 liste, devenu inutile ici, son libellé est maintenant figé directement dans
+                 WorkOrderWindow.xaml) par une liste "Nom" (section Validation du bon). -->
+            <GroupBox x:Name="SignatoryNamesGroupBox" Grid.Column="10" ToolTip="Champ associé à:&#10;* Nom du signataire dans la section « Validation »">
                 <DockPanel>
-                    <TextBox x:Name="LabelDeadlineTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
-                    <TextBlock DockPanel.Dock="Top" Text="Champ date (pas de liste associée)" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap"/>
+                    <TextBox x:Name="LabelSignatoryNameTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* Nom du signataire dans la section « Validation »"/>
+                    <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
+                    <ComboBox x:Name="DefaultSignatoryNameComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
+
+                    <Border x:Name="SignatoryNamesListBorder"
+						Background="Transparent"
+						BorderThickness="2"
+						CornerRadius="6"
+						BorderBrush="#E5E7EB"
+						PreviewMouseLeftButtonDown="SignatoryNamesListBorder_PreviewMouseLeftButtonDown">
+                        <ListBox x:Name="SignatoryNamesListBox"
+							GotFocus="SignatoryNamesListBox_GotFocus"
+							SelectionChanged="AnyListBox_SelectionChanged"
+							ItemContainerStyle="{StaticResource StretchListBoxItemStyle}"
+							ItemTemplate="{StaticResource EditableListItemTemplate}"/>
+                    </Border>
                 </DockPanel>
             </GroupBox>
 
@@ -409,9 +459,9 @@
             </Grid.ColumnDefinitions>
 
             <!-- Zone de texte planning -->
-            <GroupBox x:Name="PlanningTextZonesGroupBox" Grid.Column="0">
+            <GroupBox x:Name="PlanningTextZonesGroupBox" Grid.Column="0" ToolTip="Champ associé à:&#10;* Titre des champs de texte dans Planning.">
                 <DockPanel>
-                    <TextBox x:Name="LabelPlanningTextZoneTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelPlanningTextZoneTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* Titre des champs de texte dans Planning."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultPlanningTextZoneComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 
@@ -431,9 +481,9 @@
             </GroupBox>
 
             <!-- Cat. (tâches Planning) -->
-            <GroupBox x:Name="TaskCategoriesGroupBox" Grid.Column="2">
+            <GroupBox x:Name="TaskCategoriesGroupBox" Grid.Column="2" ToolTip="Champ associé à:&#10;* 6è colonne du tableau des tâches.">
                 <DockPanel>
-                    <TextBox x:Name="LabelTaskCategoryTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelTaskCategoryTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 6è colonne du tableau des tâches."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultTaskCategoryComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 
@@ -469,9 +519,9 @@
             </GroupBox>
 
             <!-- Urg. (tâches Planning) -->
-            <GroupBox x:Name="TaskUrgenciesGroupBox" Grid.Column="4">
+            <GroupBox x:Name="TaskUrgenciesGroupBox" Grid.Column="4" ToolTip="Champ associé à:&#10;* 8è colonne du tableau des tâches.">
                 <DockPanel>
-                    <TextBox x:Name="LabelTaskUrgencyTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus"/>
+                    <TextBox x:Name="LabelTaskUrgencyTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 8è colonne du tableau des tâches."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultTaskUrgencyComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 

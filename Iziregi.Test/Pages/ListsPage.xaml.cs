@@ -73,7 +73,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         var others = new[]
         {
             LabelReserveTextBox, LabelRequestedByTextBox, LabelPerformedByTextBox, LabelPlaceTextBox,
-            LabelEtageTextBox, LabelDeadlineTextBox, LabelPlanningTextZoneTextBox, LabelTaskCategoryTextBox,
+            LabelEtageTextBox, LabelSignatoryNameTextBox, LabelPlanningTextZoneTextBox, LabelTaskCategoryTextBox,
             LabelTaskUrgencyTextBox
         };
 
@@ -105,6 +105,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         PlanningTextZones = 6,
         TaskCategories = 7,
         TaskUrgencies = 8,
+        SignatoryNames = 9,
     }
 
     private ActiveListKind _activeList = ActiveListKind.None;
@@ -161,6 +162,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     private readonly ObservableCollection<EditableListItem> _planningTextZonesItems = new();
     private readonly ObservableCollection<EditableListItem> _taskCategoriesItems = new();
     private readonly ObservableCollection<EditableListItem> _taskUrgenciesItems = new();
+    private readonly ObservableCollection<EditableListItem> _signatoryNamesItems = new();
 
     // Instantané des noms tels que chargés depuis la base, pour calculer au moment
     // d'"Enregistrer" ce qui a été ajouté/renommé/supprimé (voir SaveAllNow).
@@ -172,6 +174,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     private List<string> _planningTextZonesOriginal = new();
     private List<string> _taskCategoriesOriginal = new();
     private List<string> _taskUrgenciesOriginal = new();
+    private List<string> _signatoryNamesOriginal = new();
 
     private ObservableCollection<EditableListItem>? GetActiveItemsCollection() => _activeList switch
     {
@@ -183,6 +186,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         ActiveListKind.PlanningTextZones => _planningTextZonesItems,
         ActiveListKind.TaskCategories => _taskCategoriesItems,
         ActiveListKind.TaskUrgencies => _taskUrgenciesItems,
+        ActiveListKind.SignatoryNames => _signatoryNamesItems,
         _ => null
     };
 
@@ -196,6 +200,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         ActiveListKind.PlanningTextZones => PlanningTextZonesListBox,
         ActiveListKind.TaskCategories => TaskCategoriesListBox,
         ActiveListKind.TaskUrgencies => TaskUrgenciesListBox,
+        ActiveListKind.SignatoryNames => SignatoryNamesListBox,
         _ => null
     };
 
@@ -209,6 +214,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         (_planningTextZonesItems, ActiveListKind.PlanningTextZones),
         (_taskCategoriesItems, ActiveListKind.TaskCategories),
         (_taskUrgenciesItems, ActiveListKind.TaskUrgencies),
+        (_signatoryNamesItems, ActiveListKind.SignatoryNames),
     };
 
     private (ObservableCollection<EditableListItem>? Collection, ActiveListKind? Kind) FindOwningCollection(EditableListItem item)
@@ -387,6 +393,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         SetBorder(PlanningTextZonesListBorder, _activeList == ActiveListKind.PlanningTextZones);
         SetBorder(TaskCategoriesListBorder, _activeList == ActiveListKind.TaskCategories);
         SetBorder(TaskUrgenciesListBorder, _activeList == ActiveListKind.TaskUrgencies);
+        SetBorder(SignatoryNamesListBorder, _activeList == ActiveListKind.SignatoryNames);
     }
 
     private static long RequireCurrentProjectId()
@@ -435,7 +442,10 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         CommonCopyButton.IsEnabled = hasProject && hasActiveList && (_activeRowItem != null || hasAnyContent);
         CommonPasteButton.IsEnabled = hasProject && hasActiveList && _listClipboard != null && _listClipboard.Items.Count > 0;
 
-        CommonSaveButton.IsEnabled = HasUnsavedChanges;
+        // ✅ 29.07.2026 (Joe : "ça me fait faire un clic en plus pour le dégriser") : le
+        // bouton reste toujours cliquable -- cliquer sans rien à enregistrer ne fait rien
+        // (SaveAllNow n'écrit que ce qui a changé).
+        CommonSaveButton.IsEnabled = hasProject;
 
         if (ActiveListLabel != null)
         {
@@ -450,6 +460,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
                 ActiveListKind.PlanningTextZones => pid > 0 ? Db.GetLabelPlanningTextZone(pid) : "Zone de texte planning",
                 ActiveListKind.TaskCategories => pid > 0 ? Db.GetLabelTaskCategory(pid) : "Cat.",
                 ActiveListKind.TaskUrgencies => pid > 0 ? Db.GetLabelTaskUrgency(pid) : "Urg.",
+                ActiveListKind.SignatoryNames => pid > 0 ? Db.GetLabelSignatoryName(pid) : "Nom",
                 _ => "—",
             };
         }
@@ -486,6 +497,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         PlanningTextZonesListBox.ItemsSource = _planningTextZonesItems;
         TaskCategoriesListBox.ItemsSource = _taskCategoriesItems;
         TaskUrgenciesListBox.ItemsSource = _taskUrgenciesItems;
+        SignatoryNamesListBox.ItemsSource = _signatoryNamesItems;
     }
 
     public void Reload()
@@ -536,6 +548,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             _planningTextZonesItems.Clear(); _planningTextZonesOriginal.Clear();
             _taskCategoriesItems.Clear(); _taskCategoriesOriginal.Clear();
             _taskUrgenciesItems.Clear(); _taskUrgenciesOriginal.Clear();
+            _signatoryNamesItems.Clear(); _signatoryNamesOriginal.Clear();
 
             DefaultReserveComboBox.ItemsSource = null;
             DefaultRequesterComboBox.ItemsSource = null;
@@ -545,6 +558,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             DefaultPlanningTextZoneComboBox.ItemsSource = null;
             DefaultTaskCategoryComboBox.ItemsSource = null;
             DefaultTaskUrgencyComboBox.ItemsSource = null;
+            DefaultSignatoryNameComboBox.ItemsSource = null;
 
             DefaultReserveComboBox.SelectedItem = null; DefaultReserveComboBox.Text = "";
             DefaultRequesterComboBox.SelectedItem = null; DefaultRequesterComboBox.Text = "";
@@ -554,13 +568,14 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
             DefaultPlanningTextZoneComboBox.SelectedItem = null; DefaultPlanningTextZoneComboBox.Text = "";
             DefaultTaskCategoryComboBox.SelectedItem = null; DefaultTaskCategoryComboBox.Text = "";
             DefaultTaskUrgencyComboBox.SelectedItem = null; DefaultTaskUrgencyComboBox.Text = "";
+            DefaultSignatoryNameComboBox.SelectedItem = null; DefaultSignatoryNameComboBox.Text = "";
 
             LabelReserveTextBox.Text = "";
             LabelRequestedByTextBox.Text = "";
             LabelPerformedByTextBox.Text = "";
             LabelPlaceTextBox.Text = "";
             LabelEtageTextBox.Text = "";
-            LabelDeadlineTextBox.Text = "";
+            LabelSignatoryNameTextBox.Text = "";
             LabelPlanningTextZoneTextBox.Text = "";
             LabelTaskCategoryTextBox.Text = "";
             LabelTaskUrgencyTextBox.Text = "";
@@ -588,6 +603,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         var planningTextZones = Db.GetPlanningTextZones(projectId);
         var taskCategories = Db.GetTaskCategories(projectId);
         var taskUrgencies = Db.GetTaskUrgencies(projectId);
+        var signatoryNames = Db.GetSignatoryNames(projectId);
 
         PopulateItems(_reservesItems, reserves, _reservesOriginal);
         PopulateItems(_requestersItems, requesters, _requestersOriginal);
@@ -597,6 +613,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         PopulateItems(_planningTextZonesItems, planningTextZones, _planningTextZonesOriginal);
         PopulateItems(_taskCategoriesItems, taskCategories, _taskCategoriesOriginal, name => BuildTaskCategoryColorBrush(projectId, name));
         PopulateItems(_taskUrgenciesItems, taskUrgencies, _taskUrgenciesOriginal);
+        PopulateItems(_signatoryNamesItems, signatoryNames, _signatoryNamesOriginal);
 
         var reserveDefaults = Db.WithEmptyOption(reserves);
         var requesterDefaults = Db.WithEmptyOption(requesters);
@@ -606,6 +623,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         var planningDefaults = Db.WithEmptyOption(planningTextZones);
         var taskCategoryDefaults = Db.WithEmptyOption(taskCategories);
         var taskUrgencyDefaults = Db.WithEmptyOption(taskUrgencies);
+        var signatoryNameDefaults = Db.WithEmptyOption(signatoryNames);
 
         DefaultReserveComboBox.ItemsSource = reserveDefaults;
         DefaultRequesterComboBox.ItemsSource = requesterDefaults;
@@ -615,6 +633,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         DefaultPlanningTextZoneComboBox.ItemsSource = planningDefaults;
         DefaultTaskCategoryComboBox.ItemsSource = taskCategoryDefaults;
         DefaultTaskUrgencyComboBox.ItemsSource = taskUrgencyDefaults;
+        DefaultSignatoryNameComboBox.ItemsSource = signatoryNameDefaults;
 
         var defReserve = Db.GetDefaultReserve(projectId) ?? "";
         var defRequester = Db.GetDefaultRequester(projectId) ?? "";
@@ -624,6 +643,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         var defPlanning = Db.GetDefaultPlanningTextZone(projectId) ?? "";
         var defTaskCategory = Db.GetDefaultTaskCategory(projectId) ?? "";
         var defTaskUrgency = Db.GetDefaultTaskUrgency(projectId) ?? "";
+        var defSignatoryName = Db.GetDefaultSignatoryName(projectId) ?? "";
 
         DefaultReserveComboBox.SelectedItem = reserveDefaults.Contains(defReserve) ? defReserve : "";
         DefaultReserveComboBox.Text = defReserve;
@@ -649,12 +669,15 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         DefaultTaskUrgencyComboBox.SelectedItem = taskUrgencyDefaults.Contains(defTaskUrgency) ? defTaskUrgency : "";
         DefaultTaskUrgencyComboBox.Text = defTaskUrgency;
 
+        DefaultSignatoryNameComboBox.SelectedItem = signatoryNameDefaults.Contains(defSignatoryName) ? defSignatoryName : "";
+        DefaultSignatoryNameComboBox.Text = defSignatoryName;
+
         LabelReserveTextBox.Text = Db.GetLabelReserve(projectId);
         LabelRequestedByTextBox.Text = Db.GetLabelRequestedBy(projectId);
         LabelPerformedByTextBox.Text = Db.GetLabelPerformedBy(projectId);
         LabelPlaceTextBox.Text = Db.GetLabelPlace(projectId);
         LabelEtageTextBox.Text = Db.GetLabelEtage(projectId);
-        LabelDeadlineTextBox.Text = Db.GetLabelDeadline(projectId);
+        LabelSignatoryNameTextBox.Text = Db.GetLabelSignatoryName(projectId);
         LabelPlanningTextZoneTextBox.Text = Db.GetLabelPlanningTextZone(projectId);
         LabelTaskCategoryTextBox.Text = Db.GetLabelTaskCategory(projectId);
         LabelTaskUrgencyTextBox.Text = Db.GetLabelTaskUrgency(projectId);
@@ -677,6 +700,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
     private void PlanningTextZonesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.PlanningTextZones);
     private void TaskCategoriesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.TaskCategories);
     private void TaskUrgenciesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.TaskUrgencies);
+    private void SignatoryNamesListBox_GotFocus(object sender, RoutedEventArgs e) => SetActiveList(ActiveListKind.SignatoryNames);
 
     private void AnyListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -748,6 +772,13 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         SetActiveList(ActiveListKind.TaskUrgencies);
         _activeRowItem = null;
         TaskUrgenciesListBox.Focus();
+    }
+
+    private void SignatoryNamesListBorder_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        SetActiveList(ActiveListKind.SignatoryNames);
+        _activeRowItem = null;
+        SignatoryNamesListBox.Focus();
     }
 
     // =========================
@@ -960,6 +991,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         SaveListChanges(projectId, _planningTextZonesItems, _planningTextZonesOriginal, Db.InsertPlanningTextZone, Db.RenamePlanningTextZone, Db.DeletePlanningTextZone);
         SaveListChanges(projectId, _taskCategoriesItems, _taskCategoriesOriginal, Db.InsertTaskCategory, Db.RenameTaskCategory, Db.DeleteTaskCategory);
         SaveListChanges(projectId, _taskUrgenciesItems, _taskUrgenciesOriginal, Db.InsertTaskUrgency, Db.RenameTaskUrgency, Db.DeleteTaskUrgency);
+        SaveListChanges(projectId, _signatoryNamesItems, _signatoryNamesOriginal, Db.InsertSignatoryName, Db.RenameSignatoryName, Db.DeleteSignatoryName);
 
         Db.SetDefaultReserve(projectId, DefaultReserveComboBox.Text ?? "");
         Db.SetDefaultRequester(projectId, DefaultRequesterComboBox.Text ?? "");
@@ -969,6 +1001,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         Db.SetDefaultPlanningTextZone(projectId, DefaultPlanningTextZoneComboBox.Text ?? "");
         Db.SetDefaultTaskCategory(projectId, DefaultTaskCategoryComboBox.Text ?? "");
         Db.SetDefaultTaskUrgency(projectId, DefaultTaskUrgencyComboBox.Text ?? "");
+        Db.SetDefaultSignatoryName(projectId, DefaultSignatoryNameComboBox.Text ?? "");
 
         _listsDirty = false;
         Reload();
@@ -1018,7 +1051,7 @@ public partial class ListsPage : System.Windows.Controls.UserControl, IReloadabl
         Db.SetLabelPerformedBy(projectId, (LabelPerformedByTextBox.Text ?? "").Trim());
         Db.SetLabelPlace(projectId, (LabelPlaceTextBox.Text ?? "").Trim());
         Db.SetLabelEtage(projectId, (LabelEtageTextBox.Text ?? "").Trim());
-        Db.SetLabelDeadline(projectId, (LabelDeadlineTextBox.Text ?? "").Trim());
+        Db.SetLabelSignatoryName(projectId, (LabelSignatoryNameTextBox.Text ?? "").Trim());
         Db.SetLabelPlanningTextZone(projectId, (LabelPlanningTextZoneTextBox.Text ?? "").Trim());
         Db.SetLabelTaskCategory(projectId, (LabelTaskCategoryTextBox.Text ?? "").Trim());
         Db.SetLabelTaskUrgency(projectId, (LabelTaskUrgencyTextBox.Text ?? "").Trim());

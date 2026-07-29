@@ -115,6 +115,16 @@ public static class Db
             );
         """);
 
+        // ✅ NOUVEAU (29.07.2026, demande de Joe) : liste "Nom" (section Validation du bon,
+        // libellé personnalisable comme les autres listes -- voir LabelSignatoryName) --
+        // remplace le champ libre SignatureName par une liste déroulante alimentable.
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS SignatoryNames (
+                ProjectId INTEGER NOT NULL,
+                Name TEXT NOT NULL
+            );
+        """);
+
         // ✅ NOUVEAU : Couleurs des entreprises (par projet)
         con.Execute("""
             CREATE TABLE IF NOT EXISTS CompanyColors (
@@ -593,6 +603,13 @@ public static class Db
     public static void SetDefaultReserve(long projectId, string value) =>
         SetSetting(MakeProjectKey("DefaultReserve", projectId), (value ?? "").Trim());
 
+    // ✅ NOUVEAU (29.07.2026) : "Nom" par défaut (liste Validation, par projet)
+    public static string GetDefaultSignatoryName(long projectId) =>
+        GetSetting(MakeProjectKey("DefaultSignatoryName", projectId)) ?? "";
+
+    public static void SetDefaultSignatoryName(long projectId, string value) =>
+        SetSetting(MakeProjectKey("DefaultSignatoryName", projectId), (value ?? "").Trim());
+
     // ✅ Etage par défaut
     public static string GetDefaultEtage(long projectId) =>
         GetSetting(MakeProjectKey("DefaultEtage", projectId)) ?? "";
@@ -739,8 +756,11 @@ public static class Db
     public static string GetLabelEtage(long projectId) => GetLabel(projectId, "Etage", "Étage");
     public static void SetLabelEtage(long projectId, string value) => SetLabel(projectId, "Etage", value);
 
-    public static string GetLabelDeadline(long projectId) => GetLabel(projectId, "DeadlineDate", "Délai");
-    public static void SetLabelDeadline(long projectId, string value) => SetLabel(projectId, "DeadlineDate", value);
+    // ✅ 29.07.2026 (demande de Joe) : "Délai" n'est plus personnalisable (texte figé
+    // directement dans WorkOrderWindow.xaml) -- ce champ de libellé est retiré de la page
+    // Listes au profit de la nouvelle liste "Nom" (voir GetLabelSignatoryName ci-dessous).
+    public static string GetLabelSignatoryName(long projectId) => GetLabel(projectId, "SignatoryName", "Nom");
+    public static void SetLabelSignatoryName(long projectId, string value) => SetLabel(projectId, "SignatoryName", value);
 
     // ✅ NOUVEAU : Libellé pour la liste "Zone de texte planning" (page Listes)
     public static string GetLabelPlanningTextZone(long projectId) => GetLabel(projectId, "PlanningTextZone", "Zone de texte planning");
@@ -2850,6 +2870,75 @@ public static class Db
     public static void InsertEtage(string name) => InsertEtage(RequireProjectId(null), name);
     public static void DeleteEtage(string name) => DeleteEtage(RequireProjectId(null), name);
     public static void RenameEtage(string oldName, string newName) => RenameEtage(RequireProjectId(null), oldName, newName);
+
+    public static List<string> GetSignatoryNames(long projectId)
+    {
+        using var con = Open();
+        con.Open();
+        return con.Query<string>(
+            "SELECT Name FROM SignatoryNames WHERE ProjectId=@Id ORDER BY Name;",
+            new { Id = projectId }
+        ).ToList();
+    }
+
+    public static void InsertSignatoryName(long projectId, string name)
+    {
+        using var con = Open();
+        con.Open();
+        con.Execute(
+            "INSERT INTO SignatoryNames (ProjectId, Name) VALUES (@ProjectId, @Name);",
+            new { ProjectId = projectId, Name = (name ?? "").Trim() }
+        );
+    }
+
+    public static void DeleteSignatoryName(long projectId, string name)
+    {
+        using var con = Open();
+        con.Open();
+        con.Execute(
+            "DELETE FROM SignatoryNames WHERE ProjectId=@ProjectId AND Name=@Name;",
+            new { ProjectId = projectId, Name = name }
+        );
+    }
+
+    public static void RenameSignatoryName(long projectId, string oldName, string newName)
+    {
+        oldName = (oldName ?? "").Trim();
+        newName = (newName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        var exists = con.ExecuteScalar<long>(
+            "SELECT COUNT(1) FROM SignatoryNames WHERE ProjectId=@ProjectId AND Name=@Name;",
+            new { ProjectId = projectId, Name = newName },
+            tx
+        );
+        if (exists > 0)
+            throw new Exception("Ce nom existe déjà dans la liste « Nom » (pour ce dossier).");
+
+        con.Execute(
+            "UPDATE SignatoryNames SET Name=@NewName WHERE ProjectId=@ProjectId AND Name=@OldName;",
+            new { ProjectId = projectId, OldName = oldName, NewName = newName },
+            tx
+        );
+
+        con.Execute(
+            "UPDATE WorkOrders SET SignatureName=@NewName WHERE ProjectId=@ProjectId AND SignatureName=@OldName;",
+            new { ProjectId = projectId, OldName = oldName, NewName = newName },
+            tx
+        );
+
+        tx.Commit();
+    }
+
+    public static List<string> GetSignatoryNames() => GetSignatoryNames(RequireProjectId(null));
+    public static void InsertSignatoryName(string name) => InsertSignatoryName(RequireProjectId(null), name);
+    public static void DeleteSignatoryName(string name) => DeleteSignatoryName(RequireProjectId(null), name);
+    public static void RenameSignatoryName(string oldName, string newName) => RenameSignatoryName(RequireProjectId(null), oldName, newName);
 
     public static List<string> GetCompanies() => GetCompanies(RequireProjectId(null));
     public static void InsertCompany(string name) => InsertCompany(RequireProjectId(null), name);

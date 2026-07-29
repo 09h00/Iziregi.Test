@@ -1423,7 +1423,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (FontSizeCombo != null && FontSizeCombo.Items.Count == 0)
             FontSizeCombo.ItemsSource = _fontSizes;
 
-        if (FontFamilyCombo != null) FontFamilyCombo.SelectedItem = new WpfFontFamily("Segoe UI");
+        // ✅ 29.07.2026 (demande de Joe) : Arial par défaut (au lieu de Segoe UI), cohérent
+        // avec TextZoneRichTextBoxStyle.
+        if (FontFamilyCombo != null) FontFamilyCombo.SelectedItem = new WpfFontFamily("Arial");
         if (FontSizeCombo != null) FontSizeCombo.SelectedItem = 12.0;
 
         if (FontColorSwatch != null)
@@ -2287,6 +2289,26 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         SelectedTextZoneIndex = FindFirstVisibleTextZoneIndex();
     }
 
+    // ✅ 29.07.2026 (demande de Joe) : bouton "Supprimer" séparé de "Retirer zone de texte" --
+    // vide juste le texte de la zone sélectionnée, sans la masquer (contrairement à
+    // RemoveSelectedTextZone ci-dessus qui, en plus d'effacer le texte, cache la zone).
+    public void ClearSelectedTextZone()
+    {
+        if (SelectedTextZoneIndex < 0 || SelectedTextZoneIndex > 3)
+            return;
+
+        var idx = SelectedTextZoneIndex;
+        var z = TextZones[idx];
+
+        z.DocumentXaml = "";
+        var rtb = GetRtbFromZoneIndex(idx);
+        if (rtb != null)
+        {
+            rtb.Document = new FlowDocument();
+            EnsureRtbHasAtLeastOneParagraph(rtb);
+        }
+    }
+
     private WpfRichTextBox? GetRtbFromZoneIndex(int idx) => idx switch
     {
         0 => Rtb0,
@@ -2312,6 +2334,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private void TextZoneAdd_Click(object sender, RoutedEventArgs e) => ActivateAllTextZones();
     private void TextZoneRemove_Click(object sender, RoutedEventArgs e) => RemoveSelectedTextZone();
+    private void TextZoneClear_Click(object sender, RoutedEventArgs e) => ClearSelectedTextZone();
 
     // ✅ Sélectionner tout / Copier / Coller (19.07.2026, demande de Joe) : pour copier le
     // texte d'une zone entière et le coller dans une zone de texte d'une autre semaine.
@@ -2573,12 +2596,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         PlanningDataGrid.ScrollIntoView(_planningRows.Last());
     }
 
+    // ✅ 29.07.2026 (demande de Joe) : suppression via les cases à cocher (colonne de
+    // gauche), comme pour la grille des tâches, plutôt que la sélection native du DataGrid.
     private void RemovePlanningRowButton_Click(object sender, RoutedEventArgs e)
     {
         if (!_isPageActive) return;
 
-        var toRemove = PlanningDataGrid.SelectedItems.Cast<object>().OfType<PlanningRow>().ToList();
-        if (toRemove.Count == 0 && PlanningDataGrid.SelectedItem is PlanningRow one) toRemove.Add(one);
+        try { PlanningDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); PlanningDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+
+        var toRemove = _planningRows.Where(r => r.IsSelected).ToList();
 
         foreach (var r in toRemove)
             _planningRows.Remove(r);
@@ -3176,6 +3202,13 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (WeekendShowSundayCheckBox != null) WeekendShowSundayCheckBox.IsChecked = showSunday;
     }
 
+    // ✅ 29.07.2026 (Joe : "la fonction de ce bouton n'était pas sensée agir sur autre chose
+    // que le calendrier") : ne copie plus QUE la grille du planning hebdomadaire (PlanningRows).
+    // Avant ce correctif, BuildCurrentWeekStateForKey copiait aussi les zones de texte, les
+    // stickers et les images de la semaine courante vers la semaine cible, les écrasant --
+    // ce qui, utilisé plusieurs fois de suite (y compris "semaine précédente"), propageait le
+    // même contenu de zones de texte sur de nombreuses semaines passées ET futures. Le fichier
+    // cible existant est maintenant lu et conservé tel quel pour tout sauf la grille.
     private void DuplicateCurrentWeekTo_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button btn) return;
@@ -3188,10 +3221,23 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var semaineNum = ISOWeek.GetWeekOfYear(targetWeekStart);
         var label = $"semaine {semaineNum} ({targetWeekStart:dd.MM.yyyy})";
 
+        var planningRows = _planningRows.Select(r => new PlanningRowState
+        {
+            Company = r.Company,
+            D1 = r.D1,
+            D2 = r.D2,
+            D3 = r.D3,
+            D4 = r.D4,
+            D5 = r.D5,
+            D6 = r.D6,
+            Sat = r.Sat,
+            Sun = r.Sun
+        }).ToList();
+
         if (File.Exists(filePath))
         {
             var result = System.Windows.MessageBox.Show(
-                $"La {label} contient déjà des données.\nLes remplacer par celles de la semaine courante ?",
+                $"La {label} a déjà une grille de planning renseignée.\nLa remplacer par celle de la semaine courante ? (les zones de texte, stickers et images de la {label} ne sont pas affectés)",
                 "Confirmer la duplication",
                 MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) return;
@@ -3203,12 +3249,26 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             if (!string.IsNullOrWhiteSpace(dir))
                 Directory.CreateDirectory(dir);
 
-            var state = BuildCurrentWeekStateForKey(weekKey);
-            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(filePath, json);
+            WeekStateFile state;
+            if (File.Exists(filePath))
+            {
+                var json = File.ReadAllText(filePath);
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                state = JsonSerializer.Deserialize<WeekStateFile>(json, opts) ?? new WeekStateFile();
+            }
+            else
+            {
+                state = new WeekStateFile();
+            }
+
+            state.WeekKey = weekKey;
+            state.PlanningRows = planningRows;
+
+            var outJson = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, outJson);
 
             System.Windows.MessageBox.Show(
-                $"Planning copié vers la {label}.",
+                $"Grille du planning copiée vers la {label}.",
                 "Duplication réussie", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -4252,6 +4312,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public string D6 { get => _d6; set => SetField(ref _d6, value); }
         public string Sat { get => _sat; set => SetField(ref _sat, value); }
         public string Sun { get => _sun; set => SetField(ref _sun, value); }
+
+        // ✅ Sélection via case à cocher (colonne de gauche) pour suppression (29.07.2026,
+        // demande de Joe) — non persistée, même principe que TaskRow.IsSelected.
+        private bool _isSelected;
+        public bool IsSelected { get => _isSelected; set => SetField(ref _isSelected, value); }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 

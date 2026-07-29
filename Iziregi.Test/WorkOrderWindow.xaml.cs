@@ -523,7 +523,7 @@ public partial class WorkOrderWindow : Window
     private bool EnsureValidationIsNotPartialOrWarn()
     {
         var decision = (GetSelectedValidationDecision() ?? "").Trim();
-        var name = (SignatureNameTextBox?.Text ?? "").Trim();
+        var name = (SignatureNameComboBox?.Text ?? "").Trim();
         var date = SignatureDatePicker?.SelectedDate;
 
         bool hasInk = false;
@@ -586,7 +586,7 @@ public partial class WorkOrderWindow : Window
             if (DecisionRefuseRadio != null) DecisionRefuseRadio.IsChecked = false;
             if (DecisionCancelRadio != null) DecisionCancelRadio.IsChecked = false;
 
-            if (SignatureNameTextBox != null) SignatureNameTextBox.Text = "";
+            if (SignatureNameComboBox != null) SignatureNameComboBox.Text = "";
             if (SignatureDatePicker != null) SignatureDatePicker.SelectedDate = null;
 
             try { SignatureInkCanvas?.Strokes.Clear(); } catch { }
@@ -1053,7 +1053,7 @@ public partial class WorkOrderWindow : Window
             AddLineButton.Content = $"+ Ajouter ligne ({_lines.Count} / {QuoteMaxLines} max.)";
 
         var validationEditable = isArchitecte || isSignataire;
-        SetTextBoxEditable(SignatureNameTextBox, validationEditable);
+        SetEnabled(SignatureNameComboBox, validationEditable);
         SetEnabled(SignatureDatePicker, validationEditable);
 
         SetEnabled(DecisionValidateRadio, validationEditable);
@@ -1146,7 +1146,15 @@ public partial class WorkOrderWindow : Window
             if (PerformedByLabelTextBlock != null) PerformedByLabelTextBlock.Text = Db.GetLabelPerformedBy(projectId);
             if (PlaceLabelTextBlock != null) PlaceLabelTextBlock.Text = Db.GetLabelPlace(projectId);
             if (EtageLabelTextBlock != null) EtageLabelTextBlock.Text = Db.GetLabelEtage(projectId);
-            if (DeadlineLabelTextBlock != null) DeadlineLabelTextBlock.Text = Db.GetLabelDeadline(projectId);
+            // ✅ 29.07.2026 (demande de Joe) : "Délai" n'est plus personnalisable, le texte
+            // figé "Délai" du XAML (DeadlineLabelTextBlock) reste tel quel.
+
+            // ✅ 29.07.2026 (demande de Joe, oubli lors de l'ajout de la liste "Nom") : le
+            // libellé de la section Validation ne suivait pas le renommage fait dans la page
+            // Listes (LabelSignatoryNameTextBox / Db.GetLabelSignatoryName), contrairement aux
+            // 5 autres libellés ci-dessus.
+            if (SignatoryNameLabelTextBlock != null)
+                SignatoryNameLabelTextBlock.Text = Db.GetLabelSignatoryName(projectId) + " (obligatoire)";
         }
         catch { }
     }
@@ -1237,6 +1245,7 @@ public partial class WorkOrderWindow : Window
             PerformedByComboBox.ItemsSource = Db.WithEmptyOption(Db.GetCompanies());
             PlaceComboBox.ItemsSource = Db.WithEmptyOption(Db.GetPlaces());
             EtageComboBox.ItemsSource = Db.WithEmptyOption(Db.GetEtages());
+            SignatureNameComboBox.ItemsSource = Db.WithEmptyOption(Db.GetSignatoryNames());
         }
         finally { _isLoading = false; }
     }
@@ -1279,7 +1288,9 @@ public partial class WorkOrderWindow : Window
 
             PlaceComboBox.Text = _workOrder.Place ?? "";
             EtageComboBox.Text = _workOrder.Etage ?? "";
-            DeadlineDatePicker.SelectedDate = _workOrder.DeadlineDate == default ? DateTime.Today : _workOrder.DeadlineDate;
+            // ✅ 29.07.2026 (demande de Joe) : champ vide par défaut (pas de pré-remplissage
+            // à la date du jour) tant qu'aucun délai n'a été renseigné.
+            DeadlineDatePicker.SelectedDate = _workOrder.DeadlineDate == default ? (DateTime?)null : _workOrder.DeadlineDate;
 
             DescriptionTextBox.Text = EnforceDescriptionRules(_workOrder.Description ?? "");
 
@@ -1302,7 +1313,7 @@ public partial class WorkOrderWindow : Window
 
             QuoteNotesTextBox.Text = EnforceQuoteNotesRules(_workOrder.QuoteNotes ?? "");
 
-            SignatureNameTextBox.Text = _workOrder.SignatureName ?? "";
+            SignatureNameComboBox.Text = _workOrder.SignatureName ?? "";
             SignatureDatePicker.SelectedDate = _workOrder.SignatureDate;
 
             _existingSignaturePng = _workOrder.SignaturePng;
@@ -1366,7 +1377,7 @@ public partial class WorkOrderWindow : Window
         Add(ForfaitTtcTextBox.Text);
         Add(TvaRateTextBox.Text);
         Add(QuoteNotesTextBox.Text);
-        Add(SignatureNameTextBox.Text);
+        Add(SignatureNameComboBox.Text);
         AddDate(SignatureDatePicker.SelectedDate);
         Add(GetSelectedValidationDecision());
 
@@ -1407,7 +1418,7 @@ public partial class WorkOrderWindow : Window
             Etage = projectId.HasValue ? Db.GetDefaultEtage(projectId.Value) : Db.GetDefaultEtage(),
 
             RequestDate = DateTime.Today,
-            DeadlineDate = DateTime.Today,
+            // ✅ 29.07.2026 (demande de Joe) : pas de date par défaut pour le Délai.
 
             Description = "",
             QuoteName = "",
@@ -1988,7 +1999,7 @@ public partial class WorkOrderWindow : Window
         _workOrder.Etage = (EtageComboBox.Text ?? "").Trim();
 
         _workOrder.RequestDate = RequestDatePicker.SelectedDate ?? DateTime.Today;
-        _workOrder.DeadlineDate = DeadlineDatePicker.SelectedDate ?? DateTime.Today;
+        _workOrder.DeadlineDate = DeadlineDatePicker.SelectedDate ?? default;
 
         _workOrder.Description = EnforceDescriptionRules(DescriptionTextBox.Text ?? "");
 
@@ -2042,7 +2053,7 @@ public partial class WorkOrderWindow : Window
         if (!EnsureValidationIsNotPartialOrWarn())
             return false;
 
-        _workOrder.SignatureName = (SignatureNameTextBox.Text ?? "").Trim();
+        _workOrder.SignatureName = (SignatureNameComboBox.Text ?? "").Trim();
         _workOrder.SignatureDate = SignatureDatePicker.SelectedDate;
         _workOrder.SignaturePng = CaptureSignaturePng();
         _workOrder.ValidationDecision = GetSelectedValidationDecision();

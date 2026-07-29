@@ -33,10 +33,12 @@
                         </Border>
 
                         <ControlTemplate.Triggers>
-                            <!-- Survol : plus foncé => blanc lisible -->
+                            <!-- Survol : plus foncé => blanc lisible, bordure plus épaisse
+                                 (29.07.2026, demande de Joe : tous les boutons de l'app). -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#1D4ED8"/>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#1D4ED8"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
 
                             <!-- Pressé -->
@@ -60,10 +62,12 @@
         <!-- ✅ Style global : Button avec chevron à droite -->
         <Style x:Key="ButtonWithChevronStyle" TargetType="Button">
             <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="6"
@@ -78,6 +82,12 @@
                                            Foreground="{TemplateBinding Foreground}"/>
                             </Grid>
                         </Border>
+                        <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>

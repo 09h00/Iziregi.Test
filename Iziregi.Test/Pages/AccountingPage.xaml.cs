@@ -794,7 +794,17 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         CategoryChartBorder.Visibility = nowHidden ? Visibility.Collapsed : Visibility.Visible;
 
         if (ToggleCategoryChartButton != null)
+        {
             ToggleCategoryChartButton.Content = nowHidden ? "Afficher graphique catégories" : "Masquer graphique catégories";
+
+            // ✅ 29.07.2026 (demande de Joe) : noir quand "Masquer..." (graphique visible),
+            // bleu quand "Afficher..." (graphique masqué).
+            var color = nowHidden
+                ? (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom("#1D4ED8")!
+                : System.Windows.Media.Brushes.Black;
+            ToggleCategoryChartButton.Foreground = color;
+            ToggleCategoryChartButton.BorderBrush = color;
+        }
     }
 
     // -------------------------

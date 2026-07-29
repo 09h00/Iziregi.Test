@@ -169,9 +169,11 @@ VerticalAlignment="Center"
 RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#1E40AF"/>
                                 <Setter TargetName="border" Property="BorderBrush" Value="#1E40AF"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
                                 <Setter Property="Foreground" Value="White"/>
                             </Trigger>
 
@@ -200,6 +202,26 @@ RecognizesAccessKey="True"/>
             <Setter Property="BorderBrush" Value="#D1D5DB"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <!-- ✅ 29.07.2026 (demande de Joe) : template custom pour un survol fiable
+                 (bordure plus épaisse) quel que soit le thème Windows. -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="6">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- ✅ Boutons "Envoyer lien..." colorés selon leur section (22.07.2026, demande de Joe) :
@@ -213,12 +235,19 @@ RecognizesAccessKey="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
 CornerRadius="8">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
+                        <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -231,12 +260,19 @@ CornerRadius="8">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
 CornerRadius="8">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
+                        <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -250,12 +286,20 @@ CornerRadius="8">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
 CornerRadius="8">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
+                        <!-- ✅ 29.07.2026 (demande de Joe, écart agrandi car 2->3 passait
+                             inaperçu) : bordure nettement plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -267,12 +311,19 @@ CornerRadius="8">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
 CornerRadius="8">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
+                        <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -287,6 +338,26 @@ CornerRadius="8">
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <!-- ✅ 29.07.2026 (demande de Joe) : template custom pour un survol fiable
+                 (bordure plus épaisse) quel que soit le thème Windows. -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="6">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="SmallActionButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
@@ -559,7 +630,8 @@ Foreground="#6B7280"
 Margin="0,0,6,0"/>
                                     <DatePicker x:Name="RequestDatePicker"
 Width="105"
-Height="22"/>
+Height="22"
+VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                             </StackPanel>
@@ -645,12 +717,13 @@ Foreground="#9CA3AF"/>
                                     </StackPanel>
                                     <ComboBox x:Name="ReserveComboBox"
 Style="{StaticResource ComboStyle}"
-IsEditable="True"/>
+IsEditable="True"
+VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="2" Grid.Column="0">
                                     <TextBlock x:Name="PlaceLabelTextBlock" Text="Bâtiment" Style="{StaticResource LabelTitleStyle}"/>
-                                    <ComboBox x:Name="PlaceComboBox" Style="{StaticResource ComboStyle}" IsEditable="True"/>
+                                    <ComboBox x:Name="PlaceComboBox" Style="{StaticResource ComboStyle}" IsEditable="True" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="4" Grid.Column="0">
@@ -659,7 +732,8 @@ Text="Entreprise"
 Style="{StaticResource LabelTitleStyle}"/>
                                     <ComboBox x:Name="PerformedByComboBox"
 Style="{StaticResource ComboStyle}"
-IsEditable="True"/>
+IsEditable="True"
+VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="0" Grid.Column="2">
@@ -668,17 +742,18 @@ Text="Demandé par"
 Style="{StaticResource LabelTitleStyle}"/>
                                     <ComboBox x:Name="RequestedByComboBox"
 Style="{StaticResource ComboStyle}"
-IsEditable="True"/>
+IsEditable="True"
+VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="2" Grid.Column="2">
                                     <TextBlock x:Name="EtageLabelTextBlock" Text="Étage" Style="{StaticResource LabelTitleStyle}"/>
-                                    <ComboBox x:Name="EtageComboBox" Style="{StaticResource ComboStyle}" IsEditable="True"/>
+                                    <ComboBox x:Name="EtageComboBox" Style="{StaticResource ComboStyle}" IsEditable="True" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="4" Grid.Column="2">
                                     <TextBlock x:Name="DeadlineLabelTextBlock" Text="Délai" Style="{StaticResource LabelTitleStyle}"/>
-                                    <DatePicker x:Name="DeadlineDatePicker" Height="32"/>
+                                    <DatePicker x:Name="DeadlineDatePicker" Height="32" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="0" Grid.Column="4" Grid.RowSpan="5">
@@ -1559,13 +1634,15 @@ Margin="0,6,0,0"/>
                                             </Grid.ColumnDefinitions>
 
                                             <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
-                                                <TextBlock Text="Nom (obligatoire)" Style="{StaticResource LabelStyle}"/>
-                                                <TextBox x:Name="SignatureNameTextBox" Style="{StaticResource InputStyle}"/>
+                                                <TextBlock x:Name="SignatoryNameLabelTextBlock" Text="Nom (obligatoire)" Style="{StaticResource LabelStyle}"/>
+                                                <!-- ✅ 29.07.2026 (Joe) : la position du champ était déjà bonne, c'est le
+                                                     TEXTE À L'INTÉRIEUR du champ qui remontait trop haut. -->
+                                                <ComboBox x:Name="SignatureNameComboBox" Style="{StaticResource ComboStyle}" IsEditable="True" VerticalContentAlignment="Center"/>
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
                                                 <TextBlock Text="Date (obligatoire)" Style="{StaticResource LabelStyle}"/>
-                                                <DatePicker x:Name="SignatureDatePicker" Height="32"/>
+                                                <DatePicker x:Name="SignatureDatePicker" Height="32" VerticalContentAlignment="Center"/>
                                             </StackPanel>
                                         </Grid>
                                     </Grid>

@@ -45,15 +45,22 @@
         <!-- Button style with chevron on the right -->
         <Style x:Key="ButtonWithChevronStyle" TargetType="Button">
             <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
                             <Grid>
                                 <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"/>
                                 <TextBlock Text="▾" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,6,0" Foreground="{TemplateBinding Foreground}"/>
                             </Grid>
                         </Border>
+                        <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -142,6 +149,12 @@
                     <!-- ✅ Aide (24.07.2026, demande de Joe) : ouvre la page d'aide (mode d'emploi PDF)
                          dans le navigateur par défaut, ne devient jamais l'onglet "actif". -->
                     <Button x:Name="NavHelpButton" Content="Aide" Click="NavHelp_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ Contact (29.07.2026, demande de Joe) : même principe que Aide, ouvre
+                         la page /contact (adresse e-mail) dans le navigateur par défaut. -->
+                    <Button x:Name="NavContactButton" Content="Contact" Click="NavContact_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ CGV version d'essai (29.07.2026, demande de Joe) : même principe que
+                         Aide/Contact, ouvre la page /cgv-essai dans le navigateur par défaut. -->
+                    <Button x:Name="NavCgvEssaiButton" Content="CGV essai" Click="NavCgvEssai_Click" Style="{StaticResource NavPillButtonStyle}"/>
                 </StackPanel>
 
                 <!-- Pastille projet (dans le même bandeau que la navigation) -->
