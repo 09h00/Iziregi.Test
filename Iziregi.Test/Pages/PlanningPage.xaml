@@ -233,6 +233,43 @@
             </Setter>
         </Style>
 
+        <!-- ✅ Bouton "Archiver sélection" (30.07.2026, demande de Joe) : même vert que
+             "Archiver" dans Dashboard (ArchiveSmallButtonStyle, #15803D). -->
+        <Style x:Key="ArchiveOutlineButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallBlueButtonStyle}">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#15803D"/>
+            <Setter Property="BorderBrush" Value="#15803D"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+						        Background="{TemplateBinding Background}"
+						        BorderBrush="{TemplateBinding BorderBrush}"
+						        BorderThickness="{TemplateBinding BorderThickness}"
+						        CornerRadius="6"
+						        SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+							                  VerticalAlignment="Center"
+							                  Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F0FDF4"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#BBF7D0"/>
+                                <Setter Property="Foreground" Value="#BBF7D0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="PlanningDatePickerStyle" TargetType="DatePicker">
             <!-- ✅ Retour au format court "13.07.2026" (19.07.2026) : le format long
                  ("lundi, 13 juillet 2026") essayé juste avant prenait trop de place dans
@@ -596,9 +633,6 @@
                         Padding="0"
                         Style="{StaticResource SmallBlackButtonStyle}"/>
 
-                <!-- ✅ DuplicateNextButton retiré d'ici (3e demande de Joe, 19.07.2026) : reste
-                     dans la section "Planning hebdomadaire" (voir WeeklyHeaderToolbar). -->
-
                 <TextBlock Text="Début :"
                            Foreground="#374151"
                            VerticalAlignment="Center"
@@ -662,51 +696,64 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <DockPanel x:Name="TaskHeaderToolbar"
-                                   Grid.Row="0"
-                                   Margin="0,0,0,8"
-                                   LastChildFill="False">
-                            <TextBlock Text="Tâches"
+                        <!-- ✅ 30.07.2026 (demande de Joe) : Grid (plutôt que DockPanel) pour que
+                             "Ajouter" démarre à une position FIXE (98 = largeur colonne case à
+                             cocher [28] + colonne N° [70], les 2 seules largeurs FIXES avant
+                             Bâtiment) et s'aligne verticalement avec le bord gauche de la colonne
+                             Bâtiment de TasksDataGrid ci-dessous, indépendamment de la largeur du
+                             titre "Tâches", contrairement à un DockPanel classique. -->
+                        <Grid x:Name="TaskHeaderToolbar"
+                              Grid.Row="0"
+                              Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="98"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="Tâches"
 							           FontSize="14"
 							           FontWeight="SemiBold"
 							           Foreground="#111827"
-							           DockPanel.Dock="Left"/>
+							           VerticalAlignment="Center"/>
 
-                            <!-- ✅ Ignore temporairement le filtre par semaine (28.07.2026, demande
-                                 de Joe) : pour retrouver/nettoyer des tâches devenues invisibles
-                                 dans toutes les semaines (résidu d'un bug de date corrigé depuis,
-                                 voir TaskRowVisibleInCurrentWeek). -->
-                            <CheckBox x:Name="ShowAllWeeksTasksCheckBox"
-                                      Content="Afficher toutes les semaines"
-                                      DockPanel.Dock="Left"
-                                      Margin="16,0,0,0"
-                                      VerticalAlignment="Center"
-                                      Click="ShowAllWeeksTasksCheckBox_Click"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="AddTaskRowButton"
+								        Content="Ajouter"
+								        Style="{StaticResource SmallBlueButtonStyle}"
+								        Height="34"
+								        Click="AddTaskRowButton_Click"/>
+
+                                <Button x:Name="RemoveTaskRowButton"
+								        Content="Supprimer"
+								        Style="{StaticResource SmallBlackButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="RemoveTaskRowButton_Click"/>
+
+                                <!-- ✅ 30.07.2026 (demande de Joe) : archive la/les tâche(s)
+                                     sélectionnée(s) (comme "Supprimer", même sélection) au lieu de
+                                     les effacer, consultable/restaurable depuis "Archives tâches". -->
+                                <Button x:Name="ArchiveTaskRowButton"
+								        Content="Archiver sélection"
+								        Style="{StaticResource ArchiveOutlineButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="ArchiveTaskRowButton_Click"/>
+                            </StackPanel>
 
                             <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
                                  (mémorisé entre les sessions via Db.GetTasksVisibleColumns/
-                                 SetTasksVisibleColumns). Tout à droite, espacement identique
-                                 aux autres boutons de cette barre. -->
+                                 SetTasksVisibleColumns). -->
                             <Button x:Name="TaskColumnsButton"
+                                    Grid.Column="3"
 							        Content="Colonnes ▾"
 							        Style="{StaticResource OutlineBlueButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
+							        Height="34"
 							        Click="TaskColumnsButton_Click"/>
-
-                            <Button x:Name="RemoveTaskRowButton"
-							        Content="Supprimer"
-							        Style="{StaticResource SmallBlackButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="RemoveTaskRowButton_Click"/>
-
-                            <Button x:Name="AddTaskRowButton"
-							        Content="Ajouter"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Click="AddTaskRowButton_Click"/>
-                        </DockPanel>
+                        </Grid>
 
                         <Popup x:Name="TaskColumnsPopup"
                                PlacementTarget="{Binding ElementName=TaskColumnsButton}"
@@ -743,6 +790,16 @@
 						          IsReadOnly="False">
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn x:Name="TaskSelectColumn" Header="" Width="28" CanUserResize="False">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <!-- ✅ 30.07.2026 (demande de Joe) : case à cocher qui sélectionne
+                                                 toutes les cases de la colonne. -->
+                                            <CheckBox x:Name="TaskSelectAllCheckBox"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Click="TaskSelectAllCheckBox_Click"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <CheckBox HorizontalAlignment="Center"
@@ -1033,58 +1090,76 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <DockPanel x:Name="WeeklyHeaderToolbar"
-                                   Grid.Row="0"
-                                   Margin="0,0,0,8"
-                                   LastChildFill="False">
-                            <TextBlock Text="Planning hebdomadaire"
+                        <!-- ✅ 30.07.2026 (demande de Joe) : Grid (plutôt que DockPanel) pour que
+                             "Ajouter" démarre à une position FIXE (178 = largeur colonne case à
+                             cocher [28] + colonne Entreprise [MinWidth 150, valeur habituelle en
+                             pratique]) et s'aligne verticalement avec le bord gauche de la colonne
+                             "Lundi" de PlanningDataGrid ci-dessous, indépendamment de la largeur
+                             du titre. Approximatif si un nom d'entreprise pousse la colonne
+                             au-delà de 150 (colonne en Auto). -->
+                        <Grid x:Name="WeeklyHeaderToolbar"
+                              Grid.Row="0"
+                              Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="178"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="Planning hebdomadaire"
 							           FontSize="14"
 							           FontWeight="SemiBold"
 							           Foreground="#111827"
-							           VerticalAlignment="Center"
-							           DockPanel.Dock="Left"/>
+							           VerticalAlignment="Center"/>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="AddPlanningRowButton"
+								        Content="Ajouter"
+								        Style="{StaticResource SmallBlueButtonStyle}"
+								        Height="34"
+								        Click="AddPlanningRowButton_Click"/>
+
+                                <Button x:Name="RemovePlanningRowButton"
+								        Content="Supprimer"
+								        Style="{StaticResource SmallBlackButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="RemovePlanningRowButton_Click"/>
+                            </StackPanel>
 
                             <!-- ✅ Navigation de semaine + dates déplacées dans la zone figée en haut
                                  de page (19.07.2026, 2e demande de Joe), même ligne que "Générer PDF"
                                  -> toujours visibles au scroll. Voir Grid Grid.Row="0" (hors du
                                  ScrollViewer). -->
 
-                            <!-- ✅ Toutes les options de structure de la semaine regroupées sous un
-                                 seul bouton (19.07.2026, demande de Joe : auparavant deux boutons
-                                 séparés "Samedi/Dimanche ▾" et "Jours : 6 ▾"). Choix Samedi/Dimanche
-                                 mémorisés PAR SEMAINE (voir LoadWeekState) ; structure 5/6 jours en
-                                 mémoire pour la session (voir _weekDayCount). -->
-                            <Button x:Name="WeekStructureButton"
-							        Content="Structurer la semaine ▾"
-							        Style="{StaticResource OutlineBlueButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="WeekStructureButton_Click"/>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                                <!-- ✅ 30.07.2026 (demande de Joe) : commutateur Automatique/Manuel
+                                     pour l'ajout des intervenants au planning depuis la liste des
+                                     tâches, figé par semaine (voir AutoAddToggleButton_Click). -->
+                                <Button x:Name="AutoAddToggleButton"
+								        Content="Automatique"
+								        Style="{StaticResource SmallBlueButtonStyle}"
+								        Height="34"
+								        ToolTip="Ajout automatique des intervenants au planning (choisis dans les tâches). Cliquer pour passer en manuel pour cette semaine."
+								        Click="AutoAddToggleButton_Click"/>
 
-                            <!-- ✅ Entre "Supprimer" et "Structurer la semaine" (4e demande de Joe,
-                                 19.07.2026), avec libellé complet au lieu de l'icône seule. -->
-                            <Button x:Name="DuplicateNextButton"
-                                    Content="▶⧉ Copier semaine à la suivante"
-                                    Tag="next"
-                                    Click="DuplicateCurrentWeekTo_Click"
-                                    ToolTip="Copier cette semaine vers la semaine suivante"
-                                    DockPanel.Dock="Right"
-                                    Margin="8,0,0,0"
-                                    Style="{StaticResource SmallBlueButtonStyle}"/>
-
-                            <Button x:Name="RemovePlanningRowButton"
-							        Content="Supprimer"
-							        Style="{StaticResource SmallBlackButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="RemovePlanningRowButton_Click"/>
-
-                            <Button x:Name="AddPlanningRowButton"
-							        Content="Ajouter"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Click="AddPlanningRowButton_Click"/>
-                        </DockPanel>
+                                <!-- ✅ Toutes les options de structure de la semaine regroupées sous
+                                     un seul bouton (19.07.2026, demande de Joe : auparavant deux
+                                     boutons séparés "Samedi/Dimanche ▾" et "Jours : 6 ▾"). Choix
+                                     Samedi/Dimanche mémorisés PAR SEMAINE (voir LoadWeekState) ;
+                                     structure 5/6 jours en mémoire pour la session (voir
+                                     _weekDayCount). Placé tout à droite (30.07.2026, demande de
+                                     Joe). -->
+                                <Button x:Name="WeekStructureButton"
+								        Content="Structurer la semaine ▾"
+								        Style="{StaticResource OutlineBlueButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="WeekStructureButton_Click"/>
+                            </StackPanel>
+                        </Grid>
 
                         <Popup x:Name="WeekStructurePopup"
                                PlacementTarget="{Binding ElementName=WeekStructureButton}"
@@ -1167,6 +1242,16 @@
                                 <!-- ✅ 29.07.2026 (demande de Joe) : case à cocher pour sélectionner
                                      les lignes à supprimer, même principe que TaskSelectColumn. -->
                                 <DataGridTemplateColumn x:Name="PlanningSelectColumn" Header="" Width="28" CanUserResize="False">
+                                    <DataGridTemplateColumn.HeaderTemplate>
+                                        <DataTemplate>
+                                            <!-- ✅ 30.07.2026 (demande de Joe) : case à cocher qui sélectionne
+                                                 toutes les cases de la colonne. -->
+                                            <CheckBox x:Name="PlanningSelectAllCheckBox"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Click="PlanningSelectAllCheckBox_Click"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.HeaderTemplate>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <CheckBox HorizontalAlignment="Center"
@@ -1519,14 +1604,33 @@
 							           Foreground="#111827"
 							           DockPanel.Dock="Left"/>
 
-                            <!-- ✅ Ordre gauche->droite (19.07.2026, demande de Joe) : Ajouter image >
-                                 Retirer image > Ajouter aux favoris > Favoris > Reset stickers. Dans un
-                                 DockPanel LastChildFill="False", le 1er élément Dock="Right" déclaré est
-                                 le plus à droite -> on déclare donc dans l'ordre inverse (droite vers
-                                 gauche). -->
+                            <!-- ✅ 30.07.2026 (demande de Joe) : "Ajouter image"/"Retirer image"
+                                 déplacés à gauche, juste après le titre de section. -->
+                            <Button x:Name="PlanAddButton"
+                                    Content="Ajouter image"
+							        Style="{StaticResource SmallBlueButtonStyle}"
+							        Height="34"
+							        DockPanel.Dock="Left"
+							        Margin="16,0,0,0"
+							        Click="PlanAdd_Click"/>
+
+                            <Button x:Name="PlanRemoveButton"
+                                    Content="Retirer image"
+							        Style="{StaticResource SmallBlackButtonStyle}"
+							        Height="34"
+							        DockPanel.Dock="Left"
+							        Margin="8,0,0,0"
+							        Click="PlanRemove_Click"/>
+
+                            <!-- ✅ Ordre gauche->droite pour les boutons restants (19.07.2026,
+                                 demande de Joe) : Ajouter aux favoris > Favoris > Reset stickers. Dans
+                                 un DockPanel LastChildFill="False", le 1er élément Dock="Right"
+                                 déclaré est le plus à droite -> on déclare donc dans l'ordre inverse
+                                 (droite vers gauche). -->
                             <Button x:Name="ResetStickersButton"
                                     Content="Reset stickers"
 							        Style="{StaticResource SmallBlackButtonStyle}"
+							        Height="34"
 							        DockPanel.Dock="Right"
 							        Margin="8,0,0,0"
 							        Click="ResetPlacedStickers_Click"/>
@@ -1534,6 +1638,7 @@
                             <Button x:Name="ImageFavoritesButton"
                                     Content="Favoris ▾"
 							        Style="{StaticResource OutlineBlueButtonStyle}"
+							        Height="34"
 							        DockPanel.Dock="Right"
 							        Margin="8,0,0,0"
 							        Click="ImageFavoritesButton_Click"/>
@@ -1541,23 +1646,10 @@
                             <Button x:Name="AddImageToFavoritesButton"
                                     Content="☆ Ajouter Image aux favoris"
 							        Style="{StaticResource SmallBlueButtonStyle}"
+							        Height="34"
 							        DockPanel.Dock="Right"
 							        Margin="8,0,0,0"
 							        Click="AddSelectedImageToFavorites_Click"/>
-
-                            <Button x:Name="PlanRemoveButton"
-                                    Content="Retirer image"
-							        Style="{StaticResource SmallBlackButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="PlanRemove_Click"/>
-
-                            <Button x:Name="PlanAddButton"
-                                    Content="Ajouter image"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="PlanAdd_Click"/>
                         </DockPanel>
 
                         <Popup x:Name="ImageFavoritesPopup"
@@ -1870,26 +1962,24 @@
                             <!-- ✅ Sélectionner tout / Copier / Coller déplacés sur la ligne "Police"
                                  (19.07.2026, 2e demande de Joe) : voir TextZoneFontToolbar. -->
 
-                            <!-- ✅ 29.07.2026 (demande de Joe) : "Supprimer" vide juste le texte de la
-                                 zone sélectionnée, sans la masquer (contrairement à "Retirer zone de
-                                 texte" à droite qui masque aussi la zone). -->
-                            <Button Content="Supprimer"
-							        Style="{StaticResource SmallBlackButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="TextZoneClear_Click"/>
+                            <!-- ✅ "Supprimer" déplacé à côté de "Insérer image" (30.07.2026,
+                                 demande de Joe) : voir TextZoneFontToolbar, Grid.Column="13". -->
+
+                            <!-- ✅ 30.07.2026 (demande de Joe) : "Ajouter"/"Retirer" déplacés à
+                                 gauche, juste après le titre de section. -->
+                            <Button Content="Ajouter zone de texte"
+							        Style="{StaticResource SmallBlueButtonStyle}"
+							        Height="34"
+							        DockPanel.Dock="Left"
+							        Margin="16,0,0,0"
+							        Click="TextZoneAdd_Click"/>
 
                             <Button Content="Retirer zone de texte"
 							        Style="{StaticResource SmallBlackButtonStyle}"
-							        DockPanel.Dock="Right"
+							        Height="34"
+							        DockPanel.Dock="Left"
 							        Margin="8,0,0,0"
 							        Click="TextZoneRemove_Click"/>
-
-                            <Button Content="Ajouter zone de texte"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="TextZoneAdd_Click"/>
                         </DockPanel>
 
                         <Border x:Name="TextZoneFontToolbar"
@@ -1916,6 +2006,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
@@ -1927,7 +2018,7 @@
                                 <ComboBox Grid.Column="3" x:Name="FontSizeCombo" Width="64" Height="26" Margin="8,0,16,0"
 								          SelectionChanged="FontSizeCombo_SelectionChanged"/>
 
-                                <ToggleButton Grid.Column="4" x:Name="BoldToggle" Width="40" Height="28" Margin="0,0,8,0"
+                                <ToggleButton Grid.Column="4" x:Name="BoldToggle" Width="40" Height="34" Margin="0,0,8,0"
 								              Style="{StaticResource TextZoneToolToggleStyle}"
 								              Background="White" Foreground="#111827"
 								              Click="BoldToggle_Click"
@@ -1936,7 +2027,7 @@
 									           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </ToggleButton>
 
-                                <ToggleButton Grid.Column="5" x:Name="ItalicToggle" Width="40" Height="28" Margin="0,0,8,0"
+                                <ToggleButton Grid.Column="5" x:Name="ItalicToggle" Width="40" Height="34" Margin="0,0,8,0"
 								              Style="{StaticResource TextZoneToolToggleStyle}"
 								              Background="White" Foreground="#111827"
 								              Click="ItalicToggle_Click"
@@ -1945,7 +2036,7 @@
 									           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </ToggleButton>
 
-                                <ToggleButton Grid.Column="6" x:Name="UnderlineToggle" Width="40" Height="28" Margin="0,0,16,0"
+                                <ToggleButton Grid.Column="6" x:Name="UnderlineToggle" Width="40" Height="34" Margin="0,0,16,0"
 								              Style="{StaticResource TextZoneToolToggleStyle}"
 								              Background="White" Foreground="#111827"
 								              Click="UnderlineToggle_Click"
@@ -1954,7 +2045,7 @@
 									           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </ToggleButton>
 
-                                <Button Grid.Column="7" x:Name="FontColorButton" Width="56" Height="28" Margin="0,0,8,0"
+                                <Button Grid.Column="7" x:Name="FontColorButton" Width="56" Height="34" Margin="0,0,8,0"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Background="White"
@@ -1979,7 +2070,7 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Grid.Column="8" x:Name="FillColorButton" Width="56" Height="28"
+                                <Button Grid.Column="8" x:Name="FillColorButton" Width="56" Height="34"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Background="White"
@@ -2007,7 +2098,7 @@
                                 <!-- ✅ Sélectionner tout / Copier / Coller, déplacés sur la ligne
                                      "Police" (19.07.2026, 2e demande de Joe), même look que les autres
                                      boutons de cette barre (fond blanc, bordure grise, hauteur 28). -->
-                                <Button Grid.Column="9" Content="Sélectionner tout" Height="28"
+                                <Button Grid.Column="9" Content="Sélectionner tout" Height="34"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="16,0,8,0" Padding="10,0"
@@ -2015,7 +2106,7 @@
 								        Click="TextZoneSelectAll_Click"
 								        ToolTip="Sélectionner tout le texte de la zone active"/>
 
-                                <Button Grid.Column="10" Content="Copier" Height="28"
+                                <Button Grid.Column="10" Content="Copier" Height="34"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="0,0,8,0" Padding="10,0"
@@ -2023,7 +2114,7 @@
 								        Click="TextZoneCopy_Click"
 								        ToolTip="Copier le texte sélectionné"/>
 
-                                <Button Grid.Column="11" Content="Coller" Height="28"
+                                <Button Grid.Column="11" Content="Coller" Height="34"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Padding="10,0"
@@ -2031,13 +2122,23 @@
 								        Click="TextZonePaste_Click"
 								        ToolTip="Coller dans la zone active"/>
 
-                                <Button Grid.Column="12" Content="🖼 Insérer image" Height="28"
+                                <Button Grid.Column="12" Content="🖼 Insérer image" Height="34"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="16,0,0,0" Padding="10,0"
 								        Background="White" Foreground="#111827"
 								        Click="InsertImageIntoActiveTextZone_Click"
 								        ToolTip="Insérer une image (PNG, JPG...) dans la zone active. Ctrl + molette sur l'image pour la redimensionner."/>
+
+                                <!-- ✅ 30.07.2026 (demande de Joe) : "Supprimer" (vide juste le texte
+                                     de la zone active, sans la masquer) déplacé à côté de "Insérer
+                                     image", police et bordure rouges (au lieu de noir plein). -->
+                                <Button Grid.Column="13" Content="Supprimer" Height="34"
+								        Style="{StaticResource TextZoneToolButtonStyle}"
+								        HorizontalAlignment="Left"
+								        Margin="16,0,0,0" Padding="10,0"
+								        Background="White" Foreground="#DC2626" BorderBrush="#DC2626"
+								        Click="TextZoneClear_Click"/>
 
                             </Grid>
 

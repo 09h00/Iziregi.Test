@@ -123,6 +123,32 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- ✅ 30.07.2026 (demande de Joe) : items du menu déroulant "Archives ▾" (Bons
+             d'intervention / Tâches). -->
+        <Style x:Key="ArchivesMenuItemStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <DockPanel>
@@ -140,7 +166,9 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="NavDashboardButton" Content="Tableau de bord" Click="NavDashboard_Click" Style="{StaticResource NavPillButtonActiveStyle}"/>
                     <Button x:Name="NavAccountingButton" Content="Comptabilité" Click="NavAccounting_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <Button x:Name="NavArchivesButton" Content="Archives" Click="NavArchives_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ 30.07.2026 (demande de Joe) : "Archives" devient un menu déroulant avec
+                         2 choix (Bons d'intervention / Tâches), voir ArchivesNavPopup ci-dessous. -->
+                    <Button x:Name="NavArchivesButton" Content="Archives ▾" Click="NavArchivesDropdown_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavTrashButton" Content="Corbeille" Click="NavTrash_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavPlanningButton" Content="Planning" Click="NavPlanning_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavListsButton" Content="Listes" Click="NavLists_Click" Style="{StaticResource NavPillButtonStyle}"/>
@@ -152,10 +180,29 @@
                     <!-- ✅ Contact (29.07.2026, demande de Joe) : même principe que Aide, ouvre
                          la page /contact (adresse e-mail) dans le navigateur par défaut. -->
                     <Button x:Name="NavContactButton" Content="Contact" Click="NavContact_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <!-- ✅ CGV version d'essai (29.07.2026, demande de Joe) : même principe que
-                         Aide/Contact, ouvre la page /cgv-essai dans le navigateur par défaut. -->
-                    <Button x:Name="NavCgvEssaiButton" Content="CGV essai" Click="NavCgvEssai_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ CGU / Politique de confidentialité (30.07.2026, demande de Joe :
+                         remplace la CGV d'essai) : même principe que Aide/Contact, ouvre la page
+                         /cgu dans le navigateur par défaut. -->
+                    <Button x:Name="NavCgvEssaiButton" Content="CGU" Click="NavCgvEssai_Click" Style="{StaticResource NavPillButtonStyle}"/>
                 </StackPanel>
+
+                <Popup x:Name="ArchivesNavPopup"
+                       PlacementTarget="{Binding ElementName=NavArchivesButton}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="White"
+                            BorderBrush="#D1D5DB"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="4"
+                            Effect="{StaticResource CardShadowEffect}">
+                        <StackPanel>
+                            <Button Content="Bons d'intervention" Style="{StaticResource ArchivesMenuItemStyle}" Click="NavArchivesBons_Click"/>
+                            <Button Content="Tâches" Style="{StaticResource ArchivesMenuItemStyle}" Click="NavArchivesTasksMenuItem_Click"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
 
                 <!-- Pastille projet (dans le même bandeau que la navigation) -->
                 <!-- Project selector visible sur toutes les pages -->

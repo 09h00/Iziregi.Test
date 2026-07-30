@@ -109,6 +109,7 @@ public partial class MainWindow : Window
     private DashboardPage? _dashboardPage;
     private AccountingPage? _accountingPage;
     private ArchivesPage? _archivesPage;
+    private ArchivesTasksPage? _archivesTasksPage;
     private TrashPage? _trashPage;
     private ListsPage? _listsPage;
     private PlanningPage? _planningPage;
@@ -1504,7 +1505,24 @@ public partial class MainWindow : Window
     // =========================
     private void NavDashboard_Click(object sender, RoutedEventArgs e) => ShowDashboard();
     private void NavAccounting_Click(object sender, RoutedEventArgs e) => ShowAccounting();
-    private void NavArchives_Click(object sender, RoutedEventArgs e) => ShowArchives();
+    // ✅ 30.07.2026 (demande de Joe) : "Archives" ouvre maintenant un menu déroulant (2
+    // choix) au lieu d'aller directement aux archives des bons.
+    private void NavArchivesDropdown_Click(object sender, RoutedEventArgs e)
+    {
+        ArchivesNavPopup.IsOpen = !ArchivesNavPopup.IsOpen;
+    }
+
+    private void NavArchivesBons_Click(object sender, RoutedEventArgs e)
+    {
+        ArchivesNavPopup.IsOpen = false;
+        ShowArchives();
+    }
+
+    private void NavArchivesTasksMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ArchivesNavPopup.IsOpen = false;
+        ShowArchivesTasks();
+    }
     private void NavTrash_Click(object sender, RoutedEventArgs e) => ShowTrash();
     private void NavLists_Click(object sender, RoutedEventArgs e) => ShowLists();
     private void NavPlanning_Click(object sender, RoutedEventArgs e) => ShowPlanning();
@@ -1561,7 +1579,7 @@ public partial class MainWindow : Window
         try
         {
             var baseUrl = NormalizeServerBaseUrl(ServerBaseUrl);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"{baseUrl}/cgv-essai") { UseShellExecute = true });
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"{baseUrl}/cgu") { UseShellExecute = true });
         }
         catch (Exception ex)
         {
@@ -1685,6 +1703,18 @@ public partial class MainWindow : Window
         UpdateProjectBadge(show: true);
     }
 
+    private void ShowArchivesTasks()
+    {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
+        FlushPlanningIfActive();
+        SetActiveNavButton(NavArchivesButton);
+        _archivesTasksPage ??= new ArchivesTasksPage(this);
+        MainContent.Content = _archivesTasksPage;
+        _archivesTasksPage.Reload();
+
+        UpdateProjectBadge(show: true);
+    }
+
     private void ShowTrash()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
@@ -1778,6 +1808,7 @@ public partial class MainWindow : Window
         var wasDashboard = current is DashboardPage;
         var wasAccounting = current is AccountingPage;
         var wasArchives = current is ArchivesPage;
+        var wasArchivesTasks = current is ArchivesTasksPage;
         var wasTrash = current is TrashPage;
         var wasLists = current is ListsPage;
         var wasPlanning = current is PlanningPage;
@@ -1785,6 +1816,7 @@ public partial class MainWindow : Window
         _dashboardPage = null;
         _accountingPage = null;
         _archivesPage = null;
+        _archivesTasksPage = null;
         _trashPage = null;
         _listsPage = null;
         _planningPage = null;
@@ -1812,6 +1844,14 @@ public partial class MainWindow : Window
                 _archivesPage = new ArchivesPage(this);
                 MainContent.Content = _archivesPage;
                 _archivesPage.Reload();
+                return;
+            }
+
+            if (wasArchivesTasks)
+            {
+                _archivesTasksPage = new ArchivesTasksPage(this);
+                MainContent.Content = _archivesTasksPage;
+                _archivesTasksPage.Reload();
                 return;
             }
 

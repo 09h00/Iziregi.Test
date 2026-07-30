@@ -209,7 +209,7 @@ internal class ConfigSetupWindow : Window
     // =========================
     private static readonly (string Key, string Display)[] StartupPageOptions =
     {
-        ("", "Dashboard (par défaut)"),
+        ("", "Tableau de bord"),
         ("Archives", "Archives"),
         ("Corbeille", "Corbeille"),
         ("Listes", "Listes"),

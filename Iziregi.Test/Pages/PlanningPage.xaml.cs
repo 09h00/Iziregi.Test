@@ -114,6 +114,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     private bool _isSyncingDates = false;
     private bool _isWeekAnimating = false;
 
+    // ✅ 30.07.2026 (demande de Joe) : ajout automatique des intervenants au planning
+    // hebdo (dès qu'un intervenant est choisi dans une tâche, sa ligne apparaît dans le
+    // planning s'il n'y est pas déjà) -- figé PAR SEMAINE, vrai par défaut. Voir
+    // EnsureCompanyInPlanning, AutoAddToggleButton_Click, WeekStateFile.AutoAddCompanyToPlanning.
+    private bool _autoAddCompanyToPlanning = true;
+
     // Drag paint done
     private bool _isPaintingDone = false;
     private bool _paintDoneValue = false;
@@ -282,6 +288,10 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         if (obj is not TaskRow r) return true;
 
+        // ✅ 30.07.2026 (demande de Joe) : une tâche archivée disparaît de la grille active,
+        // quelle que soit la semaine consultée -- seule "Archives tâches" l'affiche.
+        if (r.IsArchived) return false;
+
         var viewedWeekStart = SnapToStartOfWeek(_startDay, _weekStartDay);
 
         // ✅ Borne basse (28.07.2026, demande de Joe) : pas de report dans les semaines
@@ -312,18 +322,6 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         }
 
         return true;
-    }
-
-    // ✅ Bascule "Afficher toutes les semaines" (28.07.2026, demande de Joe) : désactive
-    // temporairement le filtre par semaine pour voir/gérer absolument toutes les tâches,
-    // y compris celles devenues invisibles partout à cause d'un bug de date déjà corrigé.
-    private void ShowAllWeeksTasksCheckBox_Click(object sender, RoutedEventArgs e)
-    {
-        if (_taskRowsView == null) return;
-
-        _taskRowsView.Filter = ShowAllWeeksTasksCheckBox.IsChecked == true
-            ? null
-            : TaskRowVisibleInCurrentWeek;
     }
 
     // ✅ Recalcule la visibilité "Effectué" au moment précis du clic plutôt que via un
@@ -1211,6 +1209,18 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         try
         {
             var dep = e.OriginalSource as DependencyObject;
+
+            // ✅ Fix (30.07.2026, demande de Joe : "je clique sur Descriptif ... rien ne se
+            // passe si je clique sur Supprimer") : le bouton "Supprimer" (comme tout autre
+            // bouton d'action) est EN DEHORS des deux DataGrid, donc ce gestionnaire les
+            // videait TOUTES LES DEUX en PreviewMouseDown -- avant même que le Click du
+            // bouton ne s'exécute -- ce qui effaçait la sélection native juste avant que
+            // RemoveTaskRowButton_Click/RemovePlanningRowButton_Click ne la lise. Un clic sur
+            // un bouton (ou une case à cocher) ne doit jamais être traité comme "clic
+            // ailleurs".
+            if (FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(dep) != null)
+                return;
+
             var grid = FindAncestor<DataGrid>(dep);
 
             if (ReferenceEquals(grid, TasksDataGrid))
@@ -2553,7 +2563,60 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         foreach (var r in toRemove)
             _taskRows.Remove(r);
 
+        // ✅ 30.07.2026 (demande de Joe : "elle reste cochée une fois le travail fait") : la
+        // case d'entête ne reflète rien automatiquement (elle n'est pas liée aux lignes), donc
+        // une fois l'action terminée on la redécoche explicitement.
+        if (_taskSelectAllCheckBox != null) _taskSelectAllCheckBox.IsChecked = false;
+
         SaveProjectTasks();
+    }
+
+    // ✅ 30.07.2026 (demande de Joe) : "Archives tâches" -- même sélection que "Supprimer",
+    // mais la tâche n'est pas effacée : elle est marquée archivée (disparaît de la grille
+    // active via TaskRowVisibleInCurrentWeek, consultable/restaurable depuis
+    // ArchivesTasksPage).
+    private void ArchiveTaskRowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isPageActive) return;
+
+        try { TasksDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); TasksDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+
+        var toArchive = _taskRows.Where(r => r.IsSelected).ToList();
+
+        if (toArchive.Count == 0)
+        {
+            toArchive = TasksDataGrid.SelectedItems.Cast<object>().OfType<TaskRow>().ToList();
+            if (toArchive.Count == 0 && TasksDataGrid.SelectedItem is TaskRow one) toArchive.Add(one);
+        }
+
+        if (toArchive.Count == 0) return;
+
+        foreach (var r in toArchive)
+        {
+            r.IsArchived = true;
+            r.ArchivedAt = DateTime.Now;
+            r.IsSelected = false;
+        }
+
+        if (_taskSelectAllCheckBox != null) _taskSelectAllCheckBox.IsChecked = false;
+
+        SaveProjectTasks();
+
+        // ✅ Le filtre de la vue (TaskRowVisibleInCurrentWeek) doit être réévalué pour que la
+        // tâche archivée disparaisse immédiatement de la grille active.
+        _taskRowsView?.Refresh();
+    }
+
+    private WpfCheckBox? _taskSelectAllCheckBox;
+
+    // ✅ 30.07.2026 (demande de Joe) : case à cocher d'entête qui sélectionne/désélectionne
+    // toutes les lignes de la grille des tâches d'un seul clic.
+    private void TaskSelectAllCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfCheckBox cb) return;
+        _taskSelectAllCheckBox = cb;
+        bool select = cb.IsChecked == true;
+        foreach (var r in _taskRows) r.IsSelected = select;
     }
 
     // ✅ Éditeur agrandi du Descriptif (16.07.2026, demande de Joe) : ouvre TaskDescriptionWindow
@@ -2606,11 +2669,38 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         var toRemove = _planningRows.Where(r => r.IsSelected).ToList();
 
+        // ✅ Fix (30.07.2026, demande de Joe : "ça fonctionne pour les tâches mais pas pour
+        // planning") : contrairement à RemoveTaskRowButton_Click, ce bouton ne regardait QUE
+        // les cases à cocher -- une ligne sélectionnée juste en cliquant dans un champ
+        // (comme pour les tâches) n'était jamais prise en compte.
+        if (toRemove.Count == 0)
+        {
+            toRemove = PlanningDataGrid.SelectedItems.Cast<object>().OfType<PlanningRow>().ToList();
+            if (toRemove.Count == 0 && PlanningDataGrid.SelectedItem is PlanningRow one) toRemove.Add(one);
+        }
+
         foreach (var r in toRemove)
             _planningRows.Remove(r);
 
         if (_planningRows.Count == 0)
             _planningRows.Add(new PlanningRow());
+
+        // ✅ 30.07.2026 (demande de Joe : "elle reste cochée une fois le travail fait") : la
+        // case d'entête ne reflète rien automatiquement (elle n'est pas liée aux lignes), donc
+        // une fois l'action terminée on la redécoche explicitement.
+        if (_planningSelectAllCheckBox != null) _planningSelectAllCheckBox.IsChecked = false;
+    }
+
+    private WpfCheckBox? _planningSelectAllCheckBox;
+
+    // ✅ 30.07.2026 (demande de Joe) : case à cocher d'entête qui sélectionne/désélectionne
+    // toutes les lignes de la grille du planning d'un seul clic.
+    private void PlanningSelectAllCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfCheckBox cb) return;
+        _planningSelectAllCheckBox = cb;
+        bool select = cb.IsChecked == true;
+        foreach (var r in _planningRows) r.IsSelected = select;
     }
 
     // ✅ Toutes les options de structure de la semaine regroupées sous un seul bouton
@@ -2635,6 +2725,101 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         ApplyPlanningHeadersAndSyncDatePickers();
         PlanningDataGrid?.UpdateLayout();
+    }
+
+    // ✅ 30.07.2026 (demande de Joe) : ajout automatique des intervenants au planning
+    // hebdo -- commutateur Automatique/Manuel, figé PAR SEMAINE (comme Samedi/Dimanche),
+    // vrai (Automatique) par défaut.
+    private void AutoAddToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        _autoAddCompanyToPlanning = !_autoAddCompanyToPlanning;
+        ApplyAutoAddToggleButtonAppearance();
+        SaveCurrentWeekState();
+    }
+
+    private void ApplyAutoAddToggleButtonAppearance()
+    {
+        if (AutoAddToggleButton == null) return;
+
+        if (_autoAddCompanyToPlanning)
+        {
+            AutoAddToggleButton.Content = "Automatique";
+            AutoAddToggleButton.Style = (Style)FindResource("SmallBlueButtonStyle");
+        }
+        else
+        {
+            AutoAddToggleButton.Content = "Manuel";
+            AutoAddToggleButton.Style = (Style)FindResource("SmallBlackButtonStyle");
+        }
+    }
+
+    // ✅ Ajoute automatiquement une ligne "intervenant" au planning hebdo dès qu'il est
+    // choisi dans une tâche et n'a pas déjà sa ligne cette semaine-là (mode Automatique
+    // uniquement -- voir AutoAddToggleButton_Click).
+    private void EnsureCompanyInPlanning(string? company)
+    {
+        if (!_autoAddCompanyToPlanning) return;
+
+        var name = (company ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        var exists = _planningRows.Any(r => string.Equals((r.Company ?? "").Trim(), name, StringComparison.OrdinalIgnoreCase));
+        if (exists) return;
+
+        // ✅ 30.07.2026 (demande de Joe : "3 lignes vides -> l'intervenant se met en
+        // dernière position") : réutilise d'abord une ligne déjà vide (comblée), sans quoi
+        // les lignes vides existantes n'étant pas des "ancres" (voir plus bas), la nouvelle
+        // ligne finissait systématiquement après elles, tout en bas.
+        var blankRow = _planningRows.FirstOrDefault(r => string.IsNullOrWhiteSpace(r.Company));
+        if (blankRow != null)
+        {
+            blankRow.Company = name;
+            return;
+        }
+
+        // ✅ Sinon (aucune ligne vide disponible) : la ligne s'insère à la position
+        // correspondant à l'ordre de première apparition de cet intervenant dans la liste
+        // des tâches ("le premier en premier et le deuxième en deuxième"), pas
+        // systématiquement en haut ni en bas -- pour que les deux grilles listent les
+        // intervenants dans le même ordre.
+        var taskOrder = _taskRows
+            .Select(t => (t.Company ?? "").Trim())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var newIndex = taskOrder.FindIndex(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
+
+        var insertAt = _planningRows.Count;
+        if (newIndex >= 0)
+        {
+            for (int i = 0; i < _planningRows.Count; i++)
+            {
+                var existingCompany = (_planningRows[i].Company ?? "").Trim();
+                var existingTaskIndex = taskOrder.FindIndex(c => string.Equals(c, existingCompany, StringComparison.OrdinalIgnoreCase));
+                if (existingTaskIndex < 0) continue;
+                if (existingTaskIndex > newIndex)
+                {
+                    insertAt = i;
+                    break;
+                }
+            }
+        }
+
+        _planningRows.Insert(insertAt, new PlanningRow { Company = name });
+    }
+
+    private void AttachTaskRowCompanyWatcher(TaskRow row)
+    {
+        row.PropertyChanged -= TaskRow_PropertyChanged_AutoAddCompany;
+        row.PropertyChanged += TaskRow_PropertyChanged_AutoAddCompany;
+    }
+
+    private void TaskRow_PropertyChanged_AutoAddCompany(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(TaskRow.Company)) return;
+        if (sender is not TaskRow row) return;
+        EnsureCompanyInPlanning(row.Company);
     }
 
     private void WeekendColumnVisibility_Changed(object sender, RoutedEventArgs e)
@@ -2901,7 +3086,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Visible = z.Visible,
                 Title = z.Title,
                 DocumentXaml = z.DocumentXaml
-            }).ToList()
+            }).ToList(),
+            AutoAddCompanyToPlanning = _autoAddCompanyToPlanning
         };
     }
 
@@ -2961,32 +3147,18 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     // "se répercute" naturellement d'une semaine sur l'autre), et la numérotation
     // automatique (voir AddTaskRowButton_Click, max des Ref existants + 1) devient
     // continue sur toute l'année plutôt que de se réinitialiser.
-    private static string GetProjectTasksFilePath(long? projectId)
-    {
-        var pid = (projectId.HasValue && projectId.Value > 0)
-            ? projectId.Value.ToString(CultureInfo.InvariantCulture)
-            : "0";
-
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "Iziregi", "Planning");
-        return Path.Combine(dir, $"planning-tasks-{pid}.json");
-    }
-
     private void LoadProjectTasks()
     {
         _taskRows.Clear();
 
         var pid = Db.GetCurrentProjectId();
-        var filePath = GetProjectTasksFilePath(pid);
+        var filePath = ProjectTasksStore.GetFilePath(pid);
 
         if (File.Exists(filePath))
         {
             try
             {
-                var json = File.ReadAllText(filePath);
-                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var rows = JsonSerializer.Deserialize<List<TaskRowState>>(json, opts) ?? new();
+                var rows = ProjectTasksStore.Load(pid);
 
                 foreach (var r in rows)
                     _taskRows.Add(new TaskRow
@@ -3006,7 +3178,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                         // d'écriture ci-dessous, pas l'ordre de déclaration de la classe).
                         Done = r.Done,
                         DoneAt = r.DoneAt,
-                        CreatedWeekStart = r.CreatedWeekStart
+                        CreatedWeekStart = r.CreatedWeekStart,
+                        IsArchived = r.IsArchived,
+                        ArchivedAt = r.ArchivedAt
                     });
 
                 return;
@@ -3063,12 +3237,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             try { TasksDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); TasksDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
 
             var pid = Db.GetCurrentProjectId();
-            var filePath = GetProjectTasksFilePath(pid);
-            var dir = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrWhiteSpace(dir))
-                Directory.CreateDirectory(dir);
 
-            var rows = _taskRows.Select(r => new TaskRowState
+            var rows = _taskRows.Select(r => new TaskRecord
             {
                 Ref = r.Ref,
                 Company = r.Company,
@@ -3081,11 +3251,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Urgent = r.Urgent,
                 Done = r.Done,
                 DoneAt = r.DoneAt,
-                CreatedWeekStart = r.CreatedWeekStart
+                CreatedWeekStart = r.CreatedWeekStart,
+                IsArchived = r.IsArchived,
+                ArchivedAt = r.ArchivedAt
             }).ToList();
 
-            var json = JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(filePath, json);
+            ProjectTasksStore.Save(pid, rows);
         }
         catch { }
     }
@@ -3109,6 +3280,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var pid = Db.GetCurrentProjectId();
         bool showSaturday = pid.HasValue && pid.Value > 0 && Db.GetDefaultShowSaturday(pid.Value);
         bool showSunday = pid.HasValue && pid.Value > 0 && Db.GetDefaultShowSunday(pid.Value);
+        bool autoAddCompany = true;
         List<TextZoneState>? textZoneStates = null;
 
         if (File.Exists(filePath))
@@ -3123,6 +3295,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 {
                     showSaturday = state.ShowSaturday;
                     showSunday = state.ShowSunday;
+                    autoAddCompany = state.AutoAddCompanyToPlanning;
                     textZoneStates = state.TextZoneStates;
 
                     // ✅ state.TaskRows n'est plus utilisé (voir LoadProjectTasks) — laissé
@@ -3200,83 +3373,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (SundayColumn != null) SundayColumn.Visibility = showSunday ? Visibility.Visible : Visibility.Collapsed;
         if (WeekendShowSaturdayCheckBox != null) WeekendShowSaturdayCheckBox.IsChecked = showSaturday;
         if (WeekendShowSundayCheckBox != null) WeekendShowSundayCheckBox.IsChecked = showSunday;
-    }
 
-    // ✅ 29.07.2026 (Joe : "la fonction de ce bouton n'était pas sensée agir sur autre chose
-    // que le calendrier") : ne copie plus QUE la grille du planning hebdomadaire (PlanningRows).
-    // Avant ce correctif, BuildCurrentWeekStateForKey copiait aussi les zones de texte, les
-    // stickers et les images de la semaine courante vers la semaine cible, les écrasant --
-    // ce qui, utilisé plusieurs fois de suite (y compris "semaine précédente"), propageait le
-    // même contenu de zones de texte sur de nombreuses semaines passées ET futures. Le fichier
-    // cible existant est maintenant lu et conservé tel quel pour tout sauf la grille.
-    private void DuplicateCurrentWeekTo_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not System.Windows.Controls.Button btn) return;
-        int days = btn.Tag?.ToString() == "prev" ? -7 : +7;
-
-        var targetWeekStart = SnapToStartOfWeek(_startDay.AddDays(days), _weekStartDay);
-        var weekKey = GetWeekKey(targetWeekStart);
-        var filePath = GetWeekFilePath(weekKey);
-
-        var semaineNum = ISOWeek.GetWeekOfYear(targetWeekStart);
-        var label = $"semaine {semaineNum} ({targetWeekStart:dd.MM.yyyy})";
-
-        var planningRows = _planningRows.Select(r => new PlanningRowState
-        {
-            Company = r.Company,
-            D1 = r.D1,
-            D2 = r.D2,
-            D3 = r.D3,
-            D4 = r.D4,
-            D5 = r.D5,
-            D6 = r.D6,
-            Sat = r.Sat,
-            Sun = r.Sun
-        }).ToList();
-
-        if (File.Exists(filePath))
-        {
-            var result = System.Windows.MessageBox.Show(
-                $"La {label} a déjà une grille de planning renseignée.\nLa remplacer par celle de la semaine courante ? (les zones de texte, stickers et images de la {label} ne sont pas affectés)",
-                "Confirmer la duplication",
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (result != MessageBoxResult.Yes) return;
-        }
-
-        try
-        {
-            var dir = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrWhiteSpace(dir))
-                Directory.CreateDirectory(dir);
-
-            WeekStateFile state;
-            if (File.Exists(filePath))
-            {
-                var json = File.ReadAllText(filePath);
-                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                state = JsonSerializer.Deserialize<WeekStateFile>(json, opts) ?? new WeekStateFile();
-            }
-            else
-            {
-                state = new WeekStateFile();
-            }
-
-            state.WeekKey = weekKey;
-            state.PlanningRows = planningRows;
-
-            var outJson = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(filePath, outJson);
-
-            System.Windows.MessageBox.Show(
-                $"Grille du planning copiée vers la {label}.",
-                "Duplication réussie", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(
-                "Erreur lors de la duplication : " + ex.Message,
-                "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        _autoAddCompanyToPlanning = autoAddCompany;
+        ApplyAutoAddToggleButtonAppearance();
     }
 
     // ✅ FIX: samedi après vendredi (recalage des index de colonnes)
@@ -3292,26 +3391,29 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // doivent rester masquées pour cette semaine (28.07.2026, demande de Joe).
         try { _taskRowsView?.Refresh(); } catch { }
 
-        // 0 = Entreprise
-        // 1 = D1
-        // 2 = D2
-        // 3 = D3
-        // 4 = D4
-        // 5 = D5 (vendredi)
-        // 6 = Samedi (SaturdayColumn)
-        // 7 = Dimanche (SundayColumn)
-        // 8 = D6 (lundi suivant) -- masquée en mode 5 jours (Day6Column, _weekDayCount)
-        if (PlanningDataGrid.Columns.Count < 9)
+        // ✅ 30.07.2026 : indices décalés de +1 depuis l'ajout de PlanningSelectColumn (case
+        // à cocher de sélection, tout à gauche) -- avant cet ajout, 0 = Entreprise, 1 = D1...
+        // 0 = case à cocher (PlanningSelectColumn)
+        // 1 = Entreprise
+        // 2 = D1
+        // 3 = D2
+        // 4 = D3
+        // 5 = D4
+        // 6 = D5 (vendredi)
+        // 7 = Samedi (SaturdayColumn)
+        // 8 = Dimanche (SundayColumn)
+        // 9 = D6 (lundi suivant) -- masquée en mode 5 jours (Day6Column, _weekDayCount)
+        if (PlanningDataGrid.Columns.Count < 10)
             return;
 
         var start = SnapToStartOfWeek(_startDay, _weekStartDay);
         var businessDays = BuildBusinessDays(start, _weekDayCount);
 
-        PlanningDataGrid.Columns[1].Header = HeaderForDay(businessDays[0]);
-        PlanningDataGrid.Columns[2].Header = HeaderForDay(businessDays[1]);
-        PlanningDataGrid.Columns[3].Header = HeaderForDay(businessDays[2]);
-        PlanningDataGrid.Columns[4].Header = HeaderForDay(businessDays[3]);
-        PlanningDataGrid.Columns[5].Header = HeaderForDay(businessDays[4]);
+        PlanningDataGrid.Columns[2].Header = HeaderForDay(businessDays[0]);
+        PlanningDataGrid.Columns[3].Header = HeaderForDay(businessDays[1]);
+        PlanningDataGrid.Columns[4].Header = HeaderForDay(businessDays[2]);
+        PlanningDataGrid.Columns[5].Header = HeaderForDay(businessDays[3]);
+        PlanningDataGrid.Columns[6].Header = HeaderForDay(businessDays[4]);
 
         var saturdayDate = NextDayOfWeek(businessDays[4], DayOfWeek.Saturday);
         SaturdayColumn.Header = HeaderForDay(saturdayDate);
@@ -3324,7 +3426,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             Day6Column.Visibility = _weekDayCount >= 6 ? Visibility.Visible : Visibility.Collapsed;
 
         if (_weekDayCount >= 6)
-            PlanningDataGrid.Columns[8].Header = HeaderForDay(businessDays[5]);
+            PlanningDataGrid.Columns[9].Header = HeaderForDay(businessDays[5]);
 
         var lastDay = businessDays[_weekDayCount - 1];
 
@@ -3577,8 +3679,19 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (!cell.IsFocused)
             cell.Focus();
 
-        grid.CurrentCell = new DataGridCellInfo(cell.DataContext, cell.Column);
-        grid.SelectedItem = cell.DataContext;
+        // ✅ WPF interdit de changer CurrentCell tant qu'une autre cellule est encore en
+        // mode édition -- on valide d'abord toute édition en cours dans ce cas précis.
+        try
+        {
+            grid.CurrentCell = new DataGridCellInfo(cell.DataContext, cell.Column);
+            grid.SelectedItem = cell.DataContext;
+        }
+        catch (InvalidOperationException)
+        {
+            try { grid.CommitEdit(DataGridEditingUnit.Cell, true); grid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+            grid.CurrentCell = new DataGridCellInfo(cell.DataContext, cell.Column);
+            grid.SelectedItem = cell.DataContext;
+        }
     }
 
     private void ComboBox_OpenOnSingleClick(object sender, WpfMouseButtonEventArgs e)
@@ -3909,6 +4022,17 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         AttachTaskRowsView();
         PlanningDataGrid.ItemsSource = _planningRows;
+
+        // ✅ 30.07.2026 (demande de Joe) : surveille TOUTE ligne de tâche (existante ou
+        // ajoutée plus tard) pour l'ajout automatique de l'intervenant au planning hebdo dès
+        // qu'un intervenant est choisi -- un seul abonnement central plutôt que de répéter
+        // l'attache à chaque endroit où une TaskRow est créée.
+        foreach (var r in _taskRows) AttachTaskRowCompanyWatcher(r);
+        _taskRows.CollectionChanged += (_, args) =>
+        {
+            if (args.NewItems == null) return;
+            foreach (TaskRow r in args.NewItems) AttachTaskRowCompanyWatcher(r);
+        };
         // Forcer récréation des brushes lors du changement de projet :
         // on s'assure que les converters reçoivent une nouvelle instance du dictionnaire
         this.DataContextChanged += (_, __) =>
@@ -4241,6 +4365,16 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // partout, y compris dans le passé).
         private DateTime? _createdWeekStart;
 
+        // ✅ Archivage (30.07.2026, demande de Joe : page "Archives tâches", même principe que
+        // WorkOrders.IsArchived/ArchivedAt) : une tâche archivée disparaît de la grille active
+        // (voir TaskRowVisibleInCurrentWeek) mais reste en mémoire/fichier, consultable et
+        // restaurable depuis ArchivesTasksPage.
+        private bool _isArchived;
+        private DateTime? _archivedAt;
+
+        public bool IsArchived { get => _isArchived; set => SetField(ref _isArchived, value); }
+        public DateTime? ArchivedAt { get => _archivedAt; set => SetField(ref _archivedAt, value); }
+
         public string Ref { get => _ref; set => SetField(ref _ref, value); }
         public string Company { get => _company; set => SetField(ref _company, value); }
         public string Building { get => _building; set => SetField(ref _building, value); }
@@ -4348,6 +4482,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         // ✅ Zones de texte, indépendantes par semaine (19.07.2026, demande de Joe).
         public List<TextZoneState> TextZoneStates { get; set; } = new();
+
+        // ✅ 30.07.2026 (demande de Joe) : ajout automatique des intervenants au planning
+        // hebdo, figé PAR SEMAINE (comme Samedi/Dimanche) -- passer en manuel une semaine
+        // donnée n'affecte pas les autres. Vrai par défaut (semaines jamais sauvegardées).
+        public bool AutoAddCompanyToPlanning { get; set; } = true;
     }
 
     private sealed class TaskRowState

@@ -1,0 +1,379 @@
+<!-- File: Pages/ArchivesTasksPage.xaml -->
+<UserControl x:Class="Iziregi.Test.Pages.ArchivesTasksPage"
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 mc:Ignorable="d"
+			 d:DesignHeight="820"
+			 d:DesignWidth="1280"
+			 Background="#F6F7FB">
+
+	<!-- ✅ 30.07.2026 (demande de Joe) : "Archives tâches", fonctionne comme les Archives des
+		 bons (lecture seule, restaurer / supprimer définitivement), même entête de grille que
+		 la grille des tâches (page Planning). Styles copiés/adaptés de TrashPage.xaml (page la
+		 plus proche du besoin ici : pas de filtres façon Excel, juste sélection + actions),
+		 par choix volontaire de ne pas centraliser les styles entre pages (voir CLAUDE.md). -->
+	<UserControl.Resources>
+
+		<Style x:Key="SmallButtonStyle" TargetType="Button">
+			<Setter Property="Height" Value="28"/>
+			<Setter Property="Padding" Value="8,0"/>
+			<Setter Property="Background" Value="White"/>
+			<Setter Property="Foreground" Value="#111827"/>
+			<Setter Property="BorderBrush" Value="#D1D5DB"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="FontSize" Value="12"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bd"
+								Background="{TemplateBinding Background}"
+								BorderBrush="{TemplateBinding BorderBrush}"
+								BorderThickness="{TemplateBinding BorderThickness}"
+								CornerRadius="6">
+							<ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<Style x:Key="DangerSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+			<Setter Property="Foreground" Value="#B91C1C"/>
+			<Setter Property="BorderBrush" Value="#FCA5A5"/>
+		</Style>
+
+		<Style x:Key="RestoreSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
+			<Setter Property="Foreground" Value="#15803D"/>
+			<Setter Property="BorderBrush" Value="#15803D"/>
+		</Style>
+
+		<!-- ✅ TextBox (pas TextBlock) en lecture seule : bloque la saisie mais laisse la
+			 sélection de texte + Ctrl+C fonctionner normalement. -->
+		<Style x:Key="GridReadOnlyTextStyle" TargetType="TextBox">
+			<Setter Property="IsReadOnly" Value="True"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="VerticalAlignment" Value="Center"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+			<Setter Property="TextWrapping" Value="NoWrap"/>
+			<Setter Property="IsUndoEnabled" Value="False"/>
+			<Setter Property="Focusable" Value="True"/>
+		</Style>
+
+		<!-- CheckBox centrée -->
+		<Style x:Key="GridCheckBoxCellStyle" TargetType="CheckBox">
+			<Setter Property="VerticalAlignment" Value="Center"/>
+			<Setter Property="HorizontalAlignment" Value="Center"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+			<Setter Property="HorizontalContentAlignment" Value="Center"/>
+			<Setter Property="Margin" Value="0"/>
+			<Setter Property="Padding" Value="0"/>
+		</Style>
+
+		<!-- DataGrid -->
+		<Style x:Key="GridStyle" TargetType="DataGrid">
+			<Setter Property="AutoGenerateColumns" Value="False"/>
+			<Setter Property="CanUserAddRows" Value="False"/>
+			<Setter Property="CanUserDeleteRows" Value="False"/>
+
+			<Setter Property="GridLinesVisibility" Value="All"/>
+			<Setter Property="VerticalGridLinesBrush" Value="#E5E7EB"/>
+			<Setter Property="HorizontalGridLinesBrush" Value="#E5E7EB"/>
+
+			<Setter Property="HeadersVisibility" Value="Column"/>
+			<Setter Property="RowHeight" Value="36"/>
+			<Setter Property="ColumnHeaderHeight" Value="34"/>
+
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="BorderBrush" Value="#D1D5DB"/>
+
+			<Setter Property="Background" Value="White"/>
+			<Setter Property="AlternatingRowBackground" Value="#F9FAFB"/>
+
+			<Setter Property="SelectionMode" Value="Single"/>
+			<Setter Property="SelectionUnit" Value="FullRow"/>
+
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="IsReadOnly" Value="True"/>
+
+			<Setter Property="RowStyle">
+				<Setter.Value>
+					<Style TargetType="DataGridRow">
+						<Setter Property="Background" Value="Transparent"/>
+						<Setter Property="BorderBrush" Value="Transparent"/>
+						<Setter Property="BorderThickness" Value="0"/>
+						<Setter Property="SnapsToDevicePixels" Value="True"/>
+
+						<Style.Triggers>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter Property="BorderBrush" Value="#2563EB"/>
+								<Setter Property="BorderThickness" Value="2"/>
+								<Setter Property="Background" Value="Transparent"/>
+							</Trigger>
+						</Style.Triggers>
+					</Style>
+				</Setter.Value>
+			</Setter>
+
+			<Setter Property="CellStyle">
+				<Setter.Value>
+					<Style TargetType="DataGridCell">
+						<Setter Property="VerticalContentAlignment" Value="Stretch"/>
+						<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+						<Setter Property="Padding" Value="6,0"/>
+						<Setter Property="BorderBrush" Value="#E5E7EB"/>
+						<Setter Property="BorderThickness" Value="0,0,1,1"/>
+						<Setter Property="Background" Value="Transparent"/>
+						<Style.Triggers>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter Property="Background" Value="Transparent"/>
+							</Trigger>
+						</Style.Triggers>
+					</Style>
+				</Setter.Value>
+			</Setter>
+
+			<Setter Property="ColumnHeaderStyle">
+				<Setter.Value>
+					<Style TargetType="DataGridColumnHeader">
+						<Setter Property="VerticalContentAlignment" Value="Center"/>
+						<Setter Property="HorizontalContentAlignment" Value="Center"/>
+						<Setter Property="Padding" Value="6,0"/>
+						<Setter Property="BorderBrush" Value="#D1D5DB"/>
+						<Setter Property="BorderThickness" Value="0,0,1,1"/>
+						<Setter Property="Foreground" Value="#111827"/>
+						<Setter Property="FontWeight" Value="Bold"/>
+					</Style>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+	</UserControl.Resources>
+
+	<Grid Margin="10">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="*"/>
+		</Grid.RowDefinitions>
+
+		<!-- BARRE -->
+		<Border Grid.Row="0"
+				Background="White"
+				BorderBrush="#E5E7EB"
+				BorderThickness="1"
+				CornerRadius="12"
+				Padding="8"
+				Margin="0,0,0,8"
+				Effect="{StaticResource CardShadowEffect}">
+
+			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+				<TextBlock Text="Archives tâches"
+						   FontSize="18"
+						   FontWeight="SemiBold"
+						   Foreground="#111827"
+						   Margin="0,0,10,0"/>
+
+				<Button x:Name="RestoreSelectionButton"
+						Content="Restaurer sélection"
+						Style="{StaticResource RestoreSmallButtonStyle}"
+						Click="RestoreSelected_Click"
+						IsEnabled="False"
+						Margin="0,0,6,0"/>
+
+				<Button x:Name="DeleteSelectionButton"
+						Content="Supprimer définitivement"
+						Style="{StaticResource DangerSmallButtonStyle}"
+						Click="DeleteSelected_Click"
+						IsEnabled="False"
+						Margin="0,0,6,0"/>
+
+				<Button Content="Rafraîchir"
+						Style="{StaticResource SmallButtonStyle}"
+						Click="Refresh_Click"/>
+			</StackPanel>
+		</Border>
+
+		<!-- TABLEAU -->
+		<Border Grid.Row="1"
+				Background="White"
+				BorderBrush="#E5E7EB"
+				BorderThickness="1"
+				CornerRadius="12"
+				Padding="10"
+				Effect="{StaticResource CardShadowEffect}">
+
+			<DataGrid x:Name="ArchivedTasksGrid"
+					  Style="{StaticResource GridStyle}"
+					  ColumnWidth="SizeToCells">
+
+				<DataGrid.Columns>
+
+					<!-- Sélection -->
+					<DataGridTemplateColumn Width="31" IsReadOnly="True">
+						<DataGridTemplateColumn.HeaderTemplate>
+							<DataTemplate>
+								<CheckBox x:Name="SelectAllCheckBox"
+										  Style="{StaticResource GridCheckBoxCellStyle}"
+										  Click="SelectAllCheckBox_Click"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.HeaderTemplate>
+
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<CheckBox Style="{StaticResource GridCheckBoxCellStyle}"
+										  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+										  Click="RowSelectCheckBox_Click"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- N° -->
+					<DataGridTemplateColumn Header="N°" Width="60" IsReadOnly="True">
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<TextBox Style="{StaticResource GridReadOnlyTextStyle}"
+										 Text="{Binding Task.Ref, Mode=OneWay}"
+										 TextAlignment="Center"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Bâtiment (libellé dynamique) -->
+					<DataGridTemplateColumn Width="SizeToCells" MinWidth="90" IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<TextBlock x:Name="BuildingHeaderText" Text="Bâtiment"/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<TextBox Style="{StaticResource GridReadOnlyTextStyle}"
+										 Text="{Binding Task.Building, Mode=OneWay}"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Étage (libellé dynamique) -->
+					<DataGridTemplateColumn Width="SizeToCells" MinWidth="80" IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<TextBlock x:Name="FloorHeaderText" Text="Étage"/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<TextBox Style="{StaticResource GridReadOnlyTextStyle}"
+										 Text="{Binding Task.Floor, Mode=OneWay}"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Descriptif -->
+					<DataGridTemplateColumn Header="Descriptif" Width="*" MinWidth="140" IsReadOnly="True">
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<TextBox Style="{StaticResource GridReadOnlyTextStyle}"
+										 Text="{Binding Task.Todo, Mode=OneWay}"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Catégorie (libellé dynamique) -->
+					<DataGridTemplateColumn Width="SizeToCells" MinWidth="90" IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<TextBlock x:Name="CategoryHeaderText" Text="Cat."/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<TextBox Style="{StaticResource GridReadOnlyTextStyle}"
+										 Text="{Binding Task.Category, Mode=OneWay}"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Entreprise (libellé dynamique, avec couleur) -->
+					<DataGridTemplateColumn Width="SizeToCells" MinWidth="110" IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<TextBlock x:Name="CompanyHeaderText" Text="Entreprise"/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border Background="{Binding CompanyBrush}" CornerRadius="2" Padding="6,0">
+									<TextBox Style="{StaticResource GridReadOnlyTextStyle}"
+											 Text="{Binding Task.Company, Mode=OneWay}"
+											 Foreground="{Binding CompanyTextBrush}"
+											 FontWeight="Bold"
+											 TextAlignment="Center"
+											 Background="Transparent"/>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Urg. (libellé dynamique) -->
+					<DataGridTemplateColumn Width="SizeToCells" MinWidth="52" IsReadOnly="True">
+						<DataGridTemplateColumn.Header>
+							<TextBlock x:Name="UrgencyHeaderText" Text="Urg."/>
+						</DataGridTemplateColumn.Header>
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<TextBox Style="{StaticResource GridReadOnlyTextStyle}"
+										 Text="{Binding Task.Urgent, Mode=OneWay}"
+										 TextAlignment="Center"/>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Effectué -->
+					<DataGridTemplateColumn Header="Effectué" Width="80" IsReadOnly="True">
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<Border CornerRadius="4" Padding="0">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="Transparent"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Task.Done}" Value="True">
+													<Setter Property="Background" Value="#C7F9C7"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<CheckBox Style="{StaticResource GridCheckBoxCellStyle}"
+											  IsChecked="{Binding Task.Done, Mode=OneWay}"
+											  IsHitTestVisible="False"/>
+								</Border>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+					<!-- Actions -->
+					<DataGridTemplateColumn Header="Actions" Width="150" IsReadOnly="True">
+						<DataGridTemplateColumn.CellTemplate>
+							<DataTemplate>
+								<StackPanel Orientation="Horizontal">
+									<Button Content="↩"
+											ToolTip="Restaurer"
+											Style="{StaticResource RestoreSmallButtonStyle}"
+											Click="RestoreRow_Click"
+											Margin="0,0,4,0"/>
+
+									<Button Content="✖"
+											ToolTip="Supprimer définitivement"
+											Style="{StaticResource DangerSmallButtonStyle}"
+											Click="DeleteRow_Click"/>
+								</StackPanel>
+							</DataTemplate>
+						</DataGridTemplateColumn.CellTemplate>
+					</DataGridTemplateColumn>
+
+				</DataGrid.Columns>
+			</DataGrid>
+		</Border>
+
+	</Grid>
+</UserControl>
