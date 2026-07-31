@@ -40,7 +40,7 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     exit 1
 }
 
-$testProjDir = "C:\Users\HP\source\repos\Iziregi.Test"
+$testProjDir = $PSScriptRoot
 $csproj      = Join-Path $testProjDir "Iziregi.Test\Iziregi.Test.csproj"
 $issFile     = Join-Path $testProjDir "Installer\Iziregi.iss"
 $server      = "ubuntu@179.237.69.222"
