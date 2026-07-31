@@ -106,6 +106,7 @@ public partial class MainWindow : Window
     // =========================
     // Pages (UserControls)
     // =========================
+    private OverviewPage? _overviewPage;
     private DashboardPage? _dashboardPage;
     private AccountingPage? _accountingPage;
     private ArchivesPage? _archivesPage;
@@ -1503,6 +1504,7 @@ public partial class MainWindow : Window
     // =========================
     // Navigation menu handlers
     // =========================
+    private void NavOverview_Click(object sender, RoutedEventArgs e) => ShowOverview();
     private void NavDashboard_Click(object sender, RoutedEventArgs e) => ShowDashboard();
     private void NavAccounting_Click(object sender, RoutedEventArgs e) => ShowAccounting();
     // ✅ 30.07.2026 (demande de Joe) : "Archives" ouvre maintenant un menu déroulant (2
@@ -1609,7 +1611,7 @@ public partial class MainWindow : Window
     {
         var all = new[]
         {
-            NavDashboardButton, NavAccountingButton, NavArchivesButton,
+            NavOverviewButton, NavDashboardButton, NavAccountingButton, NavArchivesButton,
             NavTrashButton, NavListsButton, NavPlanningButton, NavArchitectIdentityButton
         };
 
@@ -1620,8 +1622,11 @@ public partial class MainWindow : Window
     }
 
     // ✅ Page par défaut au démarrage, par dossier (25.07.2026, demande de Joe). Clés
-    // possibles : "Dashboard" (ou vide), "Archives", "Corbeille", "Listes", "Comptabilité",
-    // "Planning" -- voir ConfigSetupWindow, onglet "Démarrage".
+    // possibles : "" (vide, nouveau Tableau de bord/résumé), "Bons", "Archives", "Corbeille",
+    // "Listes", "Comptabilité", "Planning" -- voir ConfigSetupWindow, onglet "Démarrage".
+    // ✅ 31.07.2026 (demande de Joe) : le nouveau Tableau de bord (résumé général, voir
+    // OverviewPage) devient le vrai défaut (clé vide) -- l'ancienne page (liste des bons,
+    // ex-"Tableau de bord") a maintenant sa propre clé explicite "Bons".
     internal void ShowDefaultStartupPage()
     {
         var projectId = _selectedProject?.Id ?? 0;
@@ -1629,12 +1634,13 @@ public partial class MainWindow : Window
 
         switch (page)
         {
+            case "Bons": ShowDashboard(); break;
             case "Archives": ShowArchives(); break;
             case "Corbeille": ShowTrash(); break;
             case "Listes": ShowLists(); break;
             case "Comptabilité": ShowAccounting(); break;
             case "Planning": ShowPlanning(); break;
-            default: ShowDashboard(); break;
+            default: ShowOverview(); break;
         }
     }
 
@@ -1667,6 +1673,18 @@ public partial class MainWindow : Window
         return true;
     }
 
+    internal void ShowOverview()
+    {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
+        FlushPlanningIfActive();
+        SetActiveNavButton(NavOverviewButton);
+        _overviewPage ??= new OverviewPage(this);
+        MainContent.Content = _overviewPage;
+        _overviewPage.Reload();
+
+        UpdateProjectBadge(show: true);
+    }
+
     internal void ShowDashboard()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
@@ -1691,7 +1709,7 @@ public partial class MainWindow : Window
         UpdateProjectBadge(show: true);
     }
 
-    private void ShowArchives()
+    internal void ShowArchives()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
@@ -1715,7 +1733,7 @@ public partial class MainWindow : Window
         UpdateProjectBadge(show: true);
     }
 
-    private void ShowTrash()
+    internal void ShowTrash()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
@@ -1805,6 +1823,7 @@ public partial class MainWindow : Window
         FlushPlanningIfActive();
         var current = MainContent.Content;
 
+        var wasOverview = current is OverviewPage;
         var wasDashboard = current is DashboardPage;
         var wasAccounting = current is AccountingPage;
         var wasArchives = current is ArchivesPage;
@@ -1813,6 +1832,7 @@ public partial class MainWindow : Window
         var wasLists = current is ListsPage;
         var wasPlanning = current is PlanningPage;
 
+        _overviewPage = null;
         _dashboardPage = null;
         _accountingPage = null;
         _archivesPage = null;
@@ -1823,6 +1843,14 @@ public partial class MainWindow : Window
 
         try
         {
+            if (wasOverview)
+            {
+                _overviewPage = new OverviewPage(this);
+                MainContent.Content = _overviewPage;
+                _overviewPage.Reload();
+                return;
+            }
+
             if (wasDashboard)
             {
                 _dashboardPage = new DashboardPage(this);

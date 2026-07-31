@@ -98,7 +98,7 @@
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Padding" Value="4,3"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
-            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderBrush" Value="Black"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Background" Value="#FAFAFA"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>

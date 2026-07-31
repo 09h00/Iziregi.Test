@@ -271,6 +271,7 @@
 
 	<Button Content="Rafraîchir"
 	        Style="{StaticResource SmallButtonStyle}"
+	        BorderBrush="Black"
 	        Click="Refresh_Click"/>
 </StackPanel>
 			</Grid>
@@ -288,7 +289,7 @@
 			<DataGrid x:Name="TrashedGrid"
 					  Grid.Row="1"
 					  Style="{StaticResource GridStyle}"
-					  ColumnWidth="SizeToCells"
+					  ColumnWidth="Auto"
 					  MouseDoubleClick="TrashedGrid_MouseDoubleClick">
 
 				<DataGrid.Columns>
@@ -320,7 +321,7 @@
 										IsReadOnly="True"/>
 
 					<!-- Concerne -->
-					<DataGridTextColumn Width="SizeToCells"
+					<DataGridTextColumn Width="Auto"
 										MinWidth="90"
 										Binding="{Binding WorkOrder.Reserve}"
 										ElementStyle="{StaticResource GridTextCellStyle}"
@@ -331,7 +332,7 @@
 					</DataGridTextColumn>
 
 					<!-- Demandé par -->
-					<DataGridTextColumn Width="SizeToCells"
+					<DataGridTextColumn Width="Auto"
 										MinWidth="90"
 										Binding="{Binding WorkOrder.RequestedBy}"
 										ElementStyle="{StaticResource GridTextCellStyle}"
@@ -342,7 +343,7 @@
 					</DataGridTextColumn>
 
 					<!-- Entreprise (avec couleur) -->
-					<DataGridTemplateColumn Width="SizeToCells" MinWidth="76" IsReadOnly="True">
+					<DataGridTemplateColumn Width="Auto" MinWidth="76" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
 							<TextBlock Text="Entreprise"/>
 						</DataGridTemplateColumn.Header>
@@ -363,7 +364,7 @@
 					<!-- Date -->
 					<DataGridTextColumn Header="Créé le"
 										Binding="{Binding WorkOrder.RequestDate, StringFormat=dd.MM.yyyy}"
-										Width="SizeToCells"
+										Width="Auto"
 										MinWidth="70"
 										ElementStyle="{StaticResource GridTextCellStyle}"
 										IsReadOnly="True"/>
@@ -373,7 +374,7 @@
 					<!-- ========================= -->
 
 					<!-- 1) Créé -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -436,7 +437,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 2) Demande devis envoyée -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -493,7 +494,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 3) Devis reçu -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -555,7 +556,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 4) Demande validation envoyée -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -600,7 +601,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 5) Validé -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderWithRightSeparator}"
 											CellStyle="{StaticResource StatusCellWithRightSeparator}"
 											IsReadOnly="True">

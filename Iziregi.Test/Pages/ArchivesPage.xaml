@@ -487,7 +487,7 @@
 
 			<Grid>
 	<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-		<TextBlock Text="Archives des bons"
+		<TextBlock Text="Archives des bons d'intervention"
 		           FontSize="18"
 		           FontWeight="SemiBold"
 		           Foreground="#111827"
@@ -509,14 +509,8 @@
 
 		<Button Content="Rafraîchir"
 		        Style="{StaticResource SmallButtonStyle}"
-		        Click="Refresh_Click"
-		        Margin="0,0,6,0"/>
-
-		<!-- ✅ Filtres façon Excel sur les en-têtes de colonnes (24.07.2026, demande de Joe) :
-		     remplace l'ancien filtre Entreprise/période unique. -->
-		<Button Content="Effacer filtres"
-		        Style="{StaticResource SmallButtonStyle}"
-		        Click="ClearFilters_Click"/>
+		        BorderBrush="Black"
+		        Click="Refresh_Click"/>
 	</StackPanel>
 </Grid>
 		</Border>
@@ -533,7 +527,7 @@
 			<DataGrid x:Name="ArchivedGrid"
 					  Grid.Row="1"
 					  Style="{StaticResource GridStyle}"
-					  ColumnWidth="SizeToCells"
+					  ColumnWidth="Auto"
 					  MouseDoubleClick="ArchivedGrid_MouseDoubleClick">
 
 				<DataGrid.Columns>
@@ -565,7 +559,7 @@
 										IsReadOnly="True"/>
 
 					<!-- Concerne -->
-					<DataGridTextColumn Width="SizeToCells"
+					<DataGridTextColumn Width="Auto"
 										MinWidth="80"
 										Binding="{Binding WorkOrder.Reserve}"
 										ElementStyle="{StaticResource GridTextCellStyle}"
@@ -584,7 +578,7 @@
 					</DataGridTextColumn>
 
 					<!-- Demandé par -->
-					<DataGridTextColumn Width="SizeToCells"
+					<DataGridTextColumn Width="Auto"
 										MinWidth="90"
 										Binding="{Binding WorkOrder.RequestedBy}"
 										ElementStyle="{StaticResource GridTextCellStyle}"
@@ -603,7 +597,7 @@
 					</DataGridTextColumn>
 
 					<!-- Entreprise (avec couleur) -->
-					<DataGridTemplateColumn Width="SizeToCells" MinWidth="76" IsReadOnly="True">
+					<DataGridTemplateColumn Width="Auto" MinWidth="76" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
 							<Border x:Name="CompanyHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
 								<StackPanel Orientation="Vertical" HorizontalAlignment="Center">
@@ -630,7 +624,7 @@
 
 					<!-- Date -->
 					<DataGridTextColumn Binding="{Binding WorkOrder.RequestDate, StringFormat=dd.MM.yyyy}"
-										Width="SizeToCells"
+										Width="Auto"
 										MinWidth="70"
 										ElementStyle="{StaticResource GridTextCellStyle}"
 										IsReadOnly="True"
@@ -652,7 +646,7 @@
 					<!-- ========================= -->
 
 					<!-- 1) Créé -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -715,7 +709,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 2) Demande devis envoyée -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -772,7 +766,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 3) Devis reçu -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											MinWidth="70"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
@@ -838,7 +832,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 4) Demande validation envoyée -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
 											CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
 											IsReadOnly="True">
@@ -883,7 +877,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- 5) Validé -->
-					<DataGridTemplateColumn Width="SizeToCells"
+					<DataGridTemplateColumn Width="Auto"
 											HeaderStyle="{StaticResource StatusHeaderWithRightSeparator}"
 											CellStyle="{StaticResource StatusCellWithRightSeparator}"
 											IsReadOnly="True">

@@ -7,6 +7,91 @@
              mc:Ignorable="d">
 
     <UserControl.Resources>
+
+        <!-- ✅ Coins arrondis + bordure noire (31.07.2026, demande de Joe). Un premier essai
+             (même jour) avait semblé casser la fiabilité de la sélection ("données qui
+             clignotaient") ; après coup, le vrai coupable identifié était un changement de
+             largeur de colonne (Auto) ailleurs sur la page, pas ce template. Il manquait
+             cependant Popup.StaysOpen="False" (toujours présent dans le template natif d'un
+             ComboBox, oubli du premier essai), ajouté ici. -->
+        <Style x:Key="RoundedComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="6"
+                                                SnapsToDevicePixels="True">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="20"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Path Grid.Column="1"
+                                                      Data="M 0 0 L 4 4 L 8 0 Z"
+                                                      Fill="#6B7280"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter x:Name="ContentSite"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"/>
+
+                            <!-- ✅ StaysOpen="False", absent du 1er essai, toujours présent dans le
+                                 template natif WPF : sans lui, le popup ne se ferme pas tout seul au
+                                 clic ailleurs/sur un item, ce qui peut désynchroniser IsDropDownOpen
+                                 de l'état réel du popup. -->
+                            <Popup x:Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   StaysOpen="False"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="White"
+                                        BorderBrush="Black"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="300"
+                                        SnapsToDevicePixels="True">
+                                    <ScrollViewer SnapsToDevicePixels="True">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- ✅ Bordure bleue arrondie + police bleue (23.07.2026, demande de Joe). -->
         <Style x:Key="CategoryChartToggleButtonStyle" TargetType="Button">
             <Setter Property="Height" Value="34"/>
@@ -95,12 +180,14 @@
                 <Button Content="Exporter CSV (détail)"
                         Width="190"
                         Margin="16,0,0,0"
+                        Background="#D1D5DB"
                         Style="{StaticResource RefreshButtonStyle}"
                         Click="ExportDetailsCsv_Click"/>
 
                 <Button Content="Exporter CSV (totaux entreprises)"
                         Width="260"
                         Margin="8,0,0,0"
+                        Background="#D1D5DB"
                         Style="{StaticResource RefreshButtonStyle}"
                         Click="ExportCompaniesCsv_Click"/>
 
@@ -187,6 +274,7 @@
                             <TextBlock Grid.Column="6" Text="Entreprise" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox x:Name="CompanyFilterComboBox"
                                       Grid.Column="7"
+                                      Style="{StaticResource RoundedComboBoxStyle}"
                                       IsEditable="False"
                                       SelectionChanged="Filters_Changed"/>
                         </Grid>
@@ -200,9 +288,14 @@
 
                         <Grid Grid.Row="0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1*"/>
+                                <!-- ✅ 31.07.2026 (demande de Joe) : largeur FIXE en pixels (pas "Auto")
+                                     pour la colonne gauche, juste assez pour les tableaux (5 colonnes
+                                     fixes, ~480px + marges), sans espace vide après TTC. "Auto" avait été
+                                     tenté puis annulé (risque de boucle de mesure avec les grilles en
+                                     dessous) ; une valeur fixe ne recalcule jamais, donc pas ce risque. -->
+                                <ColumnDefinition Width="520"/>
                                 <ColumnDefinition Width="12"/>
-                                <ColumnDefinition Width="1*"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
                             <!-- Colonne gauche : Totaux + Détail -->
@@ -241,6 +334,7 @@
                                                            VerticalAlignment="Center"/>
                                                 <ComboBox x:Name="ChartSortComboBox"
                                                           Width="190"
+                                                          Style="{StaticResource RoundedComboBoxStyle}"
                                                           SelectionChanged="ChartSort_Changed">
                                                     <ComboBoxItem Content="TTC décroissant" IsSelected="True"/>
                                                     <ComboBoxItem Content="TTC croissant"/>

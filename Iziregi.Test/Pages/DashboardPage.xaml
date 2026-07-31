@@ -429,7 +429,7 @@
         <!-- ✅ Titre de page (28.07.2026, demande de Joe : même police que les autres pages,
              ex. "Comptabilité"). -->
         <TextBlock Grid.Row="0"
-                   Text="Tableau de bord"
+                   Text="Bons d'intervention"
                    FontSize="18"
                    FontWeight="SemiBold"
                    Foreground="#111827"
@@ -587,6 +587,7 @@
                             <Button x:Name="RefreshTopButton"
                                     Content="Rafraîchir"
                                     Style="{StaticResource SmallButtonStyle}"
+                                    BorderBrush="Black"
                                     Click="Refresh_Click"/>
                         </StackPanel>
                     </StackPanel>
@@ -801,7 +802,7 @@
                 <!-- ✅ Grille principale -->
                 <DataGrid x:Name="WorkOrdersGrid"
                           Style="{StaticResource GridStyle}"
-                          ColumnWidth="SizeToCells"
+                          ColumnWidth="Auto"
                           MouseDoubleClick="WorkOrdersGrid_MouseDoubleClick"
                           SelectionChanged="WorkOrdersGrid_SelectionChanged">
 
@@ -851,7 +852,7 @@
                                             IsReadOnly="True"/>
 
                         <!-- Concerne -->
-                        <DataGridTextColumn Width="SizeToCells"
+                        <DataGridTextColumn Width="Auto"
                                             MinWidth="110"
                                             Binding="{Binding Reserve}"
                                             ElementStyle="{StaticResource EmptyTextCellStyle}"
@@ -870,7 +871,7 @@
                         </DataGridTextColumn>
 
                         <!-- Demandé par -->
-                        <DataGridTextColumn Width="SizeToCells"
+                        <DataGridTextColumn Width="Auto"
                                             MinWidth="94"
                                             Binding="{Binding RequestedBy}"
                                             ElementStyle="{StaticResource GridTextCellStyle}"
@@ -889,7 +890,7 @@
                         </DataGridTextColumn>
 
                         <!-- Entreprise -->
-                        <DataGridTextColumn Width="SizeToCells"
+                        <DataGridTextColumn Width="Auto"
                                             MinWidth="98"
                                             Binding="{Binding PerformedBy}"
                                             ElementStyle="{StaticResource GridTextCellStyle}"
@@ -909,7 +910,7 @@
 
                         <!-- Date -->
                         <DataGridTextColumn Binding="{Binding RequestDate, StringFormat=dd.MM.yyyy}"
-                                            Width="SizeToCells"
+                                            Width="Auto"
                                             MinWidth="70"
                                             ElementStyle="{StaticResource GridTextCellStyle}"
                                             IsReadOnly="True"
@@ -931,7 +932,7 @@
                         <!-- ========================= -->
 
                         <!-- 1) Créé -->
-                        <DataGridTemplateColumn Width="SizeToCells"
+                        <DataGridTemplateColumn Width="Auto"
                                                 HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
                                                 CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
                                                 IsReadOnly="True">
@@ -994,7 +995,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- 2) Demande devis envoyée -->
-                        <DataGridTemplateColumn Width="SizeToCells"
+                        <DataGridTemplateColumn Width="Auto"
                                                 HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
                                                 CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
                                                 IsReadOnly="True">
@@ -1071,7 +1072,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- 3) Devis reçu -->
-                        <DataGridTemplateColumn Width="SizeToCells"
+                        <DataGridTemplateColumn Width="Auto"
                                                 MinWidth="70"
                                                 HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
                                                 CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
@@ -1137,7 +1138,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- 4) Demande validation envoyée -->
-                        <DataGridTemplateColumn Width="SizeToCells"
+                        <DataGridTemplateColumn Width="Auto"
                                                 HeaderStyle="{StaticResource StatusHeaderNoVerticalSeparators}"
                                                 CellStyle="{StaticResource StatusCellNoVerticalSeparators}"
                                                 IsReadOnly="True">
@@ -1202,7 +1203,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- 5) Validé -->
-                        <DataGridTemplateColumn Width="SizeToCells"
+                        <DataGridTemplateColumn Width="Auto"
                                                 HeaderStyle="{StaticResource StatusHeaderWithRightSeparator}"
                                                 CellStyle="{StaticResource StatusCellWithRightSeparator}"
                                                 IsReadOnly="True">
@@ -1342,14 +1343,14 @@
                 <DataGrid x:Name="ArchivedGrid"
                           Visibility="Collapsed"
                           Style="{StaticResource GridStyle}"
-                          ColumnWidth="SizeToCells"
+                          ColumnWidth="Auto"
                           MouseDoubleClick="ArchivedGrid_MouseDoubleClick"/>
 
                 <!-- ✅ Corbeille (même zone que WorkOrdersGrid) -->
                 <DataGrid x:Name="TrashedGrid"
                           Visibility="Collapsed"
                           Style="{StaticResource GridStyle}"
-                          ColumnWidth="SizeToCells"
+                          ColumnWidth="Auto"
                           MouseDoubleClick="TrashedGrid_MouseDoubleClick"/>
 
                 <!-- ✅ Retour en haut de la liste (25.07.2026, demande de Joe) -->

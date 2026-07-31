@@ -696,17 +696,16 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- ✅ 30.07.2026 (demande de Joe) : Grid (plutôt que DockPanel) pour que
-                             "Ajouter" démarre à une position FIXE (98 = largeur colonne case à
-                             cocher [28] + colonne N° [70], les 2 seules largeurs FIXES avant
-                             Bâtiment) et s'aligne verticalement avec le bord gauche de la colonne
-                             Bâtiment de TasksDataGrid ci-dessous, indépendamment de la largeur du
-                             titre "Tâches", contrairement à un DockPanel classique. -->
+                        <!-- ✅ 31.07.2026 (demande de Joe) : tous les boutons "Ajouter" (gauche) de
+                             chaque section de la page Planning doivent s'aligner verticalement,
+                             Planning hebdo servant de référence fixe (178 = largeur colonne case à
+                             cocher [28] + colonne Entreprise [MinWidth 150]), plus aligné sur la
+                             colonne Bâtiment (98) de cette grille-ci depuis le 30.07.2026. -->
                         <Grid x:Name="TaskHeaderToolbar"
                               Grid.Row="0"
                               Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="98"/>
+                                <ColumnDefinition Width="178"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -862,11 +861,11 @@
                                     </DataGridTemplateColumn.CellEditingTemplate>
                                 </DataGridTemplateColumn>
 
-                                <!-- ✅ MaxWidth (demande de Joe, 16.07.2026) : un mot long dans cette colonne
-                                     ne doit pas élargir toute la grille — au-delà de ce plafond, le contenu
-                                     est simplement coupé et c'est "Descriptif" (colonne étoile) qui absorbe
-                                     l'espace restant. -->
-                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" MinWidth="90" MaxWidth="160" Width="Auto">
+                                <!-- ✅ Plus de MaxWidth (30.07.2026, demande de Joe) : un mot long ne doit
+                                     plus être coupé, ni dans les lignes ni dans l'entête, la colonne
+                                     s'élargit maintenant librement pour l'accueillir (au lieu de tronquer,
+                                     voir ancien commentaire du 16.07.2026 remplacé ici). -->
+                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" MinWidth="90" Width="Auto">
                                     <DataGridTemplateColumn.HeaderTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DataContext.BuildingLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
@@ -881,7 +880,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskFloorColumn" MinWidth="80" MaxWidth="140" Width="Auto">
+                                <DataGridTemplateColumn x:Name="TaskFloorColumn" MinWidth="80" Width="Auto">
                                     <DataGridTemplateColumn.HeaderTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DataContext.FloorLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
@@ -951,7 +950,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskCategoryColumn" MinWidth="90" MaxWidth="160" Width="Auto">
+                                <DataGridTemplateColumn x:Name="TaskCategoryColumn" MinWidth="90" Width="Auto">
                                     <DataGridTemplateColumn.HeaderTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DataContext.TaskCategoryLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
@@ -967,7 +966,7 @@
                                 </DataGridTemplateColumn>
 
                                 <!-- ✅ Déplacée entre Catégorie et Urg. (demande de Joe du 16.07.2026). -->
-                                <DataGridTemplateColumn x:Name="TaskCompanyColumn" MinWidth="130" MaxWidth="220" Width="Auto">
+                                <DataGridTemplateColumn x:Name="TaskCompanyColumn" MinWidth="130" Width="Auto">
                                     <DataGridTemplateColumn.HeaderTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
@@ -1593,64 +1592,64 @@
                             <ColumnDefinition Width="92"/>
                         </Grid.ColumnDefinitions>
 
-                        <DockPanel x:Name="PlanHeaderToolbar"
-                                   Grid.Row="0"
-                                   Grid.ColumnSpan="3"
-                                   Margin="0,0,0,8"
-                                   LastChildFill="False">
-                            <TextBlock Text="Image"
+                        <!-- ✅ 31.07.2026 (demande de Joe) : Grid (comme les autres sections) pour que
+                             "Ajouter image" s'aligne verticalement avec "Ajouter" de Planning hebdo
+                             (référence fixe, 178px), au lieu d'un DockPanel classique. -->
+                        <Grid x:Name="PlanHeaderToolbar"
+                              Grid.Row="0"
+                              Grid.ColumnSpan="3"
+                              Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="178"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="Image"
 							           FontSize="14"
 							           FontWeight="SemiBold"
 							           Foreground="#111827"
-							           DockPanel.Dock="Left"/>
+							           VerticalAlignment="Center"/>
 
-                            <!-- ✅ 30.07.2026 (demande de Joe) : "Ajouter image"/"Retirer image"
-                                 déplacés à gauche, juste après le titre de section. -->
-                            <Button x:Name="PlanAddButton"
-                                    Content="Ajouter image"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        Height="34"
-							        DockPanel.Dock="Left"
-							        Margin="16,0,0,0"
-							        Click="PlanAdd_Click"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="PlanAddButton"
+                                        Content="Ajouter image"
+								        Style="{StaticResource SmallBlueButtonStyle}"
+								        Height="34"
+								        Click="PlanAdd_Click"/>
 
-                            <Button x:Name="PlanRemoveButton"
-                                    Content="Retirer image"
-							        Style="{StaticResource SmallBlackButtonStyle}"
-							        Height="34"
-							        DockPanel.Dock="Left"
-							        Margin="8,0,0,0"
-							        Click="PlanRemove_Click"/>
+                                <Button x:Name="PlanRemoveButton"
+                                        Content="Retirer image"
+								        Style="{StaticResource SmallBlackButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="PlanRemove_Click"/>
+                            </StackPanel>
 
-                            <!-- ✅ Ordre gauche->droite pour les boutons restants (19.07.2026,
-                                 demande de Joe) : Ajouter aux favoris > Favoris > Reset stickers. Dans
-                                 un DockPanel LastChildFill="False", le 1er élément Dock="Right"
-                                 déclaré est le plus à droite -> on déclare donc dans l'ordre inverse
-                                 (droite vers gauche). -->
-                            <Button x:Name="ResetStickersButton"
-                                    Content="Reset stickers"
-							        Style="{StaticResource SmallBlackButtonStyle}"
-							        Height="34"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="ResetPlacedStickers_Click"/>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                                <Button x:Name="AddImageToFavoritesButton"
+                                        Content="☆ Ajouter Image aux favoris"
+								        Style="{StaticResource SmallBlueButtonStyle}"
+								        Height="34"
+								        Click="AddSelectedImageToFavorites_Click"/>
 
-                            <Button x:Name="ImageFavoritesButton"
-                                    Content="Favoris ▾"
-							        Style="{StaticResource OutlineBlueButtonStyle}"
-							        Height="34"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="ImageFavoritesButton_Click"/>
+                                <Button x:Name="ImageFavoritesButton"
+                                        Content="Favoris ▾"
+								        Style="{StaticResource OutlineBlueButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="ImageFavoritesButton_Click"/>
 
-                            <Button x:Name="AddImageToFavoritesButton"
-                                    Content="☆ Ajouter Image aux favoris"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        Height="34"
-							        DockPanel.Dock="Right"
-							        Margin="8,0,0,0"
-							        Click="AddSelectedImageToFavorites_Click"/>
-                        </DockPanel>
+                                <Button x:Name="ResetStickersButton"
+                                        Content="Reset stickers"
+								        Style="{StaticResource SmallBlackButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="ResetPlacedStickers_Click"/>
+                            </StackPanel>
+                        </Grid>
 
                         <Popup x:Name="ImageFavoritesPopup"
                                PlacementTarget="{Binding ElementName=ImageFavoritesButton}"
@@ -1948,15 +1947,23 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <DockPanel x:Name="TextZoneHeaderToolbar"
-                                   Grid.Row="0"
-                                   Margin="0,0,0,10"
-                                   LastChildFill="False">
-                            <TextBlock Text="Zones de texte"
+                        <!-- ✅ 31.07.2026 (demande de Joe) : Grid (comme les autres sections) pour que
+                             "Ajouter zone de texte" s'aligne verticalement avec "Ajouter" de Planning
+                             hebdo (référence fixe, 178px), au lieu d'un DockPanel classique. -->
+                        <Grid x:Name="TextZoneHeaderToolbar"
+                              Grid.Row="0"
+                              Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="178"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="Zones de texte"
 							           FontSize="14"
 							           FontWeight="SemiBold"
 							           Foreground="#111827"
-							           DockPanel.Dock="Left"
 							           VerticalAlignment="Center"/>
 
                             <!-- ✅ Sélectionner tout / Copier / Coller déplacés sur la ligne "Police"
@@ -1965,22 +1972,21 @@
                             <!-- ✅ "Supprimer" déplacé à côté de "Insérer image" (30.07.2026,
                                  demande de Joe) : voir TextZoneFontToolbar, Grid.Column="13". -->
 
-                            <!-- ✅ 30.07.2026 (demande de Joe) : "Ajouter"/"Retirer" déplacés à
-                                 gauche, juste après le titre de section. -->
-                            <Button Content="Ajouter zone de texte"
-							        Style="{StaticResource SmallBlueButtonStyle}"
-							        Height="34"
-							        DockPanel.Dock="Left"
-							        Margin="16,0,0,0"
-							        Click="TextZoneAdd_Click"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <!-- ✅ 30.07.2026 (demande de Joe) : "Ajouter"/"Retirer" déplacés à
+                                     gauche, juste après le titre de section. -->
+                                <Button Content="Ajouter zone de texte"
+								        Style="{StaticResource SmallBlueButtonStyle}"
+								        Height="34"
+								        Click="TextZoneAdd_Click"/>
 
-                            <Button Content="Retirer zone de texte"
-							        Style="{StaticResource SmallBlackButtonStyle}"
-							        Height="34"
-							        DockPanel.Dock="Left"
-							        Margin="8,0,0,0"
-							        Click="TextZoneRemove_Click"/>
-                        </DockPanel>
+                                <Button Content="Retirer zone de texte"
+								        Style="{StaticResource SmallBlackButtonStyle}"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="TextZoneRemove_Click"/>
+                            </StackPanel>
+                        </Grid>
 
                         <Border x:Name="TextZoneFontToolbar"
                                 Grid.Row="1"

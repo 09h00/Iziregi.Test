@@ -1,4 +1,4 @@
-<!-- File: Pages/ArchivesTasksPage.xaml -->
+﻿<!-- File: Pages/ArchivesTasksPage.xaml -->
 <UserControl x:Class="Iziregi.Test.Pages.ArchivesTasksPage"
 			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -212,7 +212,7 @@
 
 			<DataGrid x:Name="ArchivedTasksGrid"
 					  Style="{StaticResource GridStyle}"
-					  ColumnWidth="SizeToCells">
+					  ColumnWidth="Auto">
 
 				<DataGrid.Columns>
 
@@ -247,7 +247,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- Bâtiment (libellé dynamique) -->
-					<DataGridTemplateColumn Width="SizeToCells" MinWidth="90" IsReadOnly="True">
+					<DataGridTemplateColumn Width="Auto" MinWidth="90" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
 							<TextBlock x:Name="BuildingHeaderText" Text="Bâtiment"/>
 						</DataGridTemplateColumn.Header>
@@ -260,7 +260,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- Étage (libellé dynamique) -->
-					<DataGridTemplateColumn Width="SizeToCells" MinWidth="80" IsReadOnly="True">
+					<DataGridTemplateColumn Width="Auto" MinWidth="80" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
 							<TextBlock x:Name="FloorHeaderText" Text="Étage"/>
 						</DataGridTemplateColumn.Header>
@@ -283,7 +283,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- Catégorie (libellé dynamique) -->
-					<DataGridTemplateColumn Width="SizeToCells" MinWidth="90" IsReadOnly="True">
+					<DataGridTemplateColumn Width="Auto" MinWidth="90" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
 							<TextBlock x:Name="CategoryHeaderText" Text="Cat."/>
 						</DataGridTemplateColumn.Header>
@@ -296,7 +296,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- Entreprise (libellé dynamique, avec couleur) -->
-					<DataGridTemplateColumn Width="SizeToCells" MinWidth="110" IsReadOnly="True">
+					<DataGridTemplateColumn Width="Auto" MinWidth="110" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
 							<TextBlock x:Name="CompanyHeaderText" Text="Entreprise"/>
 						</DataGridTemplateColumn.Header>
@@ -315,7 +315,7 @@
 					</DataGridTemplateColumn>
 
 					<!-- Urg. (libellé dynamique) -->
-					<DataGridTemplateColumn Width="SizeToCells" MinWidth="52" IsReadOnly="True">
+					<DataGridTemplateColumn Width="Auto" MinWidth="52" IsReadOnly="True">
 						<DataGridTemplateColumn.Header>
 							<TextBlock x:Name="UrgencyHeaderText" Text="Urg."/>
 						</DataGridTemplateColumn.Header>

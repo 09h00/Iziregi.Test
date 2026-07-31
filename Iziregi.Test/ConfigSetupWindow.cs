@@ -44,13 +44,13 @@ internal class ConfigSetupWindow : Window
         connectionTab.Content = BuildConnectionTabContent(out _urlBox, out _keyBox);
         tabs.Items.Add(connectionTab);
 
-        var dataTab = new WpfTabItem { Header = "Vos données" };
-        dataTab.Content = BuildDataTabContent();
-        tabs.Items.Add(dataTab);
-
         var startupTab = new WpfTabItem { Header = "Démarrage" };
         startupTab.Content = BuildStartupTabContent();
         tabs.Items.Add(startupTab);
+
+        var dataTab = new WpfTabItem { Header = "Vos données" };
+        dataTab.Content = BuildDataTabContent();
+        tabs.Items.Add(dataTab);
 
         var ethicsTab = new WpfTabItem { Header = "Éthique & confidentialité" };
         ethicsTab.Content = BuildEthicsTabContent();
@@ -209,7 +209,11 @@ internal class ConfigSetupWindow : Window
     // =========================
     private static readonly (string Key, string Display)[] StartupPageOptions =
     {
+        // ✅ 31.07.2026 (demande de Joe) : le nouveau "Tableau de bord" (résumé général, voir
+        // OverviewPage) devient le vrai défaut (clé vide) -- l'ancienne page (liste des bons,
+        // ex-"Tableau de bord") a maintenant sa propre clé explicite "Bons".
         ("", "Tableau de bord"),
+        ("Bons", "Bons d'intervention"),
         ("Archives", "Archives"),
         ("Corbeille", "Corbeille"),
         ("Listes", "Listes"),

@@ -164,7 +164,11 @@
 
                 <!-- NAVIGATION -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="NavDashboardButton" Content="Tableau de bord" Click="NavDashboard_Click" Style="{StaticResource NavPillButtonActiveStyle}"/>
+                    <!-- ✅ 31.07.2026 (demande de Joe) : nouveau vrai "Tableau de bord" (résumé
+                         général, voir OverviewPage), l'ancien (liste des bons) est renommé
+                         "Bons d'intervention" ci-dessous, sans changement de contenu. -->
+                    <Button x:Name="NavOverviewButton" Content="Tableau de bord" Click="NavOverview_Click" Style="{StaticResource NavPillButtonActiveStyle}"/>
+                    <Button x:Name="NavDashboardButton" Content="Bons d'intervention" Click="NavDashboard_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavAccountingButton" Content="Comptabilité" Click="NavAccounting_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <!-- ✅ 30.07.2026 (demande de Joe) : "Archives" devient un menu déroulant avec
                          2 choix (Bons d'intervention / Tâches), voir ArchivesNavPopup ci-dessous. -->

@@ -568,6 +568,13 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
                         .OrderByDescending(r => r.Count)
                         .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)
                         .ToList();
+
+                    // ✅ 31.07.2026 (demande de Joe) : si la colonne "Catégorie" de la grille des
+                    // tâches est masquée (l'utilisateur n'utilise pas cette fonctionnalité), la
+                    // barre "Sans catégorie" n'a aucun sens -- retirée du graphique.
+                    var visibleColumns = Db.GetTasksVisibleColumns().Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    if (!visibleColumns.Contains("Category"))
+                        counts = counts.Where(r => !string.Equals(r.Category, "Sans catégorie", StringComparison.OrdinalIgnoreCase)).ToList();
                 }
                 catch
                 {

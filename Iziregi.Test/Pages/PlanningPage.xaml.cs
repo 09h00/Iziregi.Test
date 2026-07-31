@@ -3649,9 +3649,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private void EnsureDefaultRows()
     {
+        // ✅ Fix (demande de Joe : "les tâches que j'inscris sur la semaine 31 se répercutent
+        // sur les semaines passées", récidive d'un bug déjà rencontré) : ces lignes vides par
+        // défaut n'avaient pas de CreatedWeekStart (contrairement à AddTaskRowButton_Click),
+        // donc pas de borne basse -- une fois remplies par l'utilisateur, elles restaient
+        // visibles dans TOUTES les semaines, y compris passées, au lieu d'être bornées à la
+        // semaine où elles ont réellement été créées.
         if (_taskRows.Count == 0)
             for (int i = 0; i < DEFAULT_TASK_ROWS; i++)
-                _taskRows.Add(new TaskRow { Ref = (i + 1).ToString() });
+                _taskRows.Add(new TaskRow { Ref = (i + 1).ToString(), CreatedWeekStart = SnapToStartOfWeek(_startDay, _weekStartDay) });
 
         if (_planningRows.Count == 0)
             for (int i = 0; i < DEFAULT_PLANNING_ROWS; i++)
