@@ -30,6 +30,10 @@ public sealed class TaskRecord
     // vivent pas dans SQLite.
     public bool IsArchived { get; set; }
     public DateTime? ArchivedAt { get; set; }
+
+    // ✅ Corbeille des tâches (demande de Joe), même principe qu'IsArchived/ArchivedAt.
+    public bool IsTrashed { get; set; }
+    public DateTime? TrashedAt { get; set; }
 }
 
 public static class ProjectTasksStore

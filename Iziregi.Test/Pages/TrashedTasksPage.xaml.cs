@@ -1,4 +1,4 @@
-// File: Pages/ArchivesTasksPage.xaml.cs
+// File: Pages/TrashedTasksPage.xaml.cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,17 +16,16 @@ using Iziregi.Test.Data;
 
 namespace Iziregi.Test.Pages;
 
-// ✅ 30.07.2026 (demande de Joe) : "Archives tâches" -- fonctionne comme pour les BI
-// (lecture seule, restaurer ou supprimer définitivement), même entête que la grille des
-// tâches (page Planning). Contrairement aux bons (SQLite, Id numérique + UPDATE ciblé), les
-// tâches vivent dans un fichier JSON par projet (voir Data/ProjectTasksStore.cs) sans clé
-// numérique -- restaurer/supprimer réécrit donc la LISTE COMPLÈTE (actives + archivées) du
-// fichier, en mutant les TaskRecord partagés par référence entre _allTasks et _rows.
-public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IReloadablePage
+// ✅ Fix (demande de Joe : "il manque la ligne Corbeille" dans le widget Tâches du Tableau de
+// bord) : copie fonctionnelle d'ArchivesTasksPage (lecture seule, restaurer ou supprimer
+// définitivement), IsTrashed/TrashedAt au lieu d'IsArchived/ArchivedAt. Même remarque que
+// là-bas : les tâches vivent dans un fichier JSON par projet (Data/ProjectTasksStore.cs) sans
+// clé numérique -- restaurer/supprimer réécrit donc la LISTE COMPLÈTE du fichier.
+public partial class TrashedTasksPage : System.Windows.Controls.UserControl, IReloadablePage
 {
     private readonly MainWindow _host;
 
-    public class TaskArchiveRow
+    public class TaskTrashRow
     {
         public TaskRecord Task { get; set; } = new();
         public bool IsSelected { get; set; }
@@ -36,9 +35,9 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
     }
 
     private List<TaskRecord> _allTasks = new();
-    private List<TaskArchiveRow> _rows = new();
+    private List<TaskTrashRow> _rows = new();
 
-    public ArchivesTasksPage(MainWindow host)
+    public TrashedTasksPage(MainWindow host)
     {
         InitializeComponent();
         _host = host;
@@ -47,12 +46,12 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
     }
 
     // ✅ Retour (04.08.2026, demande de Joe) : ramène à "Planification", page d'origine depuis
-    // laquelle ces Archives (tâches) sont maintenant accessibles (voir PlanningPage.xaml).
+    // laquelle cette Corbeille (tâches) est maintenant accessible (voir PlanningPage.xaml).
     private void BackToParent_Click(object sender, RoutedEventArgs e) => _host.ShowPlanning();
 
-    // ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis Archives tâches,
-    // va directement à Corbeille tâches sans repasser par "Planification".
-    private void GoToTrash_Click(object sender, RoutedEventArgs e) => _host.ShowTrashedTasks();
+    // ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis Corbeille
+    // tâches, va directement à Archives tâches sans repasser par "Planification".
+    private void GoToArchives_Click(object sender, RoutedEventArgs e) => _host.ShowArchivesTasks();
 
     public void Reload()
     {
@@ -60,15 +59,15 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         if (!projectIdNullable.HasValue || projectIdNullable.Value <= 0)
         {
             _allTasks = new List<TaskRecord>();
-            _rows = new List<TaskArchiveRow>();
+            _rows = new List<TaskTrashRow>();
 
-            ArchivedTasksGrid.ItemsSource = _rows;
-            ArchivedTasksGrid.Items.Refresh();
+            TrashedTasksGrid.ItemsSource = _rows;
+            TrashedTasksGrid.Items.Refresh();
 
             RefreshBatchSelectionUi();
 
             System.Windows.MessageBox.Show(
-                "Aucun dossier courant. Sélectionne un dossier avant d’afficher les archives.",
+                "Aucun dossier courant. Sélectionne un dossier avant d’afficher la corbeille.",
                 "Info",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -88,12 +87,8 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         var colorMap = Db.GetCompanyColorMap(projectId);
         var gradientMap = Db.GetCompanyGradientMap(projectId);
 
-        // ✅ Fix (04.08.2026, demande de Joe) : exclut désormais les tâches à la fois archivées
-        // ET à la corbeille (nouveau cas depuis que "Supprimer définitivement" devient
-        // "Déplacer dans la corbeille", voir DeleteSelected_Click), même principe que
-        // Db.GetArchivedWorkOrders (WHERE IsTrashed=0 AND IsArchived=1) côté Bons.
         _rows = _allTasks
-            .Where(t => t.IsArchived && !t.IsTrashed)
+            .Where(t => t.IsTrashed)
             .Select(t =>
             {
                 var company = (t.Company ?? "").Trim();
@@ -102,7 +97,7 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
                 var fg = GetTextBrushForBackground(BrushFromHexOrDefault(hex, MediaBrushes.Transparent));
                 var bg = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(hex, gradientMap.Contains(company)) ?? MediaBrushes.Transparent;
 
-                return new TaskArchiveRow
+                return new TaskTrashRow
                 {
                     Task = t,
                     IsSelected = false,
@@ -112,8 +107,8 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
             })
             .ToList();
 
-        ArchivedTasksGrid.ItemsSource = _rows;
-        ArchivedTasksGrid.Items.Refresh();
+        TrashedTasksGrid.ItemsSource = _rows;
+        TrashedTasksGrid.Items.Refresh();
 
         RefreshBatchSelectionUi();
     }
@@ -166,23 +161,23 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         return luminance < 0.55 ? MediaBrushes.White : MediaBrushes.Black;
     }
 
-    private static TaskArchiveRow? GetRow(object sender)
+    private static TaskTrashRow? GetRow(object sender)
     {
-        if (sender is FrameworkElement fe && fe.DataContext is TaskArchiveRow row)
+        if (sender is FrameworkElement fe && fe.DataContext is TaskTrashRow row)
             return row;
 
         return null;
     }
 
-    private static TaskArchiveRow? GetSelectedRow(DataGrid? grid)
-        => grid?.SelectedItem as TaskArchiveRow;
+    private static TaskTrashRow? GetSelectedRow(DataGrid? grid)
+        => grid?.SelectedItem as TaskTrashRow;
 
-    private List<TaskArchiveRow> GetActiveRows()
+    private List<TaskTrashRow> GetActiveRows()
     {
-        if (ArchivedTasksGrid?.ItemsSource == null)
-            return new List<TaskArchiveRow>();
+        if (TrashedTasksGrid?.ItemsSource == null)
+            return new List<TaskTrashRow>();
 
-        return ArchivedTasksGrid.ItemsSource.Cast<TaskArchiveRow>().ToList();
+        return TrashedTasksGrid.ItemsSource.Cast<TaskTrashRow>().ToList();
     }
 
     // ✅ Fix (04.08.2026, demande de Joe) : actif si au moins une case est cochée OU si une
@@ -190,7 +185,7 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
     private void RefreshBatchSelectionUi()
     {
         var rows = GetActiveRows();
-        var anySelected = rows.Any(x => x.IsSelected) || ArchivedTasksGrid?.SelectedItem != null;
+        var anySelected = rows.Any(x => x.IsSelected) || TrashedTasksGrid?.SelectedItem != null;
 
         if (RestoreSelectionButton != null)
             RestoreSelectionButton.IsEnabled = anySelected;
@@ -199,9 +194,9 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
             DeleteSelectionButton.IsEnabled = anySelected;
     }
 
-    private void ArchivedTasksGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBatchSelectionUi();
+    private void TrashedTasksGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBatchSelectionUi();
 
-    private List<TaskRecord> GetActionSelectionOrFallbackToRow(TaskArchiveRow? fallbackRow)
+    private List<TaskRecord> GetActionSelectionOrFallbackToRow(TaskTrashRow? fallbackRow)
     {
         var sel = GetActiveRows().Where(r => r.IsSelected).Select(r => r.Task).ToList();
 
@@ -237,16 +232,16 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         foreach (var r in rows)
             r.IsSelected = newValue;
 
-        ArchivedTasksGrid?.Items.Refresh();
+        TrashedTasksGrid?.Items.Refresh();
         RefreshBatchSelectionUi();
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => Reload();
 
-    // ✅ Réécrit le fichier complet (actives + archivées) : les TaskRecord passés en
-    // paramètre sont les mêmes références que celles dans _allTasks (LINQ Where/Select ne
-    // clone pas), donc les mutations faites dessus (IsArchived/ArchivedAt) sont déjà
-    // reflétées dans _allTasks au moment de l'appel.
+    // ✅ Réécrit le fichier complet (actives + archivées + en corbeille) : les TaskRecord passés
+    // en paramètre sont les mêmes références que celles dans _allTasks (LINQ Where/Select ne
+    // clone pas), donc les mutations faites dessus (IsTrashed/TrashedAt) sont déjà reflétées
+    // dans _allTasks au moment de l'appel.
     private void PersistAllTasks()
     {
         var projectId = Db.GetCurrentProjectId();
@@ -255,7 +250,7 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
 
     private void RestoreSelected_Click(object sender, RoutedEventArgs e)
     {
-        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(ArchivedTasksGrid));
+        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(TrashedTasksGrid));
 
         if (sel.Count == 0)
         {
@@ -277,20 +272,17 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
 
         foreach (var t in sel)
         {
-            t.IsArchived = false;
-            t.ArchivedAt = null;
+            t.IsTrashed = false;
+            t.TrashedAt = null;
         }
 
         PersistAllTasks();
         Reload();
     }
 
-    // ✅ Renommé (demande de Joe, 04.08.2026) : "Supprimer définitivement" devient "Déplacer
-    // dans la corbeille" -- même principe que ArchivesPage.TrashSelected_Click côté Bons
-    // (IsTrashed=true, IsArchived reste inchangé), au lieu d'une suppression irréversible.
     private void DeleteSelected_Click(object sender, RoutedEventArgs e)
     {
-        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(ArchivedTasksGrid));
+        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(TrashedTasksGrid));
 
         if (sel.Count == 0)
         {
@@ -303,18 +295,15 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         }
 
         var msg = sel.Count == 1
-            ? $"Mettre la tâche N°{sel[0].Ref} à la corbeille ?"
-            : $"Mettre {sel.Count} tâches à la corbeille ?";
+            ? $"Supprimer définitivement la tâche N°{sel[0].Ref} ?\n\nCette action est irréversible."
+            : $"Supprimer définitivement {sel.Count} tâches ?\n\nCette action est irréversible.";
 
-        var ok = System.Windows.MessageBox.Show(msg, "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var ok = System.Windows.MessageBox.Show(msg, "Suppression définitive", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (ok != MessageBoxResult.Yes)
             return;
 
         foreach (var t in sel)
-        {
-            t.IsTrashed = true;
-            t.TrashedAt = DateTime.Now;
-        }
+            _allTasks.Remove(t);
 
         PersistAllTasks();
         Reload();
@@ -335,8 +324,8 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         if (ok != MessageBoxResult.Yes)
             return;
 
-        row.Task.IsArchived = false;
-        row.Task.ArchivedAt = null;
+        row.Task.IsTrashed = false;
+        row.Task.TrashedAt = null;
 
         PersistAllTasks();
         Reload();

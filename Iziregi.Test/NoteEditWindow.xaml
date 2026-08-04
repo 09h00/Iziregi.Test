@@ -1,0 +1,96 @@
+<!-- File: NoteEditWindow.xaml -->
+<!-- ✅ Ajouté (demande de Joe) : édition agrandie d'une note du widget "Bloc-notes"
+     (OverviewPage, page Tableau de bord), ouverte par double-clic sur un post-it de la
+     mosaïque. Même principe que TaskDescriptionWindow (agrandir un champ trop petit pour
+     une saisie confortable), en bien plus simple ici (pas de mise en forme/RichText, juste
+     un TextBox). -->
+<Window x:Class="Iziregi.Test.NoteEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Note"
+        Height="420"
+        Width="480"
+        MinHeight="260"
+        MinWidth="320"
+        WindowStartupLocation="CenterOwner"
+        Background="#F6F7FB">
+
+    <Window.Resources>
+        <!-- ✅ Convention déjà établie dans ce projet (voir TaskDescriptionWindow) : chaque
+             fenêtre garde ses propres styles locaux plutôt qu'une centralisation à large
+             portée. PrimaryButtonStyle est global (App.xaml), SecondaryButtonStyle non. -->
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ✅ Background posé en code-behind (demande de Joe) : reprend la couleur du post-it
+             d'origine (NoteEditWindow.xaml.cs), pas la barre de titre Windows (ça demanderait
+             un chrome de fenêtre personnalisé pour peu de bénéfice). -->
+        <Border x:Name="NoteCardBorder"
+                Grid.Row="0"
+                Background="White"
+                BorderBrush="#E5E7EB"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="2"
+                Effect="{StaticResource CardShadowEffect}">
+            <TextBox x:Name="NoteTextBox"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Padding="12"
+                     FontSize="14"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"/>
+        </Border>
+
+        <DockPanel Grid.Row="1" Margin="0,12,0,0" LastChildFill="False">
+            <Button x:Name="CloseButton"
+                    Content="Fermer"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    DockPanel.Dock="Right"
+                    Click="CloseButton_Click"/>
+
+            <Button x:Name="SaveButton"
+                    Content="Enregistrer"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    DockPanel.Dock="Right"
+                    Margin="0,0,8,0"
+                    Click="SaveButton_Click"/>
+        </DockPanel>
+    </Grid>
+</Window>

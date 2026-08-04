@@ -499,7 +499,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         // ✅ Désactive TOUTES les actions tant que dirty (silencieux)
         if (NewWorkOrderTopButton != null) NewWorkOrderTopButton.IsEnabled = allowContinue;
         if (RefreshTopButton != null) RefreshTopButton.IsEnabled = allowContinue;
-        if (ManageProjectsButton != null) ManageProjectsButton.IsEnabled = allowContinue;
 
         if (ArchiveSelectionButton != null) ArchiveSelectionButton.IsEnabled = allowContinue && AnyBatchSelected();
         if (TrashSelectionButton != null) TrashSelectionButton.IsEnabled = allowContinue && AnyBatchSelected();
@@ -558,55 +557,21 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             MessageBoxImage.Warning);
     }
 
+    // ✅ Fix (04.08.2026, demande de Joe) : "Archiver sélection"/"Déplacer dans la corbeille"
+    // ne réagissaient qu'aux cases cochées -- une ligne sélectionnée (bordure bleue, sans
+    // cocher sa case) doit aussi les activer.
     private bool AnyBatchSelected()
     {
         try
         {
             var items = GetActiveWorkOrders();
-            return items.Any(x => x.IsBatchSelected);
+            if (items.Any(x => x.IsBatchSelected)) return true;
+            return WorkOrdersGrid?.SelectedItem != null;
         }
         catch
         {
             return false;
         }
-    }
-
-    // =========================
-    // ✅ Helpers : split/join adresse <-> "NPA/Ville"
-    // =========================
-    private static (string line1, string line2) SplitAddressTwoLines(string? raw)
-    {
-        var s = (raw ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(s))
-            return ("", "");
-
-        // On coupe au dernier ","
-        var lastComma = s.LastIndexOf(',');
-        if (lastComma >= 0 && lastComma < s.Length - 1)
-        {
-            var a = s.Substring(0, lastComma).Trim();
-            var b = s.Substring(lastComma + 1).Trim();
-            return (a, b);
-        }
-
-        return (s, "");
-    }
-
-    private static string FormatProjectManagerLine(string? name, string? contact)
-    {
-        var n = (name ?? "").Trim();
-        var c = (contact ?? "").Trim();
-
-        if (string.IsNullOrWhiteSpace(n) && string.IsNullOrWhiteSpace(c))
-            return "";
-
-        if (string.IsNullOrWhiteSpace(c))
-            return $"Réf : {n}";
-
-        if (string.IsNullOrWhiteSpace(n))
-            return c;
-
-        return $"Réf : {n}    {c}";
     }
 
     // =========================
@@ -793,7 +758,7 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             {
                 if (ActiveWorkOrdersCountRun != null) ActiveWorkOrdersCountRun.Text = "0";
                 if (ArchivedWorkOrdersCountRun != null) ArchivedWorkOrdersCountRun.Text = "0";
-                if (TasksInProgressCountRun != null) TasksInProgressCountRun.Text = "0";
+                if (TrashedWorkOrdersCountRun != null) TrashedWorkOrdersCountRun.Text = "0";
                 return;
             }
 
@@ -803,54 +768,10 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             if (ArchivedWorkOrdersCountRun != null)
                 ArchivedWorkOrdersCountRun.Text = Db.GetArchivedWorkOrdersCount(selectedProject.Id).ToString(CultureInfo.InvariantCulture);
 
-            if (TasksInProgressCountRun != null)
-                TasksInProgressCountRun.Text = CountInProgressPlanningTasks(selectedProject.Id).ToString(CultureInfo.InvariantCulture);
+            if (TrashedWorkOrdersCountRun != null)
+                TrashedWorkOrdersCountRun.Text = Db.GetTrashedWorkOrders(selectedProject.Id).Count.ToString(CultureInfo.InvariantCulture);
         }
         catch { }
-    }
-
-    // ✅ Duplique volontairement le chemin du fichier tâches de PlanningPage.xaml.cs
-    // (GetProjectTasksFilePath), qui est privé à cette autre classe. Une tâche est
-    // considérée "en cours" si au moins une de ses colonnes contient quelque chose — Ref
-    // (numéro auto) et Done (case à cocher, pas du texte "écrit") sont volontairement
-    // exclus de ce test.
-    private sealed class DashboardTaskRowProbe
-    {
-        public string Company { get; set; } = "";
-        public string Building { get; set; } = "";
-        public string Floor { get; set; } = "";
-        public string Todo { get; set; } = "";
-        public string TodoDocumentXaml { get; set; } = "";
-        public string Category { get; set; } = "";
-        public string Reserve { get; set; } = "";
-        public string Urgent { get; set; } = "";
-    }
-
-    private static int CountInProgressPlanningTasks(long projectId)
-    {
-        try
-        {
-            var filePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "Iziregi", "Planning", $"planning-tasks-{projectId}.json");
-
-            if (!File.Exists(filePath)) return 0;
-
-            var json = File.ReadAllText(filePath);
-            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var rows = JsonSerializer.Deserialize<System.Collections.Generic.List<DashboardTaskRowProbe>>(json, opts) ?? new();
-
-            return rows.Count(r =>
-                !string.IsNullOrWhiteSpace(r.Company) ||
-                !string.IsNullOrWhiteSpace(r.Building) ||
-                !string.IsNullOrWhiteSpace(r.Floor) ||
-                !string.IsNullOrWhiteSpace(r.Todo) ||
-                !string.IsNullOrWhiteSpace(r.TodoDocumentXaml) ||
-                !string.IsNullOrWhiteSpace(r.Category) ||
-                !string.IsNullOrWhiteSpace(r.Reserve) ||
-                !string.IsNullOrWhiteSpace(r.Urgent));
-        }
-        catch { return 0; }
     }
 
     private void RefreshWorkOrders()
@@ -925,6 +846,7 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     {
         UpdateSelectedWorkOrderPreview();
         UpdatePreviewBorderFromSelection();
+        RefreshBatchSelectionUi();
     }
 
     // ✅ 25.07.2026, demande de Joe : bouton flottant pour revenir en haut de la liste.
@@ -951,14 +873,13 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
     private void RefreshBatchSelectionUi()
     {
-        var items = GetActiveWorkOrders();
-        var selectedCount = items.Count(x => x.IsBatchSelected);
+        var anySelected = AnyBatchSelected();
 
         if (ArchiveSelectionButton != null)
-            ArchiveSelectionButton.IsEnabled = !_identityDirty && selectedCount > 0;
+            ArchiveSelectionButton.IsEnabled = !_identityDirty && anySelected;
 
         if (TrashSelectionButton != null)
-            TrashSelectionButton.IsEnabled = !_identityDirty && selectedCount > 0;
+            TrashSelectionButton.IsEnabled = !_identityDirty && anySelected;
     }
 
     private void BatchSelectCheckBox_Click(object sender, RoutedEventArgs e)
@@ -995,11 +916,21 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         RefreshBatchSelectionUi();
     }
 
+    // ✅ Fallback ligne sélectionnée (04.08.2026, demande de Joe), même principe que
+    // PlanningPage.ArchiveTaskRowButton_Click/RemoveTaskRowButton_Click.
+    private System.Collections.Generic.List<WorkOrder> GetBatchOrRowSelectedWorkOrders()
+    {
+        var items = GetActiveWorkOrders().Where(x => x.IsBatchSelected).ToList();
+        if (items.Count == 0 && WorkOrdersGrid?.SelectedItem is WorkOrder selected)
+            items.Add(selected);
+        return items;
+    }
+
     private void ArchiveSelection_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureNotDirtyOrWarn()) return;
 
-        var items = GetActiveWorkOrders().Where(x => x.IsBatchSelected).ToList();
+        var items = GetBatchOrRowSelectedWorkOrders();
         if (items.Count == 0)
             return;
 
@@ -1022,7 +953,7 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     {
         if (!EnsureNotDirtyOrWarn()) return;
 
-        var items = GetActiveWorkOrders().Where(x => x.IsBatchSelected).ToList();
+        var items = GetBatchOrRowSelectedWorkOrders();
         if (items.Count == 0)
             return;
 
@@ -1249,7 +1180,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
             _lastProjectId = ProjectComboBox.SelectedItem is Project cur ? cur.Id : null;
 
-            LoadSelectedProjectIntoFields();
             ApplyDashboardLabels();
         }
         finally
@@ -1259,48 +1189,10 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         }
     }
 
-    private void LoadSelectedProjectIntoFields()
-    {
-        _suspendDirtyTracking = true;
-        try
-        {
-            if (ProjectComboBox?.SelectedItem is Project project)
-            {
-                if (ProjectNameEditTextBox != null)
-                    ProjectNameEditTextBox.Text = project.Name ?? "";
-
-                var raw = project.Address ?? "";
-                var (addr, zipCity) = SplitAddressTwoLines(raw);
-
-                if (ProjectAddressEditTextBox != null)
-                    ProjectAddressEditTextBox.Text = addr;
-
-                if (ProjectZipCityEditTextBox != null)
-                    ProjectZipCityEditTextBox.Text = zipCity;
-
-                if (ProjectManagerLineTextBox != null)
-                    ProjectManagerLineTextBox.Text = FormatProjectManagerLine(project.ManagerName, project.ManagerContact);
-            }
-            else
-            {
-                if (ProjectNameEditTextBox != null)
-                    ProjectNameEditTextBox.Text = "";
-
-                if (ProjectAddressEditTextBox != null)
-                    ProjectAddressEditTextBox.Text = "";
-
-                if (ProjectZipCityEditTextBox != null)
-                    ProjectZipCityEditTextBox.Text = "";
-
-                if (ProjectManagerLineTextBox != null)
-                    ProjectManagerLineTextBox.Text = "";
-            }
-        }
-        finally
-        {
-            _suspendDirtyTracking = false;
-        }
-    }
+    // ✅ LoadSelectedProjectIntoFields() supprimée (demande de Joe, 04.08.2026) : elle ne
+    // faisait que remplir ProjectNameEditTextBox/ProjectAddressEditTextBox/
+    // ProjectZipCityEditTextBox/ProjectManagerLineTextBox, retirés avec la section "Adresse
+    // dossier" (remplacée par le Carnet d'adresses, voir AddressBookButton_Click).
 
     private void ProjectComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1335,51 +1227,41 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
 
             _lastProjectId = project.Id;
 
-            LoadSelectedProjectIntoFields();
             ApplyDashboardLabels();
         }
 
         RefreshAll();
     }
 
-    private void ManageProjects_Click(object sender, RoutedEventArgs e)
+    // ✅ Carnet d'adresses (04.08.2026) : bouton retiré de cette page (demande de Joe),
+    // l'accès passe désormais par la barre de navigation globale (MainWindow.
+    // NavAddressBook_Click), accessible depuis n'importe quelle page.
+
+    // ✅ Archives/Corbeille (04.08.2026, demande de Joe, compromis "menu trop long") :
+    // "Archives" et "Corbeille" retirées du menu global, ces badges (déjà affichés pour montrer
+    // les compteurs) deviennent le sous-menu d'accès pour la variante Bons -- même mécanisme que
+    // ArchivedRow_Click/TrashRow_Click sur OverviewPage.
+    private void ArchivedWorkOrdersBadge_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (!EnsureNotDirtyOrWarn()) return;
-
-        try
-        {
-            var win = new ProjectsWindow
-            {
-                Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
-            };
-        try
-        {
-            win.ShowDialog();
-        }
-        catch (Exception ex)
-        {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine("Exception opening ProjectsWindow from Dashboard: " + ex);
-                var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Iziregi_unhandled_exception.txt");
-                System.IO.File.WriteAllText(path, ex.ToString());
-                System.Windows.MessageBox.Show($"Erreur à l'ouverture de la fenêtre Dossiers : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            catch { }
-        }
-
-            LoadProjects();
-            RefreshAll();
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(
-                $"Impossible d’ouvrir la fenêtre Dossiers.\n\n{ex.Message}",
-                "Dossiers",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
+        e.Handled = true;
+        GetHost()?.ShowArchives();
     }
+
+    private void TrashedWorkOrdersBadge_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        GetHost()?.ShowTrash();
+    }
+
+    // ✅ Boutons explicites (04.08.2026, demande de Joe : "je n'ai pas de boutons Archives et
+    // Corbeille"), même navigation que les badges ci-dessus, juste une signature d'événement
+    // différente (Button.Click plutôt que MouseLeftButtonDown sur le Border du badge).
+    private void ArchivesTopButton_Click(object sender, RoutedEventArgs e) => GetHost()?.ShowArchives();
+
+    private void TrashTopButton_Click(object sender, RoutedEventArgs e) => GetHost()?.ShowTrash();
+
+    private Iziregi.Test.MainWindow? GetHost() =>
+        Window.GetWindow(this) as Iziregi.Test.MainWindow ?? System.Windows.Application.Current.MainWindow as Iziregi.Test.MainWindow;
 
     // =========================
     // Boutons principaux
@@ -1392,7 +1274,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             Db.SetCurrentProjectId(project.Id);
 
         OpenWorkOrderWindow(null, createMode: true);
-        RefreshAll();
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e)
@@ -1416,7 +1297,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         if (wo == null) return;
 
         OpenWorkOrderWindow(wo, createMode: false);
-        RefreshAll();
     }
 
     private void ViewWorkOrder_Click(object sender, RoutedEventArgs e)
@@ -1427,7 +1307,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         if (wo == null) return;
 
         OpenWorkOrderWindow(wo, createMode: false);
-        RefreshAll();
     }
 
     private void ArchiveWorkOrder_Click(object sender, RoutedEventArgs e)
@@ -1481,7 +1360,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         if (wo == null) return;
 
         OpenWorkOrderWindow(wo, createMode: false);
-        RefreshAll();
     }
 
     private void TrashedGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -1492,12 +1370,17 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         if (wo == null) return;
 
         OpenWorkOrderWindow(wo, createMode: false);
-        RefreshAll();
     }
 
     // =========================
     // Helpers (ouverture bon)
     // =========================
+    // ✅ Fix (demande de Joe : "je veux pouvoir travailler sur les 2 fenêtres sans avoir à les
+    // fermer") : ShowDialog (modal) -> Show (non modal). Garde-fous contre l'ouverture en
+    // double du même bon / de deux bons "Nouveau" en même temps (voir WorkOrderWindow.
+    // ActivateIfAlreadyOpen/ActivateExistingCreateModeWindow). RefreshAll/ApplyDashboardLabels,
+    // qui se faisaient après la fermeture (ShowDialog bloquant jusque-là), se font maintenant
+    // sur l'événement Closed — les appelants n'ont plus besoin de le refaire eux-mêmes.
     private void OpenWorkOrderWindow(WorkOrder? workOrder, bool createMode)
     {
         if (!EnsureNotDirtyOrWarn()) return;
@@ -1505,14 +1388,21 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         Window win;
 
         if (createMode || workOrder == null || workOrder.Id <= 0)
+        {
+            if (WorkOrderWindow.ActivateExistingCreateModeWindow()) return;
             win = new WorkOrderWindow();
+        }
         else
+        {
+            if (WorkOrderWindow.ActivateIfAlreadyOpen(workOrder.Id)) return;
             win = new WorkOrderWindow(workOrder.Id, WorkOrderEditMode.Architecte);
+        }
 
         win.Owner = Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow;
+        win.Closed += (s, e) => { try { RefreshAll(); ApplyDashboardLabels(); } catch { } };
         try
         {
-            win.ShowDialog();
+            win.Show();
         }
         catch (Exception ex)
         {
@@ -1525,8 +1415,6 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             }
             catch { }
         }
-
-        ApplyDashboardLabels();
     }
 
     private void ImportResponse_Click(object sender, RoutedEventArgs e)

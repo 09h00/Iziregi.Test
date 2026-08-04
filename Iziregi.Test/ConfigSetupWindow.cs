@@ -218,7 +218,7 @@ internal class ConfigSetupWindow : Window
         ("Corbeille", "Corbeille"),
         ("Listes", "Listes"),
         ("Comptabilité", "Comptabilité"),
-        ("Planning", "Planning"),
+        ("Planning", "Planification"),
     };
 
     private FrameworkElement BuildStartupTabContent()

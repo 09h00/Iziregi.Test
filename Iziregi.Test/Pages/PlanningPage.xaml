@@ -49,7 +49,10 @@
 
         <!-- ✅ Boutons arrondis + bordure noire, section "zones de texte" (25.07.2026,
              demande de Joe). Preserve le Content existant (texte simple ou StackPanel
-             personnalisé comme FontColorButton/FillColorButton). -->
+             personnalisé comme FontColorButton/FillColorButton).
+             ✅ Reste noir (demande de Joe, 04.08.2026) : seuls les boutons à FOND noir plein
+             (SmallBlackButtonStyle) passent en rouge, pas ceux qui n'ont qu'une bordure/police
+             noire comme ceux qui utilisent ce style-ci. -->
         <Style x:Key="TextZoneToolButtonStyle" TargetType="Button">
             <Setter Property="BorderBrush" Value="Black"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -157,10 +160,15 @@
             </Setter>
         </Style>
 
+        <!-- ✅ Fond blanc + police/bordure rouges (demande de Joe, remplace le fond noir plein) :
+             même principe que OutlineBlueButtonStyle/ArchiveOutlineButtonStyle (survol = juste
+             bordure plus épaisse, pas de changement de fond, sauf pression = léger fond teinté).
+             Clé inchangée (SmallBlackButtonStyle) pour ne pas devoir retoucher tous ses usages
+             dans cette page ni AutoAddToggleButton.Style (PlanningPage.xaml.cs). -->
         <Style x:Key="SmallBlackButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallBlueButtonStyle}">
-            <Setter Property="Background" Value="#111827"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#D1D5DB"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#DC2626"/>
+            <Setter Property="BorderBrush" Value="#DC2626"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -175,20 +183,55 @@
 							                  Margin="{TemplateBinding Padding}"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#374151"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#374151"/>
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#4B5563"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#4B5563"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#FEF2F2"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#9CA3AF"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#9CA3AF"/>
-                                <Setter Property="Foreground" Value="#F9FAFB"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#FECACA"/>
+                                <Setter Property="Foreground" Value="#FECACA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ Flèches de navigation semaine (◀/▶, demande de Joe, 04.08.2026) : fond blanc,
+             police/bordure noires, distinct de SmallBlackButtonStyle (passé au rouge juste
+             avant), ces deux boutons-là doivent rester noirs. Même principe de survol que les
+             autres styles "outline" (bordure plus épaisse, léger fond gris à l'appui). -->
+        <Style x:Key="WeekNavButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallBlueButtonStyle}">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+						        Background="{TemplateBinding Background}"
+						        BorderBrush="{TemplateBinding BorderBrush}"
+						        BorderThickness="{TemplateBinding BorderThickness}"
+						        CornerRadius="6"
+						        SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+							                  VerticalAlignment="Center"
+							                  Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
+                                <Setter Property="Foreground" Value="#D1D5DB"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -235,10 +278,13 @@
 
         <!-- ✅ Bouton "Archiver sélection" (30.07.2026, demande de Joe) : même vert que
              "Archiver" dans Dashboard (ArchiveSmallButtonStyle, #15803D). -->
+        <!-- ✅ Gris neutre (demande de Joe, 04.08.2026) : convention plus courante pour
+             "Archiver" (action réversible, non destructive), remplace le vert précédent qui
+             évoque plutôt une action positive/validation. -->
         <Style x:Key="ArchiveOutlineButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallBlueButtonStyle}">
             <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="#15803D"/>
-            <Setter Property="BorderBrush" Value="#15803D"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="BorderBrush" Value="Black"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -258,11 +304,11 @@
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
-                                <Setter TargetName="Bd" Property="Background" Value="#F0FDF4"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#BBF7D0"/>
-                                <Setter Property="Foreground" Value="#BBF7D0"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
+                                <Setter Property="Foreground" Value="#D1D5DB"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -581,6 +627,46 @@
             </Style.Triggers>
         </Style>
 
+        <!-- ✅ Filtres façon Excel sur l'en-tête de la grille des Tâches (demande de Joe), même
+             mécanisme que sur les Bons actifs (DashboardPage/ArchivesPage), styles dupliqués ici
+             (convention déjà établie dans ce projet : pas de centralisation à large portée). -->
+        <Style x:Key="FilterHeaderButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#E5E7EB"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FilterHeaderButtonActiveStyle" TargetType="Button" BasedOn="{StaticResource FilterHeaderButtonStyle}">
+            <Setter Property="Foreground" Value="#1D4ED8"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="FilterHeaderHighlightBorderStyle" TargetType="Border">
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="4,2"/>
+        </Style>
+
     </UserControl.Resources>
 
     <Grid Background="White" ClipToBounds="True">
@@ -593,7 +679,7 @@
         <!-- ✅ Titre de page (28.07.2026, demande de Joe : même police que les autres pages,
              ex. "Comptabilité"). -->
         <TextBlock Grid.Row="0"
-                   Text="Planning"
+                   Text="Planification"
                    FontSize="18"
                    FontWeight="SemiBold"
                    Foreground="#111827"
@@ -618,7 +704,7 @@
                         Width="22" Height="24"
                         Margin="0,0,6,0"
                         Padding="0"
-                        Style="{StaticResource SmallBlackButtonStyle}"/>
+                        Style="{StaticResource WeekNavButtonStyle}"/>
                 <TextBlock x:Name="WeekTextBlock"
                            Text="Semaine …"
                            Foreground="#111827"
@@ -631,7 +717,7 @@
                         Width="22" Height="24"
                         Margin="0,0,4,0"
                         Padding="0"
-                        Style="{StaticResource SmallBlackButtonStyle}"/>
+                        Style="{StaticResource WeekNavButtonStyle}"/>
 
                 <TextBlock Text="Début :"
                            Foreground="#374151"
@@ -652,6 +738,30 @@
                             Height="24"
                             Style="{StaticResource PlanningDatePickerStyle}"
                             SelectedDateChanged="EndDatePicker_SelectedDateChanged"/>
+
+                <!-- ✅ Archives/Corbeille (04.08.2026, demande de Joe : "mettre les boutons à
+                     côté des dates") : déplacées ici depuis la colonne de droite (à côté de
+                     "Générer PDF"), deviennent le sous-menu d'accès pour la variante Tâches
+                     (ShowArchivesTasks/ShowTrashedTasks, MainWindow.xaml.cs). -->
+                <Button x:Name="PlanningArchivesButton"
+                        Content="Page archives"
+                        Style="{StaticResource WeekNavButtonStyle}"
+                        Background="#F3F4F6"
+                        Height="30"
+                        Padding="10,0"
+                        Margin="14,0,6,0"
+                        Click="PlanningArchivesButton_Click"/>
+                <!-- ✅ Fond rouge clair, police/bordure rouges (demande de Joe, 04.08.2026).
+                     Renommé "Page corbeille" (demande de Joe, 04.08.2026). -->
+                <Button x:Name="PlanningTrashButton"
+                        Content="Page corbeille"
+                        Style="{StaticResource WeekNavButtonStyle}"
+                        Background="#FEE2E2"
+                        Foreground="#B91C1C"
+                        BorderBrush="#B91C1C"
+                        Height="30"
+                        Padding="10,0"
+                        Click="PlanningTrashButton_Click"/>
             </StackPanel>
 
             <!-- ✅ Marge droite de 8 pour aligner le bord droit avec la pastille "Dossier" de
@@ -659,17 +769,16 @@
                  plus que le bandeau de nav (Padding="8,6"), et la pastille a elle-même une
                  marge droite de 12 dans son StackPanel — 12+8-12 = 8 de marge ici pour
                  compenser exactement l'écart. -->
-            <Button x:Name="ExportPdfButton"
-                    Grid.Column="2"
-                    Content="Générer PDF"
-                    Style="{StaticResource PdfButtonStyle}"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Center"
-                    Margin="12,0,8,0"
-                    Height="30"
-                    Width="150"
-                    FontSize="15"
-                    Click="ExportPdfButton_Click"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                <Button x:Name="ExportPdfButton"
+                        Content="Générer PDF"
+                        Style="{StaticResource PdfButtonStyle}"
+                        VerticalAlignment="Center"
+                        Height="30"
+                        Width="150"
+                        FontSize="15"
+                        Click="ExportPdfButton_Click"/>
+            </StackPanel>
         </Grid>
 
         <ScrollViewer x:Name="MainScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto">
@@ -695,6 +804,46 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
+
+                        <!-- ✅ Popup de filtre façon Excel (demande de Joe), même mécanisme que
+                             DashboardPage/ArchivesPage (bouton "▾" dans l'en-tête d'une colonne
+                             ouvre ce popup unique, positionné dynamiquement sur ce bouton via
+                             PlacementTarget en code-behind). Seulement le panneau "Texte" (pas de
+                             panneau "Date" ici : aucune des colonnes filtrées de cette grille
+                             n'est une date). -->
+                        <Popup x:Name="TaskColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
+                            <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8" MinWidth="220" MaxHeight="380" Effect="{StaticResource CardShadowEffect}">
+                                <StackPanel>
+                                    <CheckBox x:Name="TaskAlphaSortCheckBox"
+                                              Content="Trier par ordre alphabétique (A→Z)"
+                                              Margin="0,0,0,8"/>
+
+                                    <Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Margin="0,0,0,6"/>
+
+                                    <CheckBox x:Name="TaskFilterSelectAllCheckBox"
+                                              Content="(Tout sélectionner)"
+                                              IsChecked="True"
+                                              FontWeight="Bold"
+                                              Click="TaskFilterSelectAllCheckBox_Click"
+                                              Margin="0,0,0,6"/>
+
+                                    <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl x:Name="TaskFilterOptionsItemsControl">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox Content="{Binding DisplayText}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                                        <Button Content="Annuler" Style="{StaticResource OutlineBlueButtonStyle}" Click="TaskColumnFilterCancel_Click" Margin="0,0,6,0"/>
+                                        <Button Content="OK" Style="{StaticResource SmallBlueButtonStyle}" Click="TaskColumnFilterApply_Click"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
 
                         <!-- ✅ 31.07.2026 (demande de Joe) : tous les boutons "Ajouter" (gauche) de
                              chaque section de la page Planning doivent s'aligner verticalement,
@@ -725,22 +874,33 @@
 								        Height="34"
 								        Click="AddTaskRowButton_Click"/>
 
-                                <Button x:Name="RemoveTaskRowButton"
-								        Content="Supprimer"
-								        Style="{StaticResource SmallBlackButtonStyle}"
-								        Height="34"
-								        Margin="8,0,0,0"
-								        Click="RemoveTaskRowButton_Click"/>
-
                                 <!-- ✅ 30.07.2026 (demande de Joe) : archive la/les tâche(s)
                                      sélectionnée(s) (comme "Supprimer", même sélection) au lieu de
-                                     les effacer, consultable/restaurable depuis "Archives tâches". -->
+                                     les effacer, consultable/restaurable depuis "Archives tâches".
+                                     ✅ Repositionné juste après "Ajouter" (demande de Joe, 04.08.2026).
+                                     ✅ Grisé tant qu'aucune ligne n'est sélectionnée (demande de Joe,
+                                     04.08.2026), voir RefreshTaskSelectionButtonsState. -->
                                 <Button x:Name="ArchiveTaskRowButton"
 								        Content="Archiver sélection"
 								        Style="{StaticResource ArchiveOutlineButtonStyle}"
 								        Height="34"
 								        Margin="8,0,0,0"
+								        IsEnabled="False"
 								        Click="ArchiveTaskRowButton_Click"/>
+
+                                <!-- ✅ Renommé (demande de Joe, 04.08.2026) : ce bouton ne supprime pas
+                                     définitivement, il met à la corbeille (voir
+                                     RemoveTaskRowButton_Click, IsTrashed/TrashedAt), même principe
+                                     que "Déplacer dans la corbeille" sur Bons d'intervention.
+                                     ✅ Grisé tant qu'aucune ligne n'est sélectionnée (demande de Joe,
+                                     04.08.2026), voir RefreshTaskSelectionButtonsState. -->
+                                <Button x:Name="RemoveTaskRowButton"
+								        Content="Déplacer dans la corbeille"
+								        Style="{StaticResource SmallBlackButtonStyle}"
+								        IsEnabled="False"
+								        Height="34"
+								        Margin="8,0,0,0"
+								        Click="RemoveTaskRowButton_Click"/>
                             </StackPanel>
 
                             <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
@@ -776,9 +936,15 @@
                             </Border>
                         </Popup>
 
+                        <!-- ✅ Fix (demande de Joe : "je ne vois aucun filtre") : ColumnHeaderHeight
+                             surchargé à 44 (au lieu des 28 de PlanningGridStyle, partagé avec
+                             Planning hebdo ci-dessous, non touché). Les en-têtes filtrables ont
+                             maintenant 2 lignes (libellé + bouton ▾), 28px ne laissait aucune
+                             place visible pour la 2e ligne, le bouton était rogné/invisible. -->
                         <DataGrid x:Name="TasksDataGrid"
 						          Grid.Row="1"
 						          Style="{StaticResource PlanningGridStyle}"
+						          ColumnHeaderHeight="44"
 						          AutoGenerateColumns="False"
 						          CanUserAddRows="False"
 						          RowHeaderWidth="0"
@@ -786,7 +952,9 @@
 						          Background="White"
 						          BorderBrush="#D1D5DB"
 						          BorderThickness="1"
-						          IsReadOnly="False">
+						          IsReadOnly="False"
+						          CellEditEnding="TasksDataGrid_CellEditEnding"
+						          SelectionChanged="TasksDataGrid_SelectionChanged">
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn x:Name="TaskSelectColumn" Header="" Width="28" CanUserResize="False">
                                     <DataGridTemplateColumn.HeaderTemplate>
@@ -866,11 +1034,22 @@
                                      s'élargit maintenant librement pour l'accueillir (au lieu de tronquer,
                                      voir ancien commentaire du 16.07.2026 remplacé ici). -->
                                 <DataGridTemplateColumn x:Name="TaskBuildingColumn" MinWidth="90" Width="Auto">
-                                    <DataGridTemplateColumn.HeaderTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DataContext.BuildingLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <!-- ✅ Filtre Excel (demande de Joe) : Header (instance unique,
+                                         permanente) au lieu de HeaderTemplate, nécessaire pour
+                                         nommer le Border/Button et les retrouver depuis
+                                         UpdateTaskFilterButtonIndicators (un HeaderTemplate est
+                                         instancié par le système de présentation, ses éléments
+                                         nommés ne deviennent pas des champs de la classe). Le
+                                         binding dynamique du libellé (RelativeSource
+                                         AncestorType=UserControl) fonctionne pareil ici. -->
+                                    <DataGridTemplateColumn.Header>
+                                        <Border x:Name="BuildingHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding DataContext.BuildingLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center"/>
+                                                <Button x:Name="BuildingFilterButton" Content="▾" Tag="Building" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox Style="{StaticResource GridComboStyle}"
@@ -881,11 +1060,14 @@
                                 </DataGridTemplateColumn>
 
                                 <DataGridTemplateColumn x:Name="TaskFloorColumn" MinWidth="80" Width="Auto">
-                                    <DataGridTemplateColumn.HeaderTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DataContext.FloorLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <DataGridTemplateColumn.Header>
+                                        <Border x:Name="FloorHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding DataContext.FloorLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center"/>
+                                                <Button x:Name="FloorFilterButton" Content="▾" Tag="Floor" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox Style="{StaticResource GridComboStyle}"
@@ -912,7 +1094,8 @@
                                                      MaxLength="80"
                                                      BorderThickness="0"
                                                      Background="Transparent"
-                                                     VerticalContentAlignment="Center"/>
+                                                     VerticalContentAlignment="Center"
+                                                     LostFocus="TaskTodoTextBox_LostFocus"/>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellEditingTemplate>
                                 </DataGridTemplateColumn>
@@ -951,11 +1134,14 @@
                                 </DataGridTemplateColumn>
 
                                 <DataGridTemplateColumn x:Name="TaskCategoryColumn" MinWidth="90" Width="Auto">
-                                    <DataGridTemplateColumn.HeaderTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DataContext.TaskCategoryLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <DataGridTemplateColumn.Header>
+                                        <Border x:Name="CategoryHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding DataContext.TaskCategoryLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center"/>
+                                                <Button x:Name="CategoryFilterButton" Content="▾" Tag="Category" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox Style="{StaticResource GridComboStyle}"
@@ -967,11 +1153,14 @@
 
                                 <!-- ✅ Déplacée entre Catégorie et Urg. (demande de Joe du 16.07.2026). -->
                                 <DataGridTemplateColumn x:Name="TaskCompanyColumn" MinWidth="130" Width="Auto">
-                                    <DataGridTemplateColumn.HeaderTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.HeaderTemplate>
+                                    <DataGridTemplateColumn.Header>
+                                        <Border x:Name="CompanyHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center"/>
+                                                <Button x:Name="CompanyFilterButton" Content="▾" Tag="Company" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="4" Padding="0">
@@ -1026,12 +1215,18 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskUrgentColumn" MinWidth="52" Width="52">
-                                    <DataGridTemplateColumn.HeaderTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DataContext.TaskUrgencyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.HeaderTemplate>
+                                <DataGridTemplateColumn x:Name="TaskUrgentColumn" MinWidth="52" Width="Auto">
+                                    <!-- ✅ Width Auto (au lieu de 52 fixe) : la colonne doit pouvoir
+                                         s'élargir pour accueillir le bouton de filtre "▾" sous le
+                                         libellé, MinWidth conservé comme largeur plancher. -->
+                                    <DataGridTemplateColumn.Header>
+                                        <Border x:Name="UrgentHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding DataContext.TaskUrgencyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center"/>
+                                                <Button x:Name="UrgentFilterButton" Content="▾" Tag="Urgent" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <!-- ✅ Couleur selon la valeur (1=rouge, 2=orange, 3=jaune clair) via
@@ -1051,7 +1246,15 @@
                                 <!-- ✅ Largeur augmentée (16.07.2026, demande de Joe) : 61px coupait la
                                      dernière lettre de "Effectué" depuis l'agrandissement de la police
                                      des grilles (13→15). -->
-                                <DataGridTemplateColumn x:Name="TaskDoneColumn" Header="Effectué" Width="90">
+                                <DataGridTemplateColumn x:Name="TaskDoneColumn" Width="90">
+                                    <DataGridTemplateColumn.Header>
+                                        <Border x:Name="DoneHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
+                                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                                <TextBlock Text="Effectuée" HorizontalAlignment="Center"/>
+                                                <Button x:Name="DoneFilterButton" Content="▾" Tag="Done" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border x:Name="DoneCellBorder" Background="Transparent" CornerRadius="4" Padding="0">
@@ -1107,7 +1310,7 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0"
-                                       Text="Planning hebdomadaire"
+                                       Text="Planification hebdomadaire"
 							           FontSize="14"
 							           FontWeight="SemiBold"
 							           Foreground="#111827"
@@ -1138,7 +1341,7 @@
                                      pour l'ajout des intervenants au planning depuis la liste des
                                      tâches, figé par semaine (voir AutoAddToggleButton_Click). -->
                                 <Button x:Name="AutoAddToggleButton"
-								        Content="Automatique"
+								        Content="Intervenant automatique"
 								        Style="{StaticResource SmallBlueButtonStyle}"
 								        Height="34"
 								        ToolTip="Ajout automatique des intervenants au planning (choisis dans les tâches). Cliquer pour passer en manuel pour cette semaine."

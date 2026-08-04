@@ -459,9 +459,9 @@
             </Grid.ColumnDefinitions>
 
             <!-- Zone de texte planning -->
-            <GroupBox x:Name="PlanningTextZonesGroupBox" Grid.Column="0" ToolTip="Champ associé à:&#10;* Titre des champs de texte dans Planning.">
+            <GroupBox x:Name="PlanningTextZonesGroupBox" Grid.Column="0" ToolTip="Champ associé à:&#10;* Titre des champs de texte dans Planification.">
                 <DockPanel>
-                    <TextBox x:Name="LabelPlanningTextZoneTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* Titre des champs de texte dans Planning."/>
+                    <TextBox x:Name="LabelPlanningTextZoneTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* Titre des champs de texte dans Planification."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultPlanningTextZoneComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 

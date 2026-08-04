@@ -100,6 +100,39 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     // suppression/édition inchangés) ; seul l'affichage de TasksDataGrid passe par cette vue.
     private ICollectionView? _taskRowsView;
 
+    // ✅ Filtres façon Excel sur l'en-tête de la grille des Tâches (demande de Joe), même
+    // mécanisme que DashboardPage/ArchivesPage (bons actifs), mais composé avec le filtre de
+    // visibilité par semaine déjà en place (TaskRowVisibleInCurrentWeek) au lieu de le
+    // remplacer -- voir TaskRowMatchesFilters. Seulement des colonnes "texte" ici (pas de
+    // colonne date filtrée sur cette grille), donc pas d'équivalent ColumnKind/DateFilterPanel.
+    private readonly Dictionary<string, HashSet<string>> _activeTaskValueFilters = new();
+
+    private string? _taskSortColumnKey;
+    private System.ComponentModel.ListSortDirection _taskSortDirection = System.ComponentModel.ListSortDirection.Ascending;
+
+    // ✅ Distingue un tri choisi explicitement (bordure bleue sur l'en-tête) de l'absence de tri
+    // -- même principe que DashboardPage._sortIsUserChosen.
+    private bool _taskSortIsUserChosen;
+
+    private string? _currentTaskFilterColumnKey;
+    private List<TaskFilterOption> _taskFilterPopupOptions = new();
+
+    public sealed class TaskFilterOption : INotifyPropertyChanged
+    {
+        public string Value { get; set; } = "";
+        public int Count { get; set; }
+        public string DisplayText => $"{Value}  ({Count})";
+
+        private bool _isChecked = true;
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set { _isChecked = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsChecked))); }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
+
     // ✅ jour de départ configurable (par l’utilisateur)
     private DayOfWeek _weekStartDay = DayOfWeek.Monday;
 
@@ -278,10 +311,165 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // n'est donc réévalué qu'à des moments précis et maîtrisés : changement de semaine
         // (ApplyPlanningHeadersAndSyncDatePickers) et coche "Effectué" (TaskDoneCheckBox_Click).
         var view = CollectionViewSource.GetDefaultView(_taskRows);
-        view.Filter = TaskRowVisibleInCurrentWeek;
+
+        // ✅ Filtres façon Excel (demande de Joe) : UN SEUL delegate combine la visibilité par
+        // semaine déjà en place ET les filtres à cases à cocher par colonne -- un ICollectionView
+        // n'accepte qu'un seul Filter à la fois, pas question d'en empiler un second.
+        view.Filter = TaskRowMatchesFilters;
+
+        view.SortDescriptions.Clear();
+        if (_taskSortColumnKey != null)
+            view.SortDescriptions.Add(new System.ComponentModel.SortDescription(_taskSortColumnKey, _taskSortDirection));
 
         _taskRowsView = view;
         TasksDataGrid.ItemsSource = view;
+    }
+
+    private bool TaskRowMatchesFilters(object obj)
+    {
+        if (!TaskRowVisibleInCurrentWeek(obj)) return false;
+        if (obj is not TaskRow r) return true;
+
+        foreach (var kvp in _activeTaskValueFilters)
+        {
+            if (!kvp.Value.Contains(GetTaskColumnValue(r, kvp.Key)))
+                return false;
+        }
+
+        return true;
+    }
+
+    // ✅ Valeur normalisée par colonne pour le filtre à cases à cocher (demande de Joe), même
+    // principe que DashboardPage.GetColumnValue.
+    private static string GetTaskColumnValue(TaskRow r, string columnKey) => columnKey switch
+    {
+        "Building" => string.IsNullOrWhiteSpace(r.Building) ? "(Non défini)" : r.Building.Trim(),
+        "Floor" => string.IsNullOrWhiteSpace(r.Floor) ? "(Non défini)" : r.Floor.Trim(),
+        "Category" => string.IsNullOrWhiteSpace(r.Category) ? "(Non défini)" : r.Category.Trim(),
+        "Company" => string.IsNullOrWhiteSpace(r.Company) ? "(Non défini)" : r.Company.Trim(),
+        "Urgent" => string.IsNullOrWhiteSpace(r.Urgent) ? "(Non défini)" : r.Urgent.Trim(),
+        "Done" => r.Done ? "Effectuée" : "Non effectuée",
+        _ => ""
+    };
+
+    // ✅ "Univers" pour calculer les valeurs distinctes/comptages du popup (demande de Joe) :
+    // les tâches actuellement visibles cette semaine (avant filtre de colonne), pas TOUTE
+    // _taskRows (qui inclut aussi les tâches archivées/à la corbeille/hors semaine, qu'on ne
+    // veut pas proposer dans le filtre puisqu'elles ne s'affichent de toute façon jamais ici).
+    private IEnumerable<TaskRow> TaskRowsForCurrentWeek() => _taskRows.Where(TaskRowVisibleInCurrentWeek);
+
+    private void TaskColumnFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not string columnKey) return;
+
+        _currentTaskFilterColumnKey = columnKey;
+
+        var rows = TaskRowsForCurrentWeek().ToList();
+
+        TaskAlphaSortCheckBox.IsChecked = _taskSortColumnKey == columnKey && _taskSortDirection == System.ComponentModel.ListSortDirection.Ascending;
+
+        var allValues = rows
+            .Select(r => GetTaskColumnValue(r, columnKey))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var counts = rows
+            .GroupBy(r => GetTaskColumnValue(r, columnKey), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        var active = _activeTaskValueFilters.TryGetValue(columnKey, out var set) ? set : null;
+
+        _taskFilterPopupOptions = allValues
+            .Select(v => new TaskFilterOption { Value = v, Count = counts.TryGetValue(v, out var c) ? c : 0, IsChecked = active == null || active.Contains(v) })
+            .ToList();
+
+        TaskFilterOptionsItemsControl.ItemsSource = _taskFilterPopupOptions;
+        TaskFilterSelectAllCheckBox.IsChecked = _taskFilterPopupOptions.All(o => o.IsChecked);
+
+        TaskColumnFilterPopup.PlacementTarget = fe;
+        TaskColumnFilterPopup.IsOpen = true;
+    }
+
+    private void TaskFilterSelectAllCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        var check = TaskFilterSelectAllCheckBox.IsChecked == true;
+        foreach (var o in _taskFilterPopupOptions)
+            o.IsChecked = check;
+    }
+
+    private void TaskColumnFilterCancel_Click(object sender, RoutedEventArgs e)
+    {
+        TaskColumnFilterPopup.IsOpen = false;
+    }
+
+    private void TaskColumnFilterApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTaskFilterColumnKey == null)
+        {
+            TaskColumnFilterPopup.IsOpen = false;
+            return;
+        }
+
+        var columnKey = _currentTaskFilterColumnKey;
+
+        var checkedValues = _taskFilterPopupOptions.Where(o => o.IsChecked).Select(o => o.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (checkedValues.Count == _taskFilterPopupOptions.Count)
+            _activeTaskValueFilters.Remove(columnKey);
+        else
+            _activeTaskValueFilters[columnKey] = checkedValues;
+
+        if (TaskAlphaSortCheckBox.IsChecked == true)
+        {
+            _taskSortColumnKey = columnKey;
+            _taskSortDirection = System.ComponentModel.ListSortDirection.Ascending;
+            _taskSortIsUserChosen = true;
+        }
+        else if (_taskSortColumnKey == columnKey)
+        {
+            _taskSortColumnKey = null;
+            _taskSortIsUserChosen = false;
+        }
+
+        TaskColumnFilterPopup.IsOpen = false;
+
+        UpdateTaskFilterButtonIndicators();
+
+        // ✅ Filtre + tri réappliqués via AttachTaskRowsView (pas seulement Refresh()) : un
+        // changement de tri nécessite de reposer les SortDescriptions, pas seulement de
+        // réévaluer le Filter.
+        AttachTaskRowsView();
+    }
+
+    private void UpdateTaskFilterButtonIndicators()
+    {
+        SetTaskFilterHeaderState(BuildingFilterButton, BuildingHeaderBorder, "Building");
+        SetTaskFilterHeaderState(FloorFilterButton, FloorHeaderBorder, "Floor");
+        SetTaskFilterHeaderState(CategoryFilterButton, CategoryHeaderBorder, "Category");
+        SetTaskFilterHeaderState(CompanyFilterButton, CompanyHeaderBorder, "Company");
+        SetTaskFilterHeaderState(UrgentFilterButton, UrgentHeaderBorder, "Urgent");
+        SetTaskFilterHeaderState(DoneFilterButton, DoneHeaderBorder, "Done");
+    }
+
+    private bool IsTaskColumnFilterActive(string columnKey) =>
+        _activeTaskValueFilters.ContainsKey(columnKey) ||
+        (_taskSortColumnKey == columnKey && _taskSortIsUserChosen);
+
+    private void SetTaskFilterHeaderState(WpfButton? button, System.Windows.Controls.Border? headerBorder, string columnKey)
+    {
+        var active = IsTaskColumnFilterActive(columnKey);
+
+        if (headerBorder != null)
+            headerBorder.BorderBrush = active
+                ? new WpfSolidColorBrush((WpfColor)WpfColorConverter.ConvertFromString("#2563EB")!)
+                : WpfBrushes.Transparent;
+
+        if (button == null) return;
+        button.Style = (Style)(active
+            ? FindResource("FilterHeaderButtonActiveStyle")
+            : FindResource("FilterHeaderButtonStyle"));
     }
 
     private bool TaskRowVisibleInCurrentWeek(object obj)
@@ -291,6 +479,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // ✅ 30.07.2026 (demande de Joe) : une tâche archivée disparaît de la grille active,
         // quelle que soit la semaine consultée -- seule "Archives tâches" l'affiche.
         if (r.IsArchived) return false;
+
+        // ✅ Corbeille tâches (demande de Joe, même principe qu'Archives) : une tâche
+        // supprimée ("Supprimer") va en corbeille au lieu d'être effacée directement, seule
+        // "Corbeille tâches" l'affiche.
+        if (r.IsTrashed) return false;
 
         var viewedWeekStart = SnapToStartOfWeek(_startDay, _weekStartDay);
 
@@ -976,6 +1169,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         ExportPdfButton_Click(this, new RoutedEventArgs());
     }
+
+    // ✅ Archives/Corbeille (04.08.2026, demande de Joe, compromis "menu trop long") : retirées
+    // du menu global, deviennent le sous-menu d'accès pour la variante Tâches.
+    private void PlanningArchivesButton_Click(object sender, RoutedEventArgs e) => _main.ShowArchivesTasks();
+
+    private void PlanningTrashButton_Click(object sender, RoutedEventArgs e) => _main.ShowTrashedTasks();
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
@@ -2540,6 +2739,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         SaveProjectTasks();
     }
 
+    // ✅ Fix (demande de Joe : "il manque la ligne Corbeille" dans le widget Tâches du
+    // Tableau de bord) : "Supprimer" n'efface plus directement -- la tâche est marquée
+    // en corbeille (même principe qu'Archiver, voir ArchiveTaskRowButton_Click),
+    // disparaît de la grille active via TaskRowVisibleInCurrentWeek, consultable/
+    // restaurable depuis TrashedTasksPage.
     private void RemoveTaskRowButton_Click(object sender, RoutedEventArgs e)
     {
         if (!_isPageActive) return;
@@ -2561,7 +2765,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (toRemove.Count == 0) return;
 
         foreach (var r in toRemove)
-            _taskRows.Remove(r);
+        {
+            r.IsTrashed = true;
+            r.TrashedAt = DateTime.Now;
+            r.IsSelected = false;
+        }
 
         // ✅ 30.07.2026 (demande de Joe : "elle reste cochée une fois le travail fait") : la
         // case d'entête ne reflète rien automatiquement (elle n'est pas liée aux lignes), donc
@@ -2569,6 +2777,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (_taskSelectAllCheckBox != null) _taskSelectAllCheckBox.IsChecked = false;
 
         SaveProjectTasks();
+
+        // ✅ Fix (04.08.2026, demande de Joe : "les tâches restent affichées tant que je ne
+        // change pas de page") : oublié ici, contrairement à ArchiveTaskRowButton_Click -- le
+        // filtre de la vue (TaskRowVisibleInCurrentWeek) doit être réévalué pour que la tâche
+        // mise à la corbeille disparaisse immédiatement de la grille active.
+        _taskRowsView?.Refresh();
     }
 
     // ✅ 30.07.2026 (demande de Joe) : "Archives tâches" -- même sélection que "Supprimer",
@@ -2645,6 +2859,29 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             row.TodoDocumentXaml = win.ResultDocumentXaml;
             SaveProjectTasks();
         }
+    }
+
+    // ✅ Fix (demande de Joe : "si je modifie un descriptif d'une seule ligne, il ne
+    // s'enregistre pas directement") : la case d'édition inline du Descriptif ne fait que
+    // mettre à jour TaskRow.Todo en mémoire (binding PropertyChanged) ; sans ceci, la
+    // sauvegarde sur disque n'arrivait qu'en quittant la page Planification, pas tout de
+    // suite en sortant de la case comme pour les zones de texte du plan.
+    private void TaskTodoTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_isPageActive) return;
+        SaveProjectTasks();
+    }
+
+    // ✅ Fix (2e passe, demande de Joe : le LostFocus seul ne suffisait pas — pas toujours
+    // déclenché selon la façon dont on quitte la case dans un DataGrid). CellEditEnding est
+    // l'événement natif du DataGrid, garanti à chaque sortie de cellule éditée quelle que
+    // soit la méthode (Tab, clic ailleurs, Entrée, changement de sélection). Sauvegarde
+    // différée via Dispatcher pour laisser le DataGrid terminer son propre commit interne
+    // avant de lire _taskRows (évite une ré-entrance dans CommitEdit).
+    private void TasksDataGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (!_isPageActive) return;
+        Dispatcher.BeginInvoke(new Action(SaveProjectTasks), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void AddPlanningRowButton_Click(object sender, RoutedEventArgs e)
@@ -2743,13 +2980,16 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         if (_autoAddCompanyToPlanning)
         {
-            AutoAddToggleButton.Content = "Automatique";
+            // ✅ Renommé "Intervenant automatique" (demande de Joe, 04.08.2026).
+            AutoAddToggleButton.Content = "Intervenant automatique";
             AutoAddToggleButton.Style = (Style)FindResource("SmallBlueButtonStyle");
         }
         else
         {
+            // ✅ Police/bordure bleues en mode Manuel (demande de Joe, 04.08.2026), remplace le
+            // rouge précédent (SmallBlackButtonStyle) -- même style que "Structurer la semaine".
             AutoAddToggleButton.Content = "Manuel";
-            AutoAddToggleButton.Style = (Style)FindResource("SmallBlackButtonStyle");
+            AutoAddToggleButton.Style = (Style)FindResource("OutlineBlueButtonStyle");
         }
     }
 
@@ -2813,6 +3053,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     {
         row.PropertyChanged -= TaskRow_PropertyChanged_AutoAddCompany;
         row.PropertyChanged += TaskRow_PropertyChanged_AutoAddCompany;
+
+        // ✅ 04.08.2026 (demande de Joe) : "Archiver sélection"/"Déplacer dans la corbeille"
+        // grisés tant qu'aucune ligne n'est sélectionnée (case cochée), même point d'attache
+        // que le watcher ci-dessus (couvre les lignes existantes ET ajoutées plus tard).
+        row.PropertyChanged -= TaskRow_PropertyChanged_SelectionButtons;
+        row.PropertyChanged += TaskRow_PropertyChanged_SelectionButtons;
     }
 
     private void TaskRow_PropertyChanged_AutoAddCompany(object? sender, PropertyChangedEventArgs e)
@@ -2821,6 +3067,23 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (sender is not TaskRow row) return;
         EnsureCompanyInPlanning(row.Company);
     }
+
+    private void TaskRow_PropertyChanged_SelectionButtons(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(TaskRow.IsSelected)) return;
+        RefreshTaskSelectionButtonsState();
+    }
+
+    // ✅ 04.08.2026 (demande de Joe) : actif si au moins une case est cochée OU si une ligne est
+    // sélectionnée (bordure bleue), même principe que DashboardPage.AnyBatchSelected.
+    private void RefreshTaskSelectionButtonsState()
+    {
+        var anySelected = _taskRows.Any(r => r.IsSelected) || TasksDataGrid.SelectedItem != null;
+        if (ArchiveTaskRowButton != null) ArchiveTaskRowButton.IsEnabled = anySelected;
+        if (RemoveTaskRowButton != null) RemoveTaskRowButton.IsEnabled = anySelected;
+    }
+
+    private void TasksDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshTaskSelectionButtonsState();
 
     private void WeekendColumnVisibility_Changed(object sender, RoutedEventArgs e)
     {
@@ -3180,7 +3443,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                         DoneAt = r.DoneAt,
                         CreatedWeekStart = r.CreatedWeekStart,
                         IsArchived = r.IsArchived,
-                        ArchivedAt = r.ArchivedAt
+                        ArchivedAt = r.ArchivedAt,
+                        IsTrashed = r.IsTrashed,
+                        TrashedAt = r.TrashedAt
                     });
 
                 return;
@@ -3253,7 +3518,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 DoneAt = r.DoneAt,
                 CreatedWeekStart = r.CreatedWeekStart,
                 IsArchived = r.IsArchived,
-                ArchivedAt = r.ArchivedAt
+                ArchivedAt = r.ArchivedAt,
+                IsTrashed = r.IsTrashed,
+                TrashedAt = r.TrashedAt
             }).ToList();
 
             ProjectTasksStore.Save(pid, rows);
@@ -4039,6 +4306,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             if (args.NewItems == null) return;
             foreach (TaskRow r in args.NewItems) AttachTaskRowCompanyWatcher(r);
         };
+        RefreshTaskSelectionButtonsState();
         // Forcer récréation des brushes lors du changement de projet :
         // on s'assure que les converters reçoivent une nouvelle instance du dictionnaire
         this.DataContextChanged += (_, __) =>
@@ -4381,11 +4649,38 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public bool IsArchived { get => _isArchived; set => SetField(ref _isArchived, value); }
         public DateTime? ArchivedAt { get => _archivedAt; set => SetField(ref _archivedAt, value); }
 
+        // ✅ Corbeille (demande de Joe, même principe que IsArchived/ArchivedAt) : une tâche
+        // supprimée ("Supprimer") disparaît de la grille active (voir
+        // TaskRowVisibleInCurrentWeek) mais reste en mémoire/fichier, consultable et
+        // restaurable depuis TrashedTasksPage.
+        private bool _isTrashed;
+        private DateTime? _trashedAt;
+
+        public bool IsTrashed { get => _isTrashed; set => SetField(ref _isTrashed, value); }
+        public DateTime? TrashedAt { get => _trashedAt; set => SetField(ref _trashedAt, value); }
+
         public string Ref { get => _ref; set => SetField(ref _ref, value); }
         public string Company { get => _company; set => SetField(ref _company, value); }
         public string Building { get => _building; set => SetField(ref _building, value); }
         public string Floor { get => _floor; set => SetField(ref _floor, value); }
-        public string Todo { get => _todo; set => SetField(ref _todo, value); }
+        // ✅ Fix (demande de Joe : "quand je modifie dans la grille, ça ne s'enregistre pas
+        // dans la fiche") : TaskDescriptionWindow privilégie TOUJOURS TodoDocumentXaml s'il
+        // existe (voir son constructeur), pour afficher la mise en forme. Si l'utilisateur
+        // modifie Todo directement dans la grille (édition simple ligne) sans repasser par la
+        // fiche, TodoDocumentXaml restait l'ANCIEN contenu enrichi, périmé -> la fiche
+        // continuait de l'afficher, masquant le nouveau texte. On invalide donc le document
+        // enrichi dès que Todo change réellement ; la fiche (TaskExpandDescriptionButton_Click)
+        // et le chargement (LoadProjectTasks) réassignent Todo PUIS TodoDocumentXaml juste
+        // après dans cet ordre, donc l'état final reste correct dans ces deux cas.
+        public string Todo
+        {
+            get => _todo;
+            set
+            {
+                if (SetField(ref _todo, value))
+                    TodoDocumentXaml = "";
+            }
+        }
         public string TodoDocumentXaml { get => _todoDocumentXaml; set => SetField(ref _todoDocumentXaml, value); }
         public string Category { get => _category; set => SetField(ref _category, value); }
         public string Reserve { get => _reserve; set => SetField(ref _reserve, value); }

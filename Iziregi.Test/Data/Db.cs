@@ -175,6 +175,65 @@ public static class Db
         """);
         TryCreateUniqueIndex(con, "UX_TaskUrgencies_ProjectId_Name", "TaskUrgencies", "ProjectId, Name");
 
+        // ✅ Bloc-notes du Tableau de bord (demande de Joe) : plusieurs notes libres par dossier.
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS DashboardNotes (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ProjectId INTEGER NOT NULL,
+                Text TEXT NOT NULL DEFAULT ''
+            );
+        """);
+        // ✅ Couleur fixée à la création (demande de Joe), TryAddColumn pour les notes déjà
+        // créées avant l'ajout de cette colonne (BuildNoteTile applique un repli si vide).
+        TryAddColumn(con, "DashboardNotes", "ColorHex", "TEXT NOT NULL DEFAULT ''");
+
+        // ✅ Carnet d'adresses (demande de Joe, 04.08.2026), par dossier : remplace la section
+        // "Adresse dossier / Banque de dossiers" de la page Bons d'intervention (devenue
+        // obsolète, cet accès existe désormais depuis Paramètres). Contacts structurés
+        // (Nom/Adresse/Téléphone/E-mail) + Groupes pour envoyer un e-mail à plusieurs contacts
+        // à la fois (voir AddressBookWindow).
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS Contacts (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ProjectId INTEGER NOT NULL,
+                Name TEXT NOT NULL DEFAULT '',
+                Address TEXT NOT NULL DEFAULT '',
+                Phone TEXT NOT NULL DEFAULT '',
+                Email TEXT NOT NULL DEFAULT ''
+            );
+        """);
+        // ✅ Ajoutés (04.08.2026, demande de Joe) : Entreprise, Site web, 2e numéro de
+        // téléphone.
+        TryAddColumn(con, "Contacts", "Company", "TEXT NOT NULL DEFAULT ''");
+        TryAddColumn(con, "Contacts", "Website", "TEXT NOT NULL DEFAULT ''");
+        TryAddColumn(con, "Contacts", "Phone2", "TEXT NOT NULL DEFAULT ''");
+        // ✅ Ajoutés (04.08.2026, demande de Joe) : "Intervenant" (lié à la liste Entreprise du
+        // projet, avec pastille de couleur -- voir Db.GetCompanyColorMap/GetCompanies, même
+        // source que Bons d'intervention/Planning) et "Champ libre" (texte libre, dernier champ).
+        TryAddColumn(con, "Contacts", "Intervenant", "TEXT NOT NULL DEFAULT ''");
+        TryAddColumn(con, "Contacts", "FreeText", "TEXT NOT NULL DEFAULT ''");
+        // ✅ Ajouté (04.08.2026, demande de Joe) : "Titre" (fonction/civilité), en 1ère position
+        // dans la fiche contact, affiché aussi dans "Associé à :" de la fiche groupe.
+        TryAddColumn(con, "Contacts", "Title", "TEXT NOT NULL DEFAULT ''");
+
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS ContactGroups (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ProjectId INTEGER NOT NULL,
+                Name TEXT NOT NULL DEFAULT ''
+            );
+        """);
+
+        // ✅ Pas de clé étrangère SQLite déclarée (comme le reste de ce fichier) : le nettoyage
+        // des lignes orphelines se fait manuellement dans DeleteContact/DeleteContactGroup.
+        con.Execute("""
+            CREATE TABLE IF NOT EXISTS ContactGroupMembers (
+                GroupId INTEGER NOT NULL,
+                ContactId INTEGER NOT NULL,
+                PRIMARY KEY (GroupId, ContactId)
+            );
+        """);
+
         // Colonnes ajoutées progressivement (compat)
         TryAddColumn(con, "WorkOrders", "Description", "TEXT");
         TryAddColumn(con, "WorkOrders", "IsCancelled", "INTEGER NOT NULL DEFAULT 0");
@@ -198,6 +257,10 @@ public static class Db
 
         // ✅ NOUVEAU (20.07.2026) : Forfait TTC saisi directement (voir WorkOrder.ForfaitTtc).
         TryAddColumn(con, "WorkOrders", "ForfaitTtc", "REAL NOT NULL DEFAULT 0");
+
+        // ✅ NOUVEAU (04.08.2026, demande de Joe) : N° du devis, obligatoire dès qu'un PDF est
+        // joint (voir WorkOrder.ForfaitQuoteNumber, WorkOrderWindow.EnsureQuoteRequiredFieldsOrWarn).
+        TryAddColumn(con, "WorkOrders", "ForfaitQuoteNumber", "TEXT NOT NULL DEFAULT ''");
 
         TryAddColumn(con, "WorkOrders", "QuoteNotes", "TEXT");
 
@@ -663,6 +726,265 @@ public static class Db
 
     public static void SetDefaultTaskUrgency(long projectId, string value) =>
         SetSetting(MakeProjectKey("DefaultTaskUrgency", projectId), (value ?? "").Trim());
+
+    // =========================
+    // ✅ Bloc-notes du Tableau de bord (demande de Joe) : plusieurs notes indépendantes par
+    // dossier (pas un simple champ Settings comme la 1ère version -- une vraie table, une
+    // ligne par note, cohérent avec les autres listes par projet ci-dessus). Pas de Trim() sur
+    // le texte : c'est du texte libre multi-lignes, on ne veut pas ronger les retours à la
+    // ligne ou les espaces volontaires en début/fin de saisie.
+    // =========================
+    public sealed class DashboardNote
+    {
+        public long Id { get; set; }
+        public string Text { get; set; } = "";
+
+        // ✅ Fixée à la création (demande de Joe : "les notes gardent leur couleur du début à
+        // la fin"), plus recalculée par position dans la liste à chaque affichage -- sinon,
+        // supprimer une note décale l'index de toutes les suivantes et change leur couleur.
+        public string ColorHex { get; set; } = "";
+    }
+
+    public static List<DashboardNote> GetDashboardNotes(long projectId)
+    {
+        if (projectId <= 0)
+            return new List<DashboardNote>();
+
+        using var con = Open();
+        con.Open();
+
+        return con.Query<DashboardNote>(
+            "SELECT Id, Text, ColorHex FROM DashboardNotes WHERE ProjectId=@ProjectId ORDER BY Id;",
+            new { ProjectId = projectId }
+        ).ToList();
+    }
+
+    public static long InsertDashboardNote(long projectId, string text, string colorHex)
+    {
+        if (projectId <= 0)
+            return 0;
+
+        using var con = Open();
+        con.Open();
+
+        return con.ExecuteScalar<long>("""
+            INSERT INTO DashboardNotes (ProjectId, Text, ColorHex) VALUES (@ProjectId, @Text, @ColorHex);
+            SELECT last_insert_rowid();
+        """, new { ProjectId = projectId, Text = text ?? "", ColorHex = colorHex ?? "" });
+    }
+
+    public static void UpdateDashboardNoteText(long noteId, string text)
+    {
+        if (noteId <= 0)
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute("UPDATE DashboardNotes SET Text=@Text WHERE Id=@Id;", new { Id = noteId, Text = text ?? "" });
+    }
+
+    public static void DeleteDashboardNote(long noteId)
+    {
+        if (noteId <= 0)
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute("DELETE FROM DashboardNotes WHERE Id=@Id;", new { Id = noteId });
+    }
+
+    // =========================
+    // ✅ Carnet d'adresses (demande de Joe) : contacts structurés + groupes, par dossier.
+    // =========================
+    public sealed class Contact
+    {
+        public long Id { get; set; }
+        public string Title { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Intervenant { get; set; } = "";
+        public string Company { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Phone2 { get; set; } = "";
+        public string Website { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string FreeText { get; set; } = "";
+    }
+
+    public static List<Contact> GetContacts(long projectId)
+    {
+        if (projectId <= 0)
+            return new List<Contact>();
+
+        using var con = Open();
+        con.Open();
+
+        return con.Query<Contact>(
+            "SELECT Id, Title, Name, Intervenant, Company, Address, Phone, Phone2, Website, Email, FreeText FROM Contacts WHERE ProjectId=@ProjectId ORDER BY Id;",
+            new { ProjectId = projectId }
+        ).ToList();
+    }
+
+    public static long InsertContact(long projectId)
+    {
+        if (projectId <= 0)
+            return 0;
+
+        using var con = Open();
+        con.Open();
+
+        return con.ExecuteScalar<long>("""
+            INSERT INTO Contacts (ProjectId, Title, Name, Intervenant, Company, Address, Phone, Phone2, Website, Email, FreeText)
+            VALUES (@ProjectId, '', '', '', '', '', '', '', '', '', '');
+            SELECT last_insert_rowid();
+        """, new { ProjectId = projectId });
+    }
+
+    public static void UpdateContact(long contactId, string field, string value)
+    {
+        if (contactId <= 0)
+            return;
+
+        // ✅ Nom de colonne choisi parmi une liste fermée (jamais depuis une saisie utilisateur
+        // libre) : pas de risque d'injection SQL malgré l'interpolation directe ci-dessous.
+        var column = field switch
+        {
+            "Title" => "Title",
+            "Name" => "Name",
+            "Intervenant" => "Intervenant",
+            "Company" => "Company",
+            "Address" => "Address",
+            "Phone" => "Phone",
+            "Phone2" => "Phone2",
+            "Website" => "Website",
+            "Email" => "Email",
+            "FreeText" => "FreeText",
+            _ => null
+        };
+        if (column == null)
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute($"UPDATE Contacts SET {column}=@Value WHERE Id=@Id;", new { Id = contactId, Value = value ?? "" });
+    }
+
+    public static void DeleteContact(long contactId)
+    {
+        if (contactId <= 0)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        con.Execute("DELETE FROM ContactGroupMembers WHERE ContactId=@Id;", new { Id = contactId }, tx);
+        con.Execute("DELETE FROM Contacts WHERE Id=@Id;", new { Id = contactId }, tx);
+
+        tx.Commit();
+    }
+
+    public sealed class ContactGroup
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    public static List<ContactGroup> GetContactGroups(long projectId)
+    {
+        if (projectId <= 0)
+            return new List<ContactGroup>();
+
+        using var con = Open();
+        con.Open();
+
+        return con.Query<ContactGroup>(
+            "SELECT Id, Name FROM ContactGroups WHERE ProjectId=@ProjectId ORDER BY Id;",
+            new { ProjectId = projectId }
+        ).ToList();
+    }
+
+    public static long InsertContactGroup(long projectId, string name)
+    {
+        if (projectId <= 0)
+            return 0;
+
+        using var con = Open();
+        con.Open();
+
+        return con.ExecuteScalar<long>("""
+            INSERT INTO ContactGroups (ProjectId, Name) VALUES (@ProjectId, @Name);
+            SELECT last_insert_rowid();
+        """, new { ProjectId = projectId, Name = name ?? "" });
+    }
+
+    public static void RenameContactGroup(long groupId, string name)
+    {
+        if (groupId <= 0)
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute("UPDATE ContactGroups SET Name=@Name WHERE Id=@Id;", new { Id = groupId, Name = name ?? "" });
+    }
+
+    public static void DeleteContactGroup(long groupId)
+    {
+        if (groupId <= 0)
+            return;
+
+        using var con = Open();
+        con.Open();
+        using var tx = con.BeginTransaction();
+
+        con.Execute("DELETE FROM ContactGroupMembers WHERE GroupId=@Id;", new { Id = groupId }, tx);
+        con.Execute("DELETE FROM ContactGroups WHERE Id=@Id;", new { Id = groupId }, tx);
+
+        tx.Commit();
+    }
+
+    public static HashSet<long> GetContactGroupMemberIds(long groupId)
+    {
+        var set = new HashSet<long>();
+        if (groupId <= 0)
+            return set;
+
+        using var con = Open();
+        con.Open();
+
+        foreach (var id in con.Query<long>("SELECT ContactId FROM ContactGroupMembers WHERE GroupId=@Id;", new { Id = groupId }))
+            set.Add(id);
+
+        return set;
+    }
+
+    public static void SetContactGroupMember(long groupId, long contactId, bool isMember)
+    {
+        if (groupId <= 0 || contactId <= 0)
+            return;
+
+        using var con = Open();
+        con.Open();
+
+        if (isMember)
+        {
+            con.Execute(
+                "INSERT OR IGNORE INTO ContactGroupMembers (GroupId, ContactId) VALUES (@GroupId, @ContactId);",
+                new { GroupId = groupId, ContactId = contactId }
+            );
+        }
+        else
+        {
+            con.Execute(
+                "DELETE FROM ContactGroupMembers WHERE GroupId=@GroupId AND ContactId=@ContactId;",
+                new { GroupId = groupId, ContactId = contactId }
+            );
+        }
+    }
 
     public static string GetDefaultPlace() => GetSetting("DefaultPlace") ?? "";
     public static void SetDefaultPlace(string value) => SetSetting("DefaultPlace", (value ?? "").Trim());
@@ -1368,7 +1690,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1398,7 +1720,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1429,7 +1751,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1458,7 +1780,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1488,7 +1810,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1518,7 +1840,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1564,7 +1886,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1594,7 +1916,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1625,7 +1947,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1660,7 +1982,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1694,7 +2016,7 @@ public static class Db
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
                 DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
             FROM WorkOrders
@@ -1755,6 +2077,7 @@ public static class Db
                 ForfaitPdfFileName=@ForfaitPdfFileName,
                 ForfaitPdfFileBytes=@ForfaitPdfFileBytes,
                 ForfaitTtc=@ForfaitTtc,
+                ForfaitQuoteNumber=@ForfaitQuoteNumber,
                 QuoteNotes=@QuoteNotes,
 
                 SignatureName=@SignatureName,
@@ -1798,6 +2121,7 @@ public static class Db
             ForfaitPdfFileName = (imported.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = imported.ForfaitPdfFileBytes,
             ForfaitTtc = imported.ForfaitTtc,
+            ForfaitQuoteNumber = (imported.ForfaitQuoteNumber ?? "").Trim(),
 
             QuoteNotes = imported.QuoteNotes ?? "",
 
@@ -1866,7 +2190,7 @@ public static class Db
                 QuoteName, QuoteDate,
                 DeadlineDate,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes,
                 SignatureName, SignatureDate, SignaturePng,
                 IsInCreation, IsSentToCompany, IsQuoteReceived, IsSentToSigner,
@@ -1883,7 +2207,7 @@ public static class Db
                 @QuoteName, @QuoteDate,
                 @DeadlineDate,
                 @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate,
-                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc,
+                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc, @ForfaitQuoteNumber,
                 @QuoteNotes,
                 @SignatureName, @SignatureDate, @SignaturePng,
                 0, 0, 0, 0,
@@ -1926,6 +2250,7 @@ public static class Db
             ForfaitPdfFileName = (imported.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = imported.ForfaitPdfFileBytes,
             ForfaitTtc = imported.ForfaitTtc,
+            ForfaitQuoteNumber = (imported.ForfaitQuoteNumber ?? "").Trim(),
 
             QuoteNotes = imported.QuoteNotes ?? "",
 
@@ -2080,6 +2405,7 @@ public static class Db
             ForfaitPdfFileName = AsString(row.ForfaitPdfFileName, ""),
             ForfaitPdfFileBytes = forfaitPdfBytes,
             ForfaitTtc = AsDouble(row.ForfaitTtc, 0),
+            ForfaitQuoteNumber = AsString(row.ForfaitQuoteNumber, ""),
 
             QuoteNotes = AsString(row.QuoteNotes),
 
@@ -2140,7 +2466,7 @@ public static class Db
                 QuoteName, QuoteDate,
                 DeadlineDate,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate,
-                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc,
+                ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, ProjectId,
                 SignatureName, SignatureDate, SignaturePng,
                 Reserve,
@@ -2156,7 +2482,7 @@ public static class Db
                 @QuoteName, @QuoteDate,
                 @DeadlineDate,
                 @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate,
-                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc,
+                @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc, @ForfaitQuoteNumber,
                 @QuoteNotes, @ProjectId,
                 @SignatureName, @SignatureDate, @SignaturePng,
                 @Reserve,
@@ -2207,6 +2533,7 @@ public static class Db
             ForfaitPdfFileName = (wo.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = wo.ForfaitPdfFileBytes,
             ForfaitTtc = wo.ForfaitTtc,
+            ForfaitQuoteNumber = (wo.ForfaitQuoteNumber ?? "").Trim(),
 
             QuoteNotes = wo.QuoteNotes ?? "",
             wo.ProjectId,
@@ -2286,6 +2613,7 @@ public static class Db
                 ForfaitPdfFileName=@ForfaitPdfFileName,
                 ForfaitPdfFileBytes=@ForfaitPdfFileBytes,
                 ForfaitTtc=@ForfaitTtc,
+                ForfaitQuoteNumber=@ForfaitQuoteNumber,
                 QuoteNotes=@QuoteNotes
             WHERE Id=@Id;
         """, new
@@ -2305,6 +2633,7 @@ public static class Db
             ForfaitPdfFileName = (wo.ForfaitPdfFileName ?? "").Trim(),
             ForfaitPdfFileBytes = wo.ForfaitPdfFileBytes,
             ForfaitTtc = wo.ForfaitTtc,
+            ForfaitQuoteNumber = (wo.ForfaitQuoteNumber ?? "").Trim(),
 
             QuoteNotes = wo.QuoteNotes ?? ""
         });

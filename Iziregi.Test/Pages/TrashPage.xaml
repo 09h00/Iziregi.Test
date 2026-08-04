@@ -34,6 +34,14 @@
 							<Trigger Property="IsMouseOver" Value="True">
 								<Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
 							</Trigger>
+							<!-- ✅ Fix (04.08.2026, demande de Joe : "tu n'as pas grisé les boutons") :
+							     un ControlTemplate custom ignore l'état IsEnabled=False par défaut, il
+							     faut un Trigger explicite, mêmes valeurs que ArchivesPage.xaml. -->
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
+								<Setter Property="Foreground" Value="#9CA3AF"/>
+							</Trigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
 				</Setter.Value>
@@ -242,14 +250,10 @@
 				Margin="0,0,0,8"
 				Effect="{StaticResource CardShadowEffect}">
 
-			<Grid>
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*"/>
-					<ColumnDefinition Width="Auto"/>
-				</Grid.ColumnDefinitions>
-
-				<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-	<TextBlock Text="Corbeille"
+			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+	<!-- ✅ Renommé "Corbeille des bons" (demande de Joe, 04.08.2026), même principe que
+	     "Archives des bons d'intervention". -->
+	<TextBlock Text="Corbeille des bons"
 	           FontSize="18"
 	           FontWeight="SemiBold"
 	           Foreground="#111827"
@@ -260,6 +264,7 @@
 	        Style="{StaticResource RestoreSmallButtonStyle}"
 	        Click="RestoreSelected_Click"
 	        IsEnabled="False"
+	        Height="34"
 	        Margin="0,0,6,0"/>
 
 	<Button x:Name="DeleteSelectionButton"
@@ -267,14 +272,37 @@
 	        Style="{StaticResource DangerSmallButtonStyle}"
 	        Click="DeleteSelected_Click"
 	        IsEnabled="False"
+	        Height="34"
 	        Margin="0,0,6,0"/>
 
 	<Button Content="Rafraîchir"
 	        Style="{StaticResource SmallButtonStyle}"
 	        BorderBrush="Black"
+	        Height="34"
+	        Margin="0,0,6,0"
 	        Click="Refresh_Click"/>
+
+	<!-- ✅ Retour (04.08.2026, demande de Joe) : Corbeille n'a plus de bouton dédié
+	     dans le menu global (voir MainWindow.xaml), accès désormais via "Bons
+	     d'intervention", ce bouton ramène à la page d'origine. Déplacé à côté de
+	     "Rafraîchir" (demande de Joe, 04.08.2026). -->
+	<Button Content="Page des bons"
+	        Style="{StaticResource SmallButtonStyle}"
+	        BorderBrush="Black"
+	        Height="34"
+	        Margin="0,0,6,0"
+	        Click="BackToParent_Click"/>
+
+	<!-- ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis Corbeille, va
+	     directement à Archives sans repasser par "Bons d'intervention". Fond gris clair, même
+	     couleur que "Page archives" sur Bons d'intervention/Planification. -->
+	<Button Content="Page archives"
+	        Style="{StaticResource SmallButtonStyle}"
+	        Background="#F3F4F6"
+	        BorderBrush="Black"
+	        Height="34"
+	        Click="GoToArchives_Click"/>
 </StackPanel>
-			</Grid>
 		</Border>
 
 		<!-- TABLEAU -->
@@ -290,7 +318,8 @@
 					  Grid.Row="1"
 					  Style="{StaticResource GridStyle}"
 					  ColumnWidth="Auto"
-					  MouseDoubleClick="TrashedGrid_MouseDoubleClick">
+					  MouseDoubleClick="TrashedGrid_MouseDoubleClick"
+					  SelectionChanged="TrashedGrid_SelectionChanged">
 
 				<DataGrid.Columns>
 
@@ -653,6 +682,25 @@
 							</DataTemplate>
 						</DataGridTemplateColumn.CellTemplate>
 					</DataGridTemplateColumn>
+
+					<!-- ✅ Colonnes manquantes (demande de Joe, 04.08.2026), même principe que
+					     "Créé le" ci-dessus (lecture seule), pas les DatePicker éditables de
+					     WorkOrdersGrid (Dashboard), une entrée à la Corbeille reste figée. -->
+					<!-- Distribué le -->
+					<DataGridTextColumn Header="Distribué le"
+										Binding="{Binding WorkOrder.DistributedAt, StringFormat=dd.MM.yyyy}"
+										Width="Auto"
+										MinWidth="70"
+										ElementStyle="{StaticResource GridTextCellStyle}"
+										IsReadOnly="True"/>
+
+					<!-- Effectué le -->
+					<DataGridTextColumn Header="Effectué le"
+										Binding="{Binding WorkOrder.PerformedAt, StringFormat=dd.MM.yyyy}"
+										Width="Auto"
+										MinWidth="70"
+										ElementStyle="{StaticResource GridTextCellStyle}"
+										IsReadOnly="True"/>
 
 					<!-- Actions -->
 					<DataGridTemplateColumn Header="Actions" Width="150" IsReadOnly="True">

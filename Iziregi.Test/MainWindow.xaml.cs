@@ -112,9 +112,11 @@ public partial class MainWindow : Window
     private ArchivesPage? _archivesPage;
     private ArchivesTasksPage? _archivesTasksPage;
     private TrashPage? _trashPage;
+    private TrashedTasksPage? _trashedTasksPage;
     private ListsPage? _listsPage;
     private PlanningPage? _planningPage;
-    private ArchitectIdentityPage? _architectIdentityPage;
+    private Pages.SettingsPage? _settingsPage;
+    private Pages.AddressBookPage? _addressBookPage;
 
     public MainWindow()
     {
@@ -1507,38 +1509,41 @@ public partial class MainWindow : Window
     private void NavOverview_Click(object sender, RoutedEventArgs e) => ShowOverview();
     private void NavDashboard_Click(object sender, RoutedEventArgs e) => ShowDashboard();
     private void NavAccounting_Click(object sender, RoutedEventArgs e) => ShowAccounting();
-    // ✅ 30.07.2026 (demande de Joe) : "Archives" ouvre maintenant un menu déroulant (2
-    // choix) au lieu d'aller directement aux archives des bons.
-    private void NavArchivesDropdown_Click(object sender, RoutedEventArgs e)
-    {
-        ArchivesNavPopup.IsOpen = !ArchivesNavPopup.IsOpen;
-    }
 
-    private void NavArchivesBons_Click(object sender, RoutedEventArgs e)
-    {
-        ArchivesNavPopup.IsOpen = false;
-        ShowArchives();
-    }
+    // ✅ Sous-menus Archives/Corbeille (04.08.2026, demande de Joe : "où sont les sous-menus ?"
+    // -- les avoir seulement dans le contenu des pages n'était pas assez visible, il fallait
+    // que ce soit accessible depuis la barre de navigation, comme l'ancien "Corbeille ▾"). Les
+    // petites flèches ▾ ouvrent un Popup séparé, le clic direct sur "Planification"/"Bons
+    // d'intervention" reste inchangé (va toujours à la page elle-même).
+    private void PlanningSubMenuButton_Click(object sender, RoutedEventArgs e) => PlanningSubMenuPopup.IsOpen = !PlanningSubMenuPopup.IsOpen;
+    private void PlanningSubMenuArchives_Click(object sender, RoutedEventArgs e) { PlanningSubMenuPopup.IsOpen = false; ShowArchivesTasks(); }
+    private void PlanningSubMenuTrash_Click(object sender, RoutedEventArgs e) { PlanningSubMenuPopup.IsOpen = false; ShowTrashedTasks(); }
 
-    private void NavArchivesTasksMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ArchivesNavPopup.IsOpen = false;
-        ShowArchivesTasks();
-    }
-    private void NavTrash_Click(object sender, RoutedEventArgs e) => ShowTrash();
+    private void BonsSubMenuButton_Click(object sender, RoutedEventArgs e) => BonsSubMenuPopup.IsOpen = !BonsSubMenuPopup.IsOpen;
+    private void BonsSubMenuArchives_Click(object sender, RoutedEventArgs e) { BonsSubMenuPopup.IsOpen = false; ShowArchives(); }
+    private void BonsSubMenuTrash_Click(object sender, RoutedEventArgs e) { BonsSubMenuPopup.IsOpen = false; ShowTrash(); }
     private void NavLists_Click(object sender, RoutedEventArgs e) => ShowLists();
     private void NavPlanning_Click(object sender, RoutedEventArgs e) => ShowPlanning();
-    private void NavArchitectIdentity_Click(object sender, RoutedEventArgs e) => ShowArchitectIdentity();
 
-    private void NavSettings_Click(object sender, RoutedEventArgs e)
-    {
-        var setup = new ConfigSetupWindow();
-        setup.ShowDialog();
-    }
+    // ✅ Carnet d'adresses (04.08.2026, demande de Joe) : accessible depuis n'importe quelle
+    // page (barre de navigation globale).
+    // ✅ 4e passe (04.08.2026, demande de Joe : "pleine page par défaut" + "menu navigation
+    // visible") : devient une page embarquée (ShowAddressBook, même principe que ShowLists/
+    // ShowSettings) au lieu d'une fenêtre modale séparée.
+    private void NavAddressBook_Click(object sender, RoutedEventArgs e) => ShowAddressBook();
+
+    // ✅ 01.08.2026 (demande de Joe) : "Paramètres" ouvrait auparavant ConfigSetupWindow en
+    // fenêtre modale -- devient une page embarquée (SettingsPage) avec un sous-menu regroupant
+    // Identité société / Banque de dossiers / Connexion / Démarrage / Vos données / Éthique.
+    // ConfigSetupWindow elle-même reste inchangée, toujours utilisée pour la configuration
+    // initiale obligatoire au 1er lancement.
+    private void NavSettings_Click(object sender, RoutedEventArgs e) => ShowSettings();
 
     // ✅ Aide (24.07.2026, demande de Joe) : ouvre la page d'aide (mode d'emploi PDF, destiné à
     // l'architecte — entreprises/signataires n'en ont pas besoin) dans le navigateur par défaut.
-    private void NavHelp_Click(object sender, RoutedEventArgs e)
+    // ✅ 01.08.2026 (demande de Joe) : internal -- appelée aussi depuis SettingsPage (sous-menu
+    // "Paramètres" > "Mode d'emploi"), plus de bouton séparé dans la barre de nav principale.
+    internal void NavHelp_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -1575,8 +1580,9 @@ public partial class MainWindow : Window
         }
     }
 
-    // ✅ CGV version d'essai (29.07.2026, demande de Joe) : même principe que NavHelp_Click.
-    private void NavCgvEssai_Click(object sender, RoutedEventArgs e)
+    // ✅ CGU (29.07.2026, demande de Joe) : même principe que NavHelp_Click. Internal (01.08.2026)
+    // -- appelée aussi depuis SettingsPage (sous-menu "Paramètres" > "CGU").
+    internal void NavCgvEssai_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -1611,8 +1617,8 @@ public partial class MainWindow : Window
     {
         var all = new[]
         {
-            NavOverviewButton, NavDashboardButton, NavAccountingButton, NavArchivesButton,
-            NavTrashButton, NavListsButton, NavPlanningButton, NavArchitectIdentityButton
+            NavOverviewButton, NavDashboardButton, NavAccountingButton,
+            NavListsButton, NavPlanningButton, NavAddressBookButton, NavSettingsButton
         };
 
         foreach (var b in all)
@@ -1709,11 +1715,17 @@ public partial class MainWindow : Window
         UpdateProjectBadge(show: true);
     }
 
+    // ✅ Archives/Corbeille (04.08.2026, demande de Joe) : retirées du menu global, deviennent
+    // un sous-menu de leur page respective ("Bons archivés"/"Bons Corbeille" cliquables sur
+    // Bons d'intervention, boutons "Archives"/"Corbeille" sur Planification). Comme il n'y a
+    // plus de bouton dédié dans le menu principal, l'onglet PARENT reste surligné (Bons
+    // d'intervention pour la variante Bons, Planification pour la variante Tâches) -- repère
+    // visuel du contexte d'origine plutôt qu'aucun surlignage.
     internal void ShowArchives()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
-        SetActiveNavButton(NavArchivesButton);
+        SetActiveNavButton(NavDashboardButton);
         _archivesPage ??= new ArchivesPage(this);
         MainContent.Content = _archivesPage;
         _archivesPage.Reload();
@@ -1721,11 +1733,11 @@ public partial class MainWindow : Window
         UpdateProjectBadge(show: true);
     }
 
-    private void ShowArchivesTasks()
+    internal void ShowArchivesTasks()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
-        SetActiveNavButton(NavArchivesButton);
+        SetActiveNavButton(NavPlanningButton);
         _archivesTasksPage ??= new ArchivesTasksPage(this);
         MainContent.Content = _archivesTasksPage;
         _archivesTasksPage.Reload();
@@ -1737,10 +1749,24 @@ public partial class MainWindow : Window
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
-        SetActiveNavButton(NavTrashButton);
+        SetActiveNavButton(NavDashboardButton);
         _trashPage ??= new TrashPage(this);
         MainContent.Content = _trashPage;
         _trashPage.Reload();
+
+        UpdateProjectBadge(show: true);
+    }
+
+    // ✅ Fix (demande de Joe : "il manque la ligne Corbeille" dans le widget Tâches) : même
+    // principe que ShowArchivesTasks, pour TrashedTasksPage.
+    internal void ShowTrashedTasks()
+    {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
+        FlushPlanningIfActive();
+        SetActiveNavButton(NavPlanningButton);
+        _trashedTasksPage ??= new TrashedTasksPage(this);
+        MainContent.Content = _trashedTasksPage;
+        _trashedTasksPage.Reload();
 
         UpdateProjectBadge(show: true);
     }
@@ -1756,7 +1782,9 @@ public partial class MainWindow : Window
         UpdateProjectBadge(show: true);
     }
 
-    private void ShowPlanning()
+    // ✅ internal (27e passe, demande de Joe) : appelée aussi depuis OverviewPage (titre
+    // cliquable du widget "Tâches", lien vers la page Planification).
+    internal void ShowPlanning()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
@@ -1768,16 +1796,31 @@ public partial class MainWindow : Window
         UpdateProjectBadge(show: true);
     }
 
-    // ✅ Convertie en page embarquée (23.07.2026, demande de Joe) : ouvrait auparavant une fenêtre
-    // modale maximisée (ArchitectIdentityWindow) qui masquait la barre de navigation.
-    internal void ShowArchitectIdentity()
+    // ✅ 01.08.2026 (demande de Joe) : "Paramètres" en page embarquée avec sous-menu (Identité
+    // société / Banque de dossiers / Connexion / Démarrage / Vos données / Éthique), remplace
+    // le bouton "Identité Société" séparé et l'ouverture modale de ConfigSetupWindow.
+    internal void ShowSettings()
     {
         if (!ConfirmLeaveListsPageIfDirty()) return;
         FlushPlanningIfActive();
-        SetActiveNavButton(NavArchitectIdentityButton);
-        _architectIdentityPage ??= new ArchitectIdentityPage(this, ServerBaseUrl, ServerApiKey);
-        MainContent.Content = _architectIdentityPage;
-        _architectIdentityPage.Reload();
+        SetActiveNavButton(NavSettingsButton);
+        _settingsPage ??= new Pages.SettingsPage(this);
+        MainContent.Content = _settingsPage;
+        _settingsPage.Reload();
+
+        UpdateProjectBadge(show: true);
+    }
+
+    // ✅ Carnet d'adresses (04.08.2026, demande de Joe) : page embarquée, même principe que
+    // ShowSettings ci-dessus.
+    internal void ShowAddressBook()
+    {
+        if (!ConfirmLeaveListsPageIfDirty()) return;
+        FlushPlanningIfActive();
+        SetActiveNavButton(NavAddressBookButton);
+        _addressBookPage ??= new Pages.AddressBookPage(this);
+        MainContent.Content = _addressBookPage;
+        _addressBookPage.Reload();
 
         UpdateProjectBadge(show: true);
     }
@@ -1794,8 +1837,8 @@ public partial class MainWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                "Ouvrez d'abord la page Planning avant d'exporter le PDF.",
-                "Planning",
+                "Ouvrez d'abord la page Planification avant d'exporter le PDF.",
+                "Planification",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
         }
@@ -1829,8 +1872,11 @@ public partial class MainWindow : Window
         var wasArchives = current is ArchivesPage;
         var wasArchivesTasks = current is ArchivesTasksPage;
         var wasTrash = current is TrashPage;
+        var wasTrashedTasks = current is TrashedTasksPage;
         var wasLists = current is ListsPage;
         var wasPlanning = current is PlanningPage;
+        var wasSettings = current is Pages.SettingsPage;
+        var wasAddressBook = current is Pages.AddressBookPage;
 
         _overviewPage = null;
         _dashboardPage = null;
@@ -1840,6 +1886,8 @@ public partial class MainWindow : Window
         _trashPage = null;
         _listsPage = null;
         _planningPage = null;
+        _settingsPage = null;
+        _addressBookPage = null;
 
         try
         {
@@ -1891,6 +1939,14 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (wasTrashedTasks)
+            {
+                _trashedTasksPage = new TrashedTasksPage(this);
+                MainContent.Content = _trashedTasksPage;
+                _trashedTasksPage.Reload();
+                return;
+            }
+
             if (wasLists)
             {
                 _listsPage = new ListsPage(this);
@@ -1904,6 +1960,22 @@ public partial class MainWindow : Window
                 _planningPage = new PlanningPage(this);
                 MainContent.Content = _planningPage;
                 _planningPage.Reload();
+                return;
+            }
+
+            if (wasSettings)
+            {
+                _settingsPage = new Pages.SettingsPage(this);
+                MainContent.Content = _settingsPage;
+                _settingsPage.Reload();
+                return;
+            }
+
+            if (wasAddressBook)
+            {
+                _addressBookPage = new Pages.AddressBookPage(this);
+                MainContent.Content = _addressBookPage;
+                _addressBookPage.Reload();
                 return;
             }
         }
@@ -1946,12 +2018,19 @@ public partial class MainWindow : Window
 
     public List<WorkOrder> GetAllWorkOrders() => Db.GetWorkOrders();
 
+    // ✅ Fix (demande de Joe : "je veux pouvoir travailler sur les 2 fenêtres sans avoir à les
+    // fermer") : ShowDialog (modal) -> Show (non modal), la fenêtre principale reste utilisable
+    // pendant qu'un bon est ouvert. Le rechargement de la page courante, qui se faisait après
+    // la fermeture (ShowDialog bloquant jusque-là), se fait maintenant sur l'événement Closed.
     public void OpenWorkOrder(long workOrderId, WorkOrderEditMode mode)
     {
+        if (WorkOrderWindow.ActivateIfAlreadyOpen(workOrderId)) return;
+
         var w = new WorkOrderWindow(workOrderId, mode) { Owner = this };
+        w.Closed += (s, e) => { try { if (MainContent.Content is IReloadablePage p) p.Reload(); } catch { } };
         try
         {
-            w.ShowDialog();
+            w.Show();
         }
         catch (Exception ex)
         {
@@ -1963,8 +2042,6 @@ public partial class MainWindow : Window
             }
             catch { }
         }
-
-        try { if (MainContent.Content is IReloadablePage p) p.Reload(); } catch { }
     }
 
     public void ChooseProject()

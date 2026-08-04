@@ -369,6 +369,48 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         };
     }
 
+    // ✅ 27e passe (demande de Joe) : Total TTC réutilisé par le widget "Comptabilité" du
+    // Tableau de bord (OverviewPage). Copie autonome du calcul TTC de ComputeRow ci-dessus
+    // (pas d'appel croisé, pour ne pas risquer de casser ComputeRow) : si la formule de prix
+    // change ici, la reporter aussi dans ComputeRow, et inversement.
+    internal static double ComputeTtc(WorkOrder wo)
+    {
+        var lines = Db.GetWorkOrderLines(wo.Id);
+        var material = Math.Round(lines.Sum(l => l.LineTotal), 2);
+
+        var labor = Math.Round(wo.LaborHours * wo.LaborRate, 2);
+        var travel = Math.Round(wo.TravelQty * wo.TravelRate, 2);
+
+        var forfait = Math.Round(wo.ForfaitQty * wo.ForfaitUnitPrice, 2);
+        var hasForfait = Math.Abs(forfait) > 0.0000000001;
+
+        var forfaitTtc = Math.Round(wo.ForfaitTtc, 2);
+        var hasForfaitTtc = Math.Abs(forfaitTtc) > 0.0000000001;
+
+        if (hasForfaitTtc)
+            return forfaitTtc;
+
+        var htBrut = Math.Round(material + labor + travel + (hasForfait ? forfait : 0), 2);
+
+        var discountRate = wo.DiscountRate;
+        if (double.IsNaN(discountRate) || double.IsInfinity(discountRate)) discountRate = 0;
+        discountRate = Math.Max(0, discountRate);
+
+        var htNet = Math.Round(htBrut * (1.0 - (discountRate / 100.0)), 2);
+        var tva = Math.Round(htNet * (wo.TvaRate / 100.0), 2);
+        return Math.Round(htNet + tva, 2);
+    }
+
+    // ✅ Même critère d'éligibilité comptable que Reload() ci-dessus (bons Validé, ou anciens
+    // bons IsValidated sans ValidationDecision renseigné). Réutilisé par OverviewPage pour
+    // calculer le même "Total TTC" que celui affiché par défaut (sans filtre) sur cette page.
+    internal static bool IsAccountingEligible(WorkOrder w)
+    {
+        var decision = (w.ValidationDecision ?? "").Trim();
+        if (string.Equals(decision, "Validé", StringComparison.OrdinalIgnoreCase)) return true;
+        return w.IsValidated && string.IsNullOrWhiteSpace(decision);
+    }
+
     // =========================
     // Colors + contrast
     // =========================
@@ -503,7 +545,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         // 5) garder le titre fixe
         if (ChartTitleTextBlock != null)
-            ChartTitleTextBlock.Text = "Graphique-TTC par entreprise";
+            ChartTitleTextBlock.Text = "Graphique-TTC par intervenants";
 
         // 6) GRAPH
         double max = sorted.Count == 0 ? 0 : sorted.Max(r => r.TotalTtc);
@@ -657,7 +699,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         RenderTotalsTableAndChart();
 
         // Reset Détail
-        DetailsTitleTextBlock.Text = "Détail — sélectionne une entreprise";
+        DetailsTitleTextBlock.Text = "Détail — sélectionne un intervenant";
         DetailsTitleBorder.Background = MediaBrushes.Transparent;
         DetailsTitleTextBlock.Foreground = MediaBrushes.Black;
 
@@ -675,7 +717,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         if (row.IsTotal)
         {
-            DetailsTitleTextBlock.Text = "Détail — sélectionne une entreprise";
+            DetailsTitleTextBlock.Text = "Détail — sélectionne un intervenant";
             DetailsTitleBorder.Background = MediaBrushes.Transparent;
             DetailsTitleTextBlock.Foreground = MediaBrushes.Black;
 
@@ -754,13 +796,27 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         try
         {
+            if (WorkOrderWindow.ActivateIfAlreadyOpen(row.WorkOrderId)) return;
+
             var win = new WorkOrderWindow(row.WorkOrderId, WorkOrderEditMode.Architecte)
             {
                 Owner = Window.GetWindow(this)
             };
+
+            // ✅ BUG (Comptabilité non mise à jour automatiquement) : ouvrir un bon depuis le
+            // détail Comptabilité créait sa propre WorkOrderWindow directement (sans passer par
+            // MainWindow.OpenWorkOrder, qui rafraîchit MainContent après fermeture). Si l'architecte
+            // validait/modifiait le bon depuis cette fenêtre puis la fermait, la page Comptabilité
+            // (totaux par entreprise + détail) restait figée sur les anciennes valeurs tant qu'on ne
+            // cliquait pas manuellement sur "Rafraîchir". On recharge donc explicitement ici.
+            // ✅ Fix (demande de Joe : fenêtre non modale, voir WorkOrderWindow) : ce rechargement
+            // se faisait juste après ShowDialog (bloquant jusqu'à la fermeture) ; avec Show() non
+            // modal, il doit se faire sur l'événement Closed à la place.
+            win.Closed += (s, e) => { try { Reload(); } catch { } };
+
             try
             {
-                win.ShowDialog();
+                win.Show();
             }
             catch (Exception ex)
             {
@@ -773,14 +829,6 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
                 }
                 catch { }
             }
-
-            // ✅ BUG (Comptabilité non mise à jour automatiquement) : ouvrir un bon depuis le
-            // détail Comptabilité créait sa propre WorkOrderWindow directement (sans passer par
-            // MainWindow.OpenWorkOrder, qui rafraîchit MainContent après fermeture). Si l'architecte
-            // validait/modifiait le bon depuis cette fenêtre puis la fermait, la page Comptabilité
-            // (totaux par entreprise + détail) restait figée sur les anciennes valeurs tant qu'on ne
-            // cliquait pas manuellement sur "Rafraîchir". On recharge donc explicitement ici.
-            Reload();
         }
         catch (Exception ex)
         {
@@ -963,7 +1011,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         if (sfd.ShowDialog() != true) return;
 
         var sb = new StringBuilder();
-        sb.AppendLine("BDR;Date;Entreprise;Lieu;Demande_par;Materiel;Main_oeuvre;Deplacements;HT;TVA_% ;TVA;TTC");
+        sb.AppendLine("BDR;Date;Intervenants;Lieu;Demande_par;Materiel;Main_oeuvre;Deplacements;HT;TVA_% ;TVA;TTC");
 
         foreach (var r in rows)
         {
@@ -1007,9 +1055,9 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         var sfd = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "Exporter CSV (totaux entreprises)",
+            Title = "Exporter CSV (totaux intervenants)",
             Filter = "CSV (*.csv)|*.csv",
-            FileName = $"comptabilite-totaux-entreprises-{DateTime.Today:yyyyMMdd}.csv",
+            FileName = $"comptabilite-totaux-intervenants-{DateTime.Today:yyyyMMdd}.csv",
             AddExtension = true,
             DefaultExt = ".csv"
         };
@@ -1017,7 +1065,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         if (sfd.ShowDialog() != true) return;
 
         var sb = new StringBuilder();
-        sb.AppendLine("Entreprise;Nb_de_bons;HT;TVA;TTC");
+        sb.AppendLine("Intervenants;Nb_de_bons;HT;TVA;TTC");
 
         foreach (var r in grouped)
         {

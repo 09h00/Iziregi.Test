@@ -57,6 +57,14 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
         RefreshBatchSelectionUi();
     }
 
+    // ✅ Retour (04.08.2026, demande de Joe) : ramène à "Bons d'intervention", page d'origine
+    // depuis laquelle ces Archives sont maintenant accessibles (voir DashboardPage.xaml).
+    private void BackToParent_Click(object sender, RoutedEventArgs e) => _host.ShowDashboard();
+
+    // ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis Archives, va
+    // directement à Corbeille sans repasser par "Bons d'intervention".
+    private void GoToTrash_Click(object sender, RoutedEventArgs e) => _host.ShowTrash();
+
     public void Reload()
     {
         var projectIdNullable = Db.GetCurrentProjectId();
@@ -557,17 +565,21 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
         return ArchivedGrid.ItemsSource.Cast<WorkOrderRow>().ToList();
     }
 
+    // ✅ Fix (04.08.2026, demande de Joe) : actif si au moins une case est cochée OU si une
+    // ligne est sélectionnée (bordure bleue), même principe que DashboardPage.
     private void RefreshBatchSelectionUi()
     {
         var rows = GetActiveRows();
-        var selectedCount = rows.Count(x => x.IsSelected);
+        var anySelected = rows.Any(x => x.IsSelected) || ArchivedGrid?.SelectedItem != null;
 
         if (RestoreSelectionButton != null)
-            RestoreSelectionButton.IsEnabled = selectedCount > 0;
+            RestoreSelectionButton.IsEnabled = anySelected;
 
         if (TrashSelectionButton != null)
-            TrashSelectionButton.IsEnabled = selectedCount > 0;
+            TrashSelectionButton.IsEnabled = anySelected;
     }
+
+    private void ArchivedGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBatchSelectionUi();
 
     private List<WorkOrder> GetActionSelectionOrFallbackToRow(WorkOrderRow? fallbackRow)
     {
@@ -630,8 +642,8 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
         }
 
         var msg = sel.Count == 1
-            ? $"Restaurer le bon {sel[0].BdrDisplay} (retour au Tableau de bord) ?"
-            : $"Restaurer {sel.Count} bons (retour au Tableau de bord) ?";
+            ? $"Restaurer le bon {sel[0].BdrDisplay} (retour dans les Bons actifs) ?"
+            : $"Restaurer {sel.Count} bons (retour dans les Bons actifs) ?";
 
         var ok = System.Windows.MessageBox.Show(msg, "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (ok != MessageBoxResult.Yes)
@@ -678,7 +690,7 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
             return;
 
         var ok = System.Windows.MessageBox.Show(
-            $"Restaurer le bon {row.WorkOrder.BdrDisplay} (retour au Tableau de bord) ?",
+            $"Restaurer le bon {row.WorkOrder.BdrDisplay} (retour dans les Bons actifs) ?",
             "Confirmation",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -717,13 +729,18 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
 
         try
         {
+            if (WorkOrderWindow.ActivateIfAlreadyOpen(row.WorkOrder.Id)) return;
+
             var win = new WorkOrderWindow(row.WorkOrder.Id, WorkOrderEditMode.Architecte)
             {
                 Owner = Window.GetWindow(this)
             };
+            // ✅ Fix (demande de Joe : fenêtre non modale) : Reload() se faisait après ShowDialog
+            // (bloquant jusqu'à la fermeture) ; avec Show() non modal, sur Closed à la place.
+            win.Closed += (s, e) => { try { Reload(); } catch { } };
             try
             {
-                win.ShowDialog();
+                win.Show();
             }
             catch (Exception ex)
             {
@@ -736,7 +753,6 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
                 }
                 catch { }
             }
-            Reload();
         }
         catch
         {

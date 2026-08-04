@@ -170,6 +170,10 @@ public class WorkOrder
     public string ForfaitPdfFileName { get; set; } = "";
     public byte[]? ForfaitPdfFileBytes { get; set; }
 
+    // ✅ NOUVEAU (04.08.2026, demande de Joe) : N° du devis (saisi par l'entreprise), obligatoire
+    // dès qu'un PDF est joint (voir WorkOrderWindow.EnsureQuoteRequiredFieldsOrWarn).
+    public string ForfaitQuoteNumber { get; set; } = "";
+
     public string QuoteNotes { get; set; } = "";
 
     // Signature

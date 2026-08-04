@@ -1,0 +1,341 @@
+<!-- File: Pages/AddressBookPage.xaml -->
+<!-- ✅ Ajouté (demande de Joe, 04.08.2026) : carnet d'adresses structuré (Nom/Entreprise/
+     Adresse/Téléphone/Téléphone 2/E-mail/Site web) par dossier, remplace la section
+     "Adresse dossier / Banque de dossiers" de la page Bons d'intervention (devenue obsolète,
+     accès repris depuis Paramètres). Ajoute aussi des groupes de contacts pour envoyer un
+     e-mail (mailto:, via le client mail par défaut) à plusieurs personnes en une fois.
+
+     ✅ 2e passe (demande de Joe, 04.08.2026) : "comme un carnet d'adresses conventionnel",
+     remplace les N cartes éditables en parallèle (une par contact) par une vraie liste de
+     contacts (nom cliquable) à gauche, et UNE SEULE fiche d'édition au centre pour l'élément
+     actuellement sélectionné (contact OU groupe).
+
+     ✅ 3e passe (demande de Joe, 04.08.2026) : "même principe pour les groupes", la colonne
+     Groupes devient une liste symétrique de celle des contacts (nom cliquable, pas de carte
+     par groupe). Cliquer un contact affiche sa fiche (champs + cases à cocher "Groupes" :
+     appartenance de CE contact à chaque groupe) ; cliquer un groupe affiche sa fiche (nom +
+     cases à cocher "Contacts" : appartenance de chaque contact à CE groupe, + bouton "Envoyer
+     un e-mail"). Les deux fiches permettent donc d'affecter un contact à un groupe, dans un
+     sens comme dans l'autre.
+
+     ✅ 4e passe (demande de Joe, 04.08.2026) : devient une page embarquée (comme les autres,
+     menu de navigation visible, pleine page) au lieu d'une fenêtre modale séparée, ancien
+     AddressBookWindow.xaml/.xaml.cs supprimés. -->
+<UserControl x:Class="Iziregi.Test.Pages.AddressBookPage"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Background="#F6F7FB">
+
+    <UserControl.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
+        </Style>
+
+        <!-- ✅ Bouton "supprimer" discret (contact/groupe), même principe que NoteDeleteButtonStyle
+             (OverviewPage.xaml) : gris, rouge au survol seulement. -->
+        <Style x:Key="DeleteButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FEE2E2"/>
+                                <Setter Property="Foreground" Value="#B91C1C"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ Bouton "Supprimer la sélection" (demande de Joe) : fond blanc, police/bordure
+             rouges (action destructive sur plusieurs contacts, confirmation demandée avant
+             suppression, voir BulkDeleteButton_Click). -->
+        <Style x:Key="DeleteTextButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#B91C1C"/>
+            <Setter Property="BorderBrush" Value="#B91C1C"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FEE2E2"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ Bouton "Fermer" (demande de Joe) : gris, discret, ferme la fiche affichée
+             (même action que la croix flottante du coin haut-droit). Bordure noire (demande
+             de Joe). -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ Bouton "Envoyer un e-mail" (demande de Joe) : fond blanc, police/bordure bleus
+             (remplace le fond bleu plein précédent). -->
+        <Style x:Key="EmailButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#2563EB"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ Bouton "Copier" : discret, bleu au survol. Même taille que "Fermer" (demande de
+             Joe : Height/Padding identiques à CloseButtonStyle). Bordure noire arrondie
+             (demande de Joe). -->
+        <Style x:Key="CopyButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="BorderBrush" Value="Black"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="#334155"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#DBEAFE"/>
+                                <Setter Property="Foreground" Value="#1D4ED8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ Police noire (demande de Joe, 04.08.2026 : remplace le gris précédent), +2pt
+             (demande précédente). -->
+        <!-- ✅ Largeur 80 -> 115 (demande de Joe, 04.08.2026) : "Téléphone mobile"/"Téléphone
+             bureau" (remplace "Téléphone 1"/"Téléphone 2") dépassaient les 80px d'origine. -->
+        <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="115"/>
+        </Style>
+
+        <!-- ✅ Bordure bleue au focus (demande de Joe, comme sur les grilles Tâches de
+             Planification, voir TextZoneRichTextBoxStyle, IsKeyboardFocusWithin). -->
+        <Style x:Key="FieldTextBoxStyle" TargetType="TextBox">
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ✅ Bordure bleue au focus (demande de Joe, 04.08.2026), même bleu que le bouton
+             "Enregistrer" (#2563EB), même principe que FieldTextBoxStyle, pour le champ
+             "Intervenant" (ComboBox, seul champ de la fiche qui n'en profitait pas déjà). -->
+        <Style x:Key="FieldComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- ✅ Fix (demande de Joe : "recentre tout comme au début de la création") : retour aux
+         largeurs de colonnes d'origine (les ajustements successifs de largeur/décalage
+         n'ont fait qu'empirer les choses, voir historique des commentaires précédents). -->
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="260"/>
+            <ColumnDefinition Width="14"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="14"/>
+            <ColumnDefinition Width="300"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Colonne 1 : liste des contacts (nom cliquable = sélectionne ce contact et affiche
+             sa fiche au centre). -->
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Contacts" FontSize="18" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,8"/>
+                <Button Grid.Row="1" x:Name="AddContactButton" Content="+ Nouveau contact" Style="{StaticResource PrimaryButtonStyle}" Height="30" HorizontalAlignment="Stretch" Click="AddContactButton_Click" Margin="0,0,0,8"/>
+
+                <!-- ✅ Export/Import CSV (demande de Joe, 04.08.2026) : format propre à l'app
+                     (voir ExportContactsCsv_Click/ImportContactsCsv_Click), pas de compatibilité
+                     avec des formats externes (vCard, Outlook, Gmail...). -->
+                <Grid Grid.Row="2" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="Exporter CSV" Style="{StaticResource CopyButtonStyle}" Height="28" HorizontalAlignment="Stretch" Click="ExportContactsCsv_Click"/>
+                    <Button Grid.Column="2" Content="Importer CSV" Style="{StaticResource CopyButtonStyle}" Height="28" HorizontalAlignment="Stretch" Click="ImportContactsCsv_Click"/>
+                </Grid>
+
+                <!-- ✅ Cases à cocher par contact + "Sélectionner tout" (demande de Joe). -->
+                <CheckBox Grid.Row="3" x:Name="SelectAllContactsCheckBox" Content="Sélectionner tout" FontSize="12" Click="SelectAllContactsCheckBox_Click"/>
+
+                <!-- ✅ Actions groupées sur la sélection (demande de Joe) : associer à un
+                     groupe, envoyer un e-mail, ou supprimer les contacts cochés. Visible
+                     seulement si au moins un contact est coché (voir UpdateBulkActionsPanel). -->
+                <StackPanel Grid.Row="4" x:Name="BulkActionsPanel" Margin="0,8,0,0" Visibility="Collapsed">
+                    <Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Margin="0,0,0,8"/>
+                    <ComboBox x:Name="BulkGroupComboBox" Height="26" FontSize="12" DisplayMemberPath="Name" Margin="0,0,0,6"/>
+                    <Button x:Name="BulkAssignButton" Content="Associer au groupe" Style="{StaticResource EmailButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,6" Click="BulkAssignButton_Click"/>
+                    <Button x:Name="BulkEmailButton" Content="Envoyer un e-mail >" Style="{StaticResource EmailButtonStyle}" HorizontalAlignment="Stretch" Margin="0,0,0,6" Click="BulkEmailButton_Click"/>
+                    <Button x:Name="BulkDeleteButton" Content="Supprimer la sélection" Style="{StaticResource DeleteTextButtonStyle}" HorizontalAlignment="Stretch" Click="BulkDeleteButton_Click"/>
+                </StackPanel>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="ContactsListPanel"/>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Colonne 2 : fiche unique (contact OU groupe, selon la dernière sélection dans
+             l'une ou l'autre liste).
+             ✅ Fix (demande de Joe : "recentre tout comme au début de la création") : retour à
+             un Border simple, étiré sur toute la colonne "*" (pas de Width/Margin/
+             HorizontalAlignment="Left" fixés à la main), c'était la version d'origine, stable,
+             avant la série d'ajustements de largeur/décalage qui a fini par la casser
+             (rognage de boutons, marges négatives invisibles, etc., voir historique Git). Les
+             colonnes fixes des champs (BuildContactDetail/BuildGroupDetail, 280px) restent en
+             place : elles donnent déjà une largeur minimale sensée aux champs même en mode
+             étiré. -->
+        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <Border Style="{StaticResource CardStyle}" VerticalAlignment="Top">
+                <!-- ✅ Fermeture manuelle de la fiche (demande de Joe) : croix flottante en
+                     coin haut-droit (même principe que les croix de suppression), visible
+                     seulement quand une fiche est affichée (voir RebuildDetail). Le bouton
+                     "Fermer" en bas de chaque fiche fait la même chose (voir BuildContactDetail/
+                     BuildGroupDetail). -->
+                <Grid>
+                    <StackPanel x:Name="DetailPanel"/>
+                    <Button x:Name="CloseDetailButton"
+                            Content="✕"
+                            Style="{StaticResource DeleteButtonStyle}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Visibility="Collapsed"
+                            Click="CloseDetailButton_Click"/>
+                </Grid>
+            </Border>
+        </ScrollViewer>
+
+        <!-- Colonne 3 : liste des groupes (même principe que les contacts, nom cliquable =
+             sélectionne ce groupe et affiche sa fiche au centre). -->
+        <Grid Grid.Column="4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Groupes" FontSize="18" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,8"/>
+                <Button Grid.Row="1" x:Name="AddGroupButton" Content="+ Nouveau groupe" Style="{StaticResource PrimaryButtonStyle}" Height="30" HorizontalAlignment="Stretch" Click="AddGroupButton_Click"/>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="GroupsListPanel"/>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

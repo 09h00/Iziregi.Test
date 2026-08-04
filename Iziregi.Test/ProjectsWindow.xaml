@@ -274,7 +274,7 @@
                                        DockPanel.Dock="Left"
                                        Margin="0,0,14,0"/>
 
-                            <Button Content="+ Nouveau"
+                            <Button Content="+ Nouveau dossier"
                                     Style="{StaticResource PrimaryButtonStyle}"
                                     Click="NewProject_Click"
                                     DockPanel.Dock="Left"

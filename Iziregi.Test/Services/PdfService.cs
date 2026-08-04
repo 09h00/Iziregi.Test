@@ -469,8 +469,8 @@ public static class PdfService
         var projectManagerRefLine = GetProjectManagerRefLine(project);
         var projectManagerContactLine = GetProjectManagerContactLine(project);
 
-        var tag = (wo.ProjectId.HasValue && wo.ProjectId.Value > 0) ? $"P{wo.ProjectId.Value}" : "";
-        var bdrShort = wo.BdrNumber < 10 ? $"0{wo.BdrNumber}" : wo.BdrNumber.ToString();
+        var tag = wo.ProjectTag;
+        var bdrShort = wo.BdrNumberDisplay;
 
         // ---- Couleurs
         var textMain = Colors.Grey.Darken4;
@@ -922,6 +922,15 @@ public static class PdfService
                                         .Column(box =>
                                         {
                                             box.Item().Text("Devis PDF").Italic().SemiBold().FontSize(9).FontColor(Colors.White);
+
+                                            // ✅ N° du devis (04.08.2026, demande de Joe) : au-dessus de
+                                            // "MONTANT TTC du pdf", même ordre que le WPF.
+                                            var quoteNumber = (wo.ForfaitQuoteNumber ?? "").Trim();
+                                            if (!string.IsNullOrWhiteSpace(quoteNumber))
+                                            {
+                                                box.Item().PaddingTop(6).Text("N° du devis").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
+                                                box.Item().PaddingTop(2).Text(quoteNumber).SemiBold().FontSize(10).FontColor(Colors.White);
+                                            }
 
                                             box.Item().PaddingTop(6).Text("MONTANT TTC du pdf").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
                                             box.Item().PaddingTop(2).Text(FmtInv(forfaitTtc)).SemiBold().FontSize(10).FontColor(Colors.White);

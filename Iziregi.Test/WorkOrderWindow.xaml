@@ -1233,6 +1233,7 @@ Margin="0,0,0,4"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
@@ -1275,6 +1276,34 @@ VerticalAlignment="Center"
 TextTrimming="CharacterEllipsis"
 Margin="0,4,0,0"/>
 
+                                        <!-- ✅ N° du devis (04.08.2026, demande de Joe) : saisi par
+                                             l'entreprise, sur sa propre rangee au-dessus de "MONTANT TTC
+                                             du pdf". Obligatoire dès qu'un pdf est joint (voir
+                                             EnsureQuoteRequiredFieldsOrWarn), inclus dans le pdf du bon
+                                             (voir PdfService).
+                                             ✅ Visibility="Collapsed" par défaut (04.08.2026, demande de
+                                             Joe) : n'apparaît que lorsqu'un pdf est joint (voir
+                                             UpdateCompanyPdfButtons), pour économiser de la hauteur dans
+                                             le cas d'un devis détaillé (sans pdf). -->
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+x:Name="ForfaitQuoteNumberLabel"
+Text="N° du devis"
+Style="{StaticResource LabelStyle}"
+FontStyle="Italic"
+Foreground="White"
+Margin="0,8,6,0"
+VerticalAlignment="Center"
+Visibility="Collapsed"/>
+
+                                        <TextBox Grid.Row="2" Grid.Column="2"
+x:Name="ForfaitQuoteNumberTextBox"
+Style="{StaticResource InputStyle}"
+Visibility="Collapsed"
+BorderBrush="#D1D5DB"
+BorderThickness="2"
+Margin="0,8,0,0"
+TextChanged="TotalsInput_TextChanged"/>
+
                                         <!-- ✅ Forfait TTC (20.07.2026, demande de Joe) : montant TTC lu
                                              sur le pdf annexé, saisi directement (au lieu de HT via
                                              qty*prix). HT et TVA sont recalculés à rebours à partir de
@@ -1282,7 +1311,7 @@ Margin="0,4,0,0"/>
                                              un pdf est déjà joint ET que tous les autres totaux sont à
                                              0 (voir ApplyFieldPermissions), et devient obligatoire dès
                                              qu'un pdf est joint (voir EnsureQuoteRequiredFieldsOrWarn). -->
-                                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
 Text="MONTANT TTC du pdf"
 Style="{StaticResource LabelStyle}"
 FontStyle="Italic"
@@ -1296,7 +1325,7 @@ VerticalAlignment="Center"/>
                                              "Supprimer" a lui-meme BorderThickness=2 (via
                                              SmallActionButtonStyle). Avec 1 seulement ici, le champ
                                              paraissait plus etroit malgre la meme largeur de colonne. -->
-                                        <TextBox Grid.Row="2" Grid.Column="2"
+                                        <TextBox Grid.Row="3" Grid.Column="2"
 x:Name="ForfaitTtcTextBox"
 Style="{StaticResource ForfaitTtcInputStyle}"
 BorderBrush="#D1D5DB"

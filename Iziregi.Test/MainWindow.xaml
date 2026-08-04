@@ -168,30 +168,43 @@
                          général, voir OverviewPage), l'ancien (liste des bons) est renommé
                          "Bons d'intervention" ci-dessous, sans changement de contenu. -->
                     <Button x:Name="NavOverviewButton" Content="Tableau de bord" Click="NavOverview_Click" Style="{StaticResource NavPillButtonActiveStyle}"/>
+                    <!-- ✅ 01.08.2026 (demande de Joe) : Planning déplacé juste après le Tableau
+                         de bord. -->
+                    <Button x:Name="NavPlanningButton" Content="Planification" Click="NavPlanning_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ 04.08.2026 (demande de Joe, compromis "menu trop long") : petite flèche
+                         collée à "Planification", ouvre un sous-menu (Archives/Corbeille) sans
+                         changer le comportement du clic direct sur "Planification" (toujours la
+                         page elle-même). Voir PlanningSubMenuPopup ci-dessous. -->
+                    <Button x:Name="PlanningSubMenuButton" Content="▾" Click="PlanningSubMenuButton_Click" Style="{StaticResource NavPillButtonStyle}" Padding="6,0" Margin="-2,0,4,0" FontSize="11"/>
                     <Button x:Name="NavDashboardButton" Content="Bons d'intervention" Click="NavDashboard_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ Même principe que PlanningSubMenuButton ci-dessus, pour "Bons
+                         d'intervention". Voir BonsSubMenuPopup ci-dessous. -->
+                    <Button x:Name="BonsSubMenuButton" Content="▾" Click="BonsSubMenuButton_Click" Style="{StaticResource NavPillButtonStyle}" Padding="6,0" Margin="-2,0,4,0" FontSize="11"/>
                     <Button x:Name="NavAccountingButton" Content="Comptabilité" Click="NavAccounting_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <!-- ✅ 30.07.2026 (demande de Joe) : "Archives" devient un menu déroulant avec
-                         2 choix (Bons d'intervention / Tâches), voir ArchivesNavPopup ci-dessous. -->
-                    <Button x:Name="NavArchivesButton" Content="Archives ▾" Click="NavArchivesDropdown_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <Button x:Name="NavTrashButton" Content="Corbeille" Click="NavTrash_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <Button x:Name="NavPlanningButton" Content="Planning" Click="NavPlanning_Click" Style="{StaticResource NavPillButtonStyle}"/>
                     <Button x:Name="NavListsButton" Content="Listes" Click="NavLists_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <Button x:Name="NavArchitectIdentityButton" Content="Identité Société" Click="NavArchitectIdentity_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ Carnet d'adresses (04.08.2026, demande de Joe) : page embarquée
+                         (comme les autres onglets), accessible depuis n'importe quelle page via
+                         cette barre de navigation globale. -->
+                    <Button x:Name="NavAddressBookButton" Content="Carnet d'adresses" Click="NavAddressBook_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ 01.08.2026 (demande de Joe) : "Identité Société" repliée dans le
+                         sous-menu de "Paramètres" (voir SettingsPage), plus de bouton séparé. -->
                     <Button x:Name="NavSettingsButton" Content="Paramètres" Click="NavSettings_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <!-- ✅ Aide (24.07.2026, demande de Joe) : ouvre la page d'aide (mode d'emploi PDF)
-                         dans le navigateur par défaut, ne devient jamais l'onglet "actif". -->
+                    <!-- ✅ 01.08.2026 (demande de Joe) : "Aide" revient dans la barre de nav
+                         principale (retirée du sous-menu Paramètres), Joe compte y ajouter une
+                         vraie page plus tard, pas juste un lien vers le mode d'emploi. -->
                     <Button x:Name="NavHelpButton" Content="Aide" Click="NavHelp_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <!-- ✅ Contact (29.07.2026, demande de Joe) : même principe que Aide, ouvre
-                         la page /contact (adresse e-mail) dans le navigateur par défaut. -->
+                    <!-- ✅ Contact (29.07.2026, demande de Joe) : ouvre la page /contact (adresse
+                         e-mail) dans le navigateur par défaut. -->
                     <Button x:Name="NavContactButton" Content="Contact" Click="NavContact_Click" Style="{StaticResource NavPillButtonStyle}"/>
-                    <!-- ✅ CGU / Politique de confidentialité (30.07.2026, demande de Joe :
-                         remplace la CGV d'essai) : même principe que Aide/Contact, ouvre la page
-                         /cgu dans le navigateur par défaut. -->
-                    <Button x:Name="NavCgvEssaiButton" Content="CGU" Click="NavCgvEssai_Click" Style="{StaticResource NavPillButtonStyle}"/>
+                    <!-- ✅ 01.08.2026 (demande de Joe) : "CGU" reste dans le sous-menu Paramètres
+                         (voir SettingsPage). -->
                 </StackPanel>
 
-                <Popup x:Name="ArchivesNavPopup"
-                       PlacementTarget="{Binding ElementName=NavArchivesButton}"
+                <!-- ✅ Sous-menus Archives/Corbeille (04.08.2026, demande de Joe) : rattachés aux
+                     petites flèches PlanningSubMenuButton/BonsSubMenuButton ci-dessus, même
+                     mécanisme (Popup) que l'ancien "Corbeille ▾" du menu global. -->
+                <Popup x:Name="PlanningSubMenuPopup"
+                       PlacementTarget="{Binding ElementName=PlanningSubMenuButton}"
                        Placement="Bottom"
                        StaysOpen="False"
                        AllowsTransparency="True">
@@ -202,8 +215,26 @@
                             Padding="4"
                             Effect="{StaticResource CardShadowEffect}">
                         <StackPanel>
-                            <Button Content="Bons d'intervention" Style="{StaticResource ArchivesMenuItemStyle}" Click="NavArchivesBons_Click"/>
-                            <Button Content="Tâches" Style="{StaticResource ArchivesMenuItemStyle}" Click="NavArchivesTasksMenuItem_Click"/>
+                            <Button Content="Page archives" Style="{StaticResource ArchivesMenuItemStyle}" Click="PlanningSubMenuArchives_Click"/>
+                            <Button Content="Page corbeille" Style="{StaticResource ArchivesMenuItemStyle}" Foreground="#B91C1C" Click="PlanningSubMenuTrash_Click"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+
+                <Popup x:Name="BonsSubMenuPopup"
+                       PlacementTarget="{Binding ElementName=BonsSubMenuButton}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="White"
+                            BorderBrush="#D1D5DB"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="4"
+                            Effect="{StaticResource CardShadowEffect}">
+                        <StackPanel>
+                            <Button Content="Page archives" Style="{StaticResource ArchivesMenuItemStyle}" Click="BonsSubMenuArchives_Click"/>
+                            <Button Content="Page corbeille" Style="{StaticResource ArchivesMenuItemStyle}" Foreground="#B91C1C" Click="BonsSubMenuTrash_Click"/>
                         </StackPanel>
                     </Border>
                 </Popup>

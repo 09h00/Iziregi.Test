@@ -15,8 +15,8 @@
             <Setter Property="BorderBrush" Value="#E5E7EB"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="14"/>
-            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
         </Style>
 
@@ -98,25 +98,33 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="14">
+    <!-- ✅ Fix (demande de Joe : "remonter les blocs tout en haut") : cette page, embarquée
+         dans SettingsPage (Identité société), ajoutait une marge de 14 en plus de son propre
+         Padding de carte (14) au-dessus du titre, contrairement aux autres sections (Banque
+         de dossiers, Connexion, etc.) qui sont une simple Border CardStyle sans marge
+         englobante -> un double décalage vertical avant que "Identité Société" apparaisse. -->
+    <Grid Margin="0" VerticalAlignment="Top">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Titre -->
+        <!-- ✅ Fix (demande de Joe : "je ne vois pas le bouton Enregistrer sans scroller") :
+             titre gardé tel quel (carte + texte), juste compacté (padding/marges réduits sur
+             toute la page, voir CardStyle et les cartes ci-dessous) pour que tout tienne dans
+             la fenêtre sans avoir à défiler. -->
         <Border Grid.Row="0" Style="{StaticResource CardStyle}">
             <StackPanel>
                 <TextBlock Text="Identité Société"
-                           FontSize="22"
+                           FontSize="20"
                            FontWeight="Bold"
                            Foreground="#111827"/>
 
                 <TextBlock Text="Modifier le nom, l’adresse et le logo affichés sur les bons d'intervention."
                            FontSize="13"
                            Foreground="#6B7280"
-                           Margin="0,4,0,0"/>
+                           Margin="0,2,0,0"/>
             </StackPanel>
         </Border>
 
@@ -135,42 +143,42 @@
                                FontSize="16"
                                FontWeight="SemiBold"
                                Foreground="#111827"
-                               Margin="0,0,0,12"/>
+                               Margin="0,0,0,8"/>
 
                     <TextBlock Text="Société" Style="{StaticResource LabelStyle}"/>
                     <TextBox x:Name="ArchitectNameTextBox"
                              Style="{StaticResource InputStyle}"
                              MaxLength="28"
-                             Margin="0,0,0,12"/>
+                             Margin="0,0,0,8"/>
 
                     <TextBlock Text="Adresse" Style="{StaticResource LabelStyle}"/>
                     <TextBox x:Name="ArchitectAddressTextBox"
                              Style="{StaticResource InputStyle}"
-                             Margin="0,0,0,12"/>
+                             Margin="0,0,0,8"/>
 
                     <TextBlock Text="NPA/Ville" Style="{StaticResource LabelStyle}"/>
                     <TextBox x:Name="ArchitectZipCityTextBox"
                              Style="{StaticResource InputStyle}"
-                             Margin="0,0,0,12"/>
+                             Margin="0,0,0,8"/>
 
                     <TextBlock Text="Champ libre 1" Style="{StaticResource LabelStyle}"/>
                     <TextBox x:Name="ArchitectRefTextBox"
                              Style="{StaticResource InputStyle}"
                              MaxLength="26"
-                             Margin="0,0,0,12"/>
+                             Margin="0,0,0,8"/>
 
                     <TextBlock Text="Champ libre 2" Style="{StaticResource LabelStyle}"/>
                     <TextBox x:Name="ArchitectRef2TextBox"
                              Style="{StaticResource InputStyle}"
                              MaxLength="26"
-                             Margin="0,0,0,12"/>
+                             Margin="0,0,0,8"/>
 
                     <TextBlock x:Name="StatusTextBlock"
                                Text=""
                                Foreground="#6B7280"
                                FontSize="12"
                                TextWrapping="Wrap"
-                               Margin="0,6,0,0"/>
+                               Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>
 
@@ -181,13 +189,13 @@
                                FontSize="16"
                                FontWeight="SemiBold"
                                Foreground="#111827"
-                               Margin="0,0,0,12"/>
+                               Margin="0,0,0,8"/>
 
                     <Border BorderBrush="#D1D5DB"
                             BorderThickness="1"
                             CornerRadius="10"
                             Background="#F9FAFB"
-                            Height="160"
+                            Height="110"
                             Padding="10">
                         <Grid>
                             <Image x:Name="LogoImage" Stretch="Uniform"/>
@@ -202,13 +210,13 @@
 
                     <TextBlock Text="Chemin du logo"
                                Style="{StaticResource LabelStyle}"
-                               Margin="0,12,0,4"/>
+                               Margin="0,8,0,4"/>
 
                     <TextBox x:Name="LogoPathTextBox"
                              Style="{StaticResource InputStyle}"
                              IsReadOnly="True"/>
 
-                    <WrapPanel Margin="0,12,0,0">
+                    <WrapPanel Margin="0,8,0,0">
                         <Button Content="Importer logo"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 Foreground="#2563EB"
@@ -225,13 +233,13 @@
                     <TextBlock Text="Formats conseillés : PNG/JPG."
                                Foreground="#6B7280"
                                FontSize="12"
-                               Margin="0,6,0,0"/>
+                               Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>
         </Grid>
 
         <!-- Bas -->
-        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,12,0,0">
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,8,0,0">
             <DockPanel LastChildFill="False">
                 <Button Content="Fermer"
                         Style="{StaticResource SecondaryButtonStyle}"

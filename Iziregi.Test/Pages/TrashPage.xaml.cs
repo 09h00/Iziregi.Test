@@ -43,6 +43,14 @@ public partial class TrashPage : System.Windows.Controls.UserControl, IReloadabl
         RefreshBatchSelectionUi();
     }
 
+    // ✅ Retour (04.08.2026, demande de Joe) : ramène à "Bons d'intervention", page d'origine
+    // depuis laquelle cette Corbeille est maintenant accessible (voir DashboardPage.xaml).
+    private void BackToParent_Click(object sender, RoutedEventArgs e) => _host.ShowDashboard();
+
+    // ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis Corbeille, va
+    // directement à Archives sans repasser par "Bons d'intervention".
+    private void GoToArchives_Click(object sender, RoutedEventArgs e) => _host.ShowArchives();
+
     public void Reload()
     {
         var projectIdNullable = Db.GetCurrentProjectId();
@@ -164,17 +172,21 @@ public partial class TrashPage : System.Windows.Controls.UserControl, IReloadabl
         return TrashedGrid.ItemsSource.Cast<WorkOrderRow>().ToList();
     }
 
+    // ✅ Fix (04.08.2026, demande de Joe) : actif si au moins une case est cochée OU si une
+    // ligne est sélectionnée (bordure bleue), même principe que DashboardPage.
     private void RefreshBatchSelectionUi()
     {
         var rows = GetActiveRows();
-        var selectedCount = rows.Count(x => x.IsSelected);
+        var anySelected = rows.Any(x => x.IsSelected) || TrashedGrid?.SelectedItem != null;
 
         if (RestoreSelectionButton != null)
-            RestoreSelectionButton.IsEnabled = selectedCount > 0;
+            RestoreSelectionButton.IsEnabled = anySelected;
 
         if (DeleteSelectionButton != null)
-            DeleteSelectionButton.IsEnabled = selectedCount > 0;
+            DeleteSelectionButton.IsEnabled = anySelected;
     }
+
+    private void TrashedGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBatchSelectionUi();
 
     private List<WorkOrder> GetActionSelectionOrFallbackToRow(WorkOrderRow? fallbackRow)
     {
@@ -320,13 +332,18 @@ public partial class TrashPage : System.Windows.Controls.UserControl, IReloadabl
 
         try
         {
+            if (WorkOrderWindow.ActivateIfAlreadyOpen(row.WorkOrder.Id)) return;
+
             var win = new WorkOrderWindow(row.WorkOrder.Id, WorkOrderEditMode.Architecte)
             {
                 Owner = Window.GetWindow(this)
             };
+            // ✅ Fix (demande de Joe : fenêtre non modale) : Reload() se faisait après ShowDialog
+            // (bloquant jusqu'à la fermeture) ; avec Show() non modal, sur Closed à la place.
+            win.Closed += (s, e) => { try { Reload(); } catch { } };
             try
             {
-                win.ShowDialog();
+                win.Show();
             }
             catch (Exception ex)
             {
@@ -339,7 +356,6 @@ public partial class TrashPage : System.Windows.Controls.UserControl, IReloadabl
                 }
                 catch { }
             }
-            Reload();
         }
         catch
         {

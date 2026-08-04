@@ -184,7 +184,7 @@
                         Style="{StaticResource RefreshButtonStyle}"
                         Click="ExportDetailsCsv_Click"/>
 
-                <Button Content="Exporter CSV (totaux entreprises)"
+                <Button Content="Exporter CSV (totaux intervenants)"
                         Width="260"
                         Margin="8,0,0,0"
                         Background="#D1D5DB"
@@ -271,7 +271,7 @@
                             <TextBlock Grid.Column="3" Text="Au" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <DatePicker x:Name="ToDatePicker" Grid.Column="4"/>
 
-                            <TextBlock Grid.Column="6" Text="Entreprise" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="6" Text="Intervenants" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox x:Name="CompanyFilterComboBox"
                                       Grid.Column="7"
                                       Style="{StaticResource RoundedComboBoxStyle}"
@@ -324,7 +324,7 @@
                                             </Grid.ColumnDefinitions>
 
                                             <TextBlock Grid.Column="0"
-                                                       Text="Totaux par entreprise"
+                                                       Text="Totaux par intervenants"
                                                        FontWeight="Bold"
                                                        VerticalAlignment="Center"/>
 
@@ -386,7 +386,7 @@
 
                                             <DataGrid.Columns>
 
-                                                <DataGridTemplateColumn Header="Entreprise" Width="145">
+                                                <DataGridTemplateColumn Header="Intervenants" Width="145">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <Border x:Name="CompanyCell"
@@ -470,7 +470,7 @@
                                                 Padding="8,4"
                                                 Margin="0,0,0,10">
                                             <TextBlock x:Name="DetailsTitleTextBlock"
-                                                       Text="Détail — sélectionne une entreprise"
+                                                       Text="Détail — sélectionne un intervenant"
                                                        FontWeight="Bold"/>
                                         </Border>
 
@@ -572,7 +572,7 @@
 
                                     <TextBlock x:Name="ChartTitleTextBlock"
                                                DockPanel.Dock="Top"
-                                               Text="Graphique-TTC par entreprise"
+                                               Text="Graphique-TTC par intervenants"
                                                FontWeight="Bold"
                                                Margin="0,0,0,6"/>
 

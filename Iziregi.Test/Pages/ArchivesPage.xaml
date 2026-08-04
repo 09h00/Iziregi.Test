@@ -485,34 +485,60 @@
 				Margin="0,0,0,8"
 				Effect="{StaticResource CardShadowEffect}">
 
-			<Grid>
-	<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-		<TextBlock Text="Archives des bons d'intervention"
-		           FontSize="18"
-		           FontWeight="SemiBold"
-		           Foreground="#111827"
-		           Margin="0,0,10,0"/>
+			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+	<TextBlock Text="Archives des bons d'intervention"
+	           FontSize="18"
+	           FontWeight="SemiBold"
+	           Foreground="#111827"
+	           Margin="0,0,10,0"/>
 
-		<Button x:Name="RestoreSelectionButton"
-		        Content="Restaurer sélection"
-		        Style="{StaticResource RestoreSelectionButtonStyle}"
-		        Click="RestoreSelected_Click"
-		        IsEnabled="False"
-		        Margin="0,0,6,0"/>
+	<Button x:Name="RestoreSelectionButton"
+	        Content="Restaurer sélection"
+	        Style="{StaticResource RestoreSelectionButtonStyle}"
+	        Click="RestoreSelected_Click"
+	        IsEnabled="False"
+	        Height="34"
+	        Margin="0,0,6,0"/>
 
-		<Button x:Name="TrashSelectionButton"
-		        Content="Corbeille sélection"
-		        Style="{StaticResource TrashSelectionButtonStyle}"
-		        Click="TrashSelected_Click"
-		        IsEnabled="False"
-		        Margin="0,0,6,0"/>
+	<!-- ✅ Renommé (demande de Joe, 04.08.2026) : "Corbeille sélection" devient "Déplacer dans
+	     la corbeille", même libellé que sur Bons d'intervention/Planification. -->
+	<Button x:Name="TrashSelectionButton"
+	        Content="Déplacer dans la corbeille"
+	        Style="{StaticResource TrashSelectionButtonStyle}"
+	        Click="TrashSelected_Click"
+	        IsEnabled="False"
+	        Height="34"
+	        Margin="0,0,6,0"/>
 
-		<Button Content="Rafraîchir"
-		        Style="{StaticResource SmallButtonStyle}"
-		        BorderBrush="Black"
-		        Click="Refresh_Click"/>
-	</StackPanel>
-</Grid>
+	<Button Content="Rafraîchir"
+	        Style="{StaticResource SmallButtonStyle}"
+	        BorderBrush="Black"
+	        Height="34"
+	        Margin="0,0,6,0"
+	        Click="Refresh_Click"/>
+
+	<!-- ✅ Retour (04.08.2026, demande de Joe) : Archives n'a plus de bouton dédié dans le
+	     menu global (voir MainWindow.xaml), accès désormais via "Bons d'intervention",
+	     ce bouton ramène à la page d'origine. Déplacé à côté de "Rafraîchir" (demande de Joe,
+	     04.08.2026). -->
+	<Button Content="Page des bons"
+	        Style="{StaticResource SmallButtonStyle}"
+	        BorderBrush="Black"
+	        Height="34"
+	        Margin="0,0,6,0"
+	        Click="BackToParent_Click"/>
+
+	<!-- ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis Archives, va
+	     directement à Corbeille sans repasser par "Bons d'intervention". Fond rouge clair,
+	     même couleur que "Page corbeille" sur Bons d'intervention/Planification. -->
+	<Button Content="Page corbeille"
+	        Style="{StaticResource SmallButtonStyle}"
+	        Background="#FEE2E2"
+	        Foreground="#B91C1C"
+	        BorderBrush="#B91C1C"
+	        Height="34"
+	        Click="GoToTrash_Click"/>
+</StackPanel>
 		</Border>
 
 		<!-- TABLEAU -->
@@ -528,7 +554,8 @@
 					  Grid.Row="1"
 					  Style="{StaticResource GridStyle}"
 					  ColumnWidth="Auto"
-					  MouseDoubleClick="ArchivedGrid_MouseDoubleClick">
+					  MouseDoubleClick="ArchivedGrid_MouseDoubleClick"
+					  SelectionChanged="ArchivedGrid_SelectionChanged">
 
 				<DataGrid.Columns>
 

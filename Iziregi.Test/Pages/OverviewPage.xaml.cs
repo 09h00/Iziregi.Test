@@ -7,8 +7,10 @@ using System.Windows.Input;
 using System.Windows.Threading;
 
 using System.Windows;
+using System.Windows.Media;
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
+using Iziregi.Test;
 
 namespace Iziregi.Test.Pages;
 
@@ -19,31 +21,79 @@ namespace Iziregi.Test.Pages;
 public partial class OverviewPage : System.Windows.Controls.UserControl, IReloadablePage
 {
     private readonly MainWindow _host;
+    private static readonly CultureInfo FrenchCulture = new CultureInfo("fr-FR");
     private readonly DispatcherTimer _clockTimer;
+
+    // ✅ Bloc-notes (demande de Joe) : projet auquel appartient le texte actuellement affiché
+    // dans NoteTextBox, mémorisé pour que NoteTextBox_LostFocus sache où enregistrer même si
+    // l'utilisateur change de dossier sans avoir quitté le champ au clavier/à la souris avant.
+    private long _noteProjectId;
 
     public OverviewPage(MainWindow host)
     {
         InitializeComponent();
         _host = host;
 
-        // ✅ 31.07.2026 (demande de Joe) : plus de secondes affichées -- une mise à jour par
-        // minute suffit (au lieu d'une par seconde).
-        _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        _clockTimer.Tick += (_, _) => UpdateClock();
-        _clockTimer.Start();
         UpdateClock();
+        _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        _clockTimer.Tick += (s, e) => UpdateClock();
+        _clockTimer.Start();
     }
 
-    private static readonly CultureInfo FrenchCulture = new("fr-FR");
-
+    // ✅ Widget Heure/Date/Semaine (re-ajouté au-dessus de "Tâches", demande de Joe).
     private void UpdateClock()
     {
         var now = DateTime.Now;
-        ClockTextBlock.Text = now.ToString("HH:mm", FrenchCulture);
-
-        var dateText = now.ToString("dddd d MMMM yyyy", FrenchCulture);
-        DateTextBlock.Text = char.ToUpper(dateText[0], FrenchCulture) + dateText.Substring(1);
+        ClockTextBlock.Text = now.ToString("HH:mm");
+        DateTextBlock.Text = now.ToString("dddd d MMMM yyyy", FrenchCulture);
+        WeekTextBlock.Text = $"Semaine {System.Globalization.ISOWeek.GetWeekOfYear(now)}";
     }
+
+    // ✅ 23e passe (demande de Joe) : "0" en gris clair pour tous les totaux (tous widgets),
+    // et "Créé"/"Devis reçu"/"Validé" (widget Bons) en rouge quand ils ne sont pas à 0 --
+    // signale que ces bons attendent une action (relance devis, envoi validation, distribution).
+    private static readonly System.Windows.Media.Brush ZeroCountBrush = FreezeBrush(0xCB, 0xD5, 0xE1);
+    private static readonly System.Windows.Media.Brush NormalCountBrush = FreezeBrush(0x0F, 0x17, 0x2A);
+    private static readonly System.Windows.Media.Brush AlertCountBrush = FreezeBrush(0xDC, 0x26, 0x26);
+
+    private static System.Windows.Media.Brush FreezeBrush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static void SetCount(TextBlock tb, int value, bool alertIfNonZero = false)
+    {
+        tb.Text = value.ToString(CultureInfo.InvariantCulture);
+        var isAlert = alertIfNonZero && value != 0;
+        tb.Foreground = value == 0 ? ZeroCountBrush : (alertIfNonZero ? AlertCountBrush : NormalCountBrush);
+        // ✅ Fix (demande de Joe : "quand les totaux sont écrits en rouge, ils doivent être une
+        // police plus grande") : agrandi uniquement quand réellement en alerte, sinon revient à
+        // la taille normale (13, StageRowCountStyle) -- ne peut pas se fier au seul Style vu que
+        // FontSize local a déjà pu être posé lors d'un appel précédent.
+        tb.FontSize = isAlert ? 16 : 13;
+    }
+
+    private static readonly System.Windows.Media.Color DefaultProjectColor = System.Windows.Media.Color.FromRgb(0x25, 0x63, 0xEB);
+
+    // ✅ Même logique que ProjectsWindow.NormalizeHex/ColorToHex : "#RRGGBB", repli sur le bleu
+    // par défaut si vide ou invalide (dossier sans couleur choisie).
+    private static System.Windows.Media.Color ParseProjectColor(string? hex)
+    {
+        hex = (hex ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(hex)) return DefaultProjectColor;
+        if (!hex.StartsWith("#", StringComparison.Ordinal)) hex = "#" + hex;
+
+        try
+        {
+            if (System.Windows.Media.ColorConverter.ConvertFromString(hex) is System.Windows.Media.Color c) return c;
+        }
+        catch { }
+
+        return DefaultProjectColor;
+    }
+
 
     public void Reload()
     {
@@ -52,32 +102,63 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
         if (project == null)
         {
             ProjectNameTextBlock.Text = "Aucun dossier sélectionné";
+            ProjectAddressTextBlock.Text = "—";
+            ProjectCityTextBlock.Text = "—";
+            ProjectManagerNameTextBlock.Text = "—";
+            ProjectManagerContactTextBlock.Text = "—";
+            ProjectCardBorder.BorderBrush = new SolidColorBrush(DefaultProjectColor);
+            ProjectCardShadow.Color = DefaultProjectColor;
 
-            WorkOrdersActiveRun.Text = "0";
-            StageCreatedOnlyRun.Text = "0";
-            StageSentToCompanyRun.Text = "0";
-            StageQuoteReceivedRun.Text = "0";
-            StageSentToSignerRun.Text = "0";
-            StageValidatedRun.Text = "0";
-            StageDistributedRun.Text = "0";
-            StagePerformedRun.Text = "0";
-            StageRefusedRun.Text = "0";
-            StageCancelledRun.Text = "0";
-            WorkOrdersArchivedRun.Text = "0";
-            WorkOrdersTrashedRun.Text = "0";
-            WorkOrdersTotalRun.Text = "0";
-            ExpiredCompanyLinkRun.Text = "0";
-            ExpiredSignerLinkRun.Text = "0";
+            SetCount(WorkOrdersActiveRun, 0);
+            SetCount(StageCreatedOnlyRun, 0, alertIfNonZero: true);
+            SetCount(StageSentToCompanyRun, 0);
+            SetCount(StageQuoteReceivedRun, 0, alertIfNonZero: true);
+            SetCount(StageSentToSignerRun, 0);
+            SetCount(StageValidatedRun, 0, alertIfNonZero: true);
+            SetCount(StageDistributedRun, 0);
+            SetCount(StagePerformedRun, 0);
+            SetCount(StageRefusedRun, 0);
+            SetCount(StageCancelledRun, 0);
+            SetCount(WorkOrdersArchivedRun, 0);
+            SetCount(WorkOrdersTrashedRun, 0);
+            SetCount(WorkOrdersTotalRun, 0);
+            SetCount(ExpiredCompanyLinkRun, 0);
+            SetCount(ExpiredSignerLinkRun, 0);
 
-            TasksActiveRun.Text = "0";
-            TasksUrgency1Run.Text = "0";
-            TasksUrgency2Run.Text = "0";
-            TasksUrgency3Run.Text = "0";
-            TasksDoneRun.Text = "0";
+            SetCount(TasksActiveRun, 0);
+            SetCount(TasksUrgency1Run, 0);
+            SetCount(TasksUrgency2Run, 0);
+            SetCount(TasksUrgency3Run, 0);
+            SetCount(TasksDoneRun, 0);
+            SetCount(TasksArchivedRun, 0);
+            SetCount(TasksTotalRun, 0);
+            AccountingTotalTtcTextBlock.Text = "0.00";
+
+            _noteProjectId = 0;
+            AddNoteButton.IsEnabled = false;
+            RebuildNotesList();
             return;
         }
 
+        AddNoteButton.IsEnabled = true;
+        _noteProjectId = project.Id;
+        RebuildNotesList();
+
         ProjectNameTextBlock.Text = project.Name;
+
+        // ✅ 24e passe (demande de Joe) : "Coordonnées du dossier", mêmes champs que
+        // ProjectsWindow (Banque de dossiers).
+        ProjectAddressTextBlock.Text = string.IsNullOrWhiteSpace(project.AddressLine) ? "—" : project.AddressLine;
+        ProjectCityTextBlock.Text = string.IsNullOrWhiteSpace(project.ZipCity) ? "—" : project.ZipCity;
+        ProjectManagerNameTextBlock.Text = string.IsNullOrWhiteSpace(project.ManagerName) ? "—" : project.ManagerName;
+        ProjectManagerContactTextBlock.Text = string.IsNullOrWhiteSpace(project.ManagerContact) ? "—" : project.ManagerContact;
+
+        // ✅ 26e passe (demande de Joe) : bordure + ombre de la carte "Dossier actif" teintées
+        // de la couleur de la pastille du dossier (Project.ColorHex, même champ que
+        // ProjectsWindow). Repli sur le bleu par défaut si vide/invalide.
+        var projectColor = ParseProjectColor(project.ColorHex);
+        ProjectCardBorder.BorderBrush = new SolidColorBrush(projectColor);
+        ProjectCardShadow.Color = projectColor;
 
         // ✅ 31.07.2026 (demande de Joe) : "Statuts des bons" façon Excel -- chaque bon actif
         // (ni archivé ni à la corbeille) tombe dans EXACTEMENT une des catégories ci-dessous,
@@ -126,25 +207,25 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
         var expiredCompanyLink = StageCount("ExpiredCompanyLink");
         var expiredSignerLink = StageCount("ExpiredSignerLink");
 
-        WorkOrdersActiveRun.Text = workOrders.Count.ToString(CultureInfo.InvariantCulture);
-        StageCreatedOnlyRun.Text = createdOnly.ToString(CultureInfo.InvariantCulture);
-        StageSentToCompanyRun.Text = sentToCompany.ToString(CultureInfo.InvariantCulture);
-        StageQuoteReceivedRun.Text = quoteReceived.ToString(CultureInfo.InvariantCulture);
-        StageSentToSignerRun.Text = sentToSigner.ToString(CultureInfo.InvariantCulture);
-        StageValidatedRun.Text = validated.ToString(CultureInfo.InvariantCulture);
-        StageDistributedRun.Text = distributed.ToString(CultureInfo.InvariantCulture);
-        StagePerformedRun.Text = performed.ToString(CultureInfo.InvariantCulture);
-        StageRefusedRun.Text = refused.ToString(CultureInfo.InvariantCulture);
-        StageCancelledRun.Text = cancelled.ToString(CultureInfo.InvariantCulture);
+        SetCount(WorkOrdersActiveRun, workOrders.Count);
+        SetCount(StageCreatedOnlyRun, createdOnly, alertIfNonZero: true);
+        SetCount(StageSentToCompanyRun, sentToCompany);
+        SetCount(StageQuoteReceivedRun, quoteReceived, alertIfNonZero: true);
+        SetCount(StageSentToSignerRun, sentToSigner);
+        SetCount(StageValidatedRun, validated, alertIfNonZero: true);
+        SetCount(StageDistributedRun, distributed);
+        SetCount(StagePerformedRun, performed);
+        SetCount(StageRefusedRun, refused);
+        SetCount(StageCancelledRun, cancelled);
 
         var archivedCount = Db.GetArchivedWorkOrdersCount(project.Id);
         var trashedCount = Db.GetTrashedWorkOrders(project.Id).Count;
-        WorkOrdersArchivedRun.Text = archivedCount.ToString(CultureInfo.InvariantCulture);
-        WorkOrdersTrashedRun.Text = trashedCount.ToString(CultureInfo.InvariantCulture);
-        WorkOrdersTotalRun.Text = (workOrders.Count + archivedCount + trashedCount).ToString(CultureInfo.InvariantCulture);
+        SetCount(WorkOrdersArchivedRun, archivedCount);
+        SetCount(WorkOrdersTrashedRun, trashedCount);
+        SetCount(WorkOrdersTotalRun, workOrders.Count + archivedCount + trashedCount);
 
-        ExpiredCompanyLinkRun.Text = expiredCompanyLink.ToString(CultureInfo.InvariantCulture);
-        ExpiredSignerLinkRun.Text = expiredSignerLink.ToString(CultureInfo.InvariantCulture);
+        SetCount(ExpiredCompanyLinkRun, expiredCompanyLink);
+        SetCount(ExpiredSignerLinkRun, expiredSignerLink);
 
         // ✅ 16e passe (demande de Joe) : "Tâches actives" (comme "Actifs" côté Bons) + 1 ligne
         // par niveau d'urgence (1/2/3, liste de référence "Urg." du projet) + "Effectué", en
@@ -200,15 +281,57 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
         var allTasks = ProjectTasksStore.Load(project.Id);
         var activeTasks = allTasks.Where(t => !t.IsArchived && HasContent(t) && VisibleThisWeek(t)).ToList();
         var doneTasks = activeTasks.Count(t => t.Done);
+        var inProgressTasks = activeTasks.Count - doneTasks;
         var urgency1 = activeTasks.Count(t => !t.Done && t.Urgent == "1");
         var urgency2 = activeTasks.Count(t => !t.Done && t.Urgent == "2");
         var urgency3 = activeTasks.Count(t => !t.Done && t.Urgent == "3");
 
-        TasksActiveRun.Text = activeTasks.Count.ToString(CultureInfo.InvariantCulture);
-        TasksUrgency1Run.Text = urgency1.ToString(CultureInfo.InvariantCulture);
-        TasksUrgency2Run.Text = urgency2.ToString(CultureInfo.InvariantCulture);
-        TasksUrgency3Run.Text = urgency3.ToString(CultureInfo.InvariantCulture);
-        TasksDoneRun.Text = doneTasks.ToString(CultureInfo.InvariantCulture);
+        // ✅ Total = Actives + Effectuées + Archivées (demande de Joe) : les niveaux d'urgence
+        // ne s'y ajoutent pas (ce sont déjà un sous-détail d'Actives, pas un total à part). Pas
+        // de Corbeille ici (pas de page Corbeille pour les tâches, contrairement aux Bons).
+        var archivedTasksCount = allTasks.Count(t => t.IsArchived && HasContent(t));
+
+        SetCount(TasksActiveRun, inProgressTasks);
+        SetCount(TasksUrgency1Run, urgency1);
+
+        // ✅ "Niveau d'urgence 1" en rouge + police 1pt plus grand quand non nul (demande de
+        // Joe) : si 0, on ne touche à rien (garde l'apparence posée par SetCount ci-dessus).
+        // Volontairement à part de "alertIfNonZero" (SetCount) : cet écart-là saute à 16
+        // (utilisé ailleurs sur les bons), ici Joe veut seulement +1pt (13 -> 14).
+        if (urgency1 != 0)
+        {
+            TasksUrgency1Run.Foreground = AlertCountBrush;
+            TasksUrgency1Run.FontSize = 14;
+        }
+
+        SetCount(TasksUrgency2Run, urgency2);
+        SetCount(TasksUrgency3Run, urgency3);
+        SetCount(TasksDoneRun, doneTasks);
+        SetCount(TasksArchivedRun, archivedTasksCount);
+        SetCount(TasksTotalRun, activeTasks.Count + archivedTasksCount);
+
+        // ✅ 22e passe (demande de Joe) : niveaux d'urgence visibles uniquement si la colonne
+        // "Urg." est actuellement affichée dans la grille Planning (Db.GetTasksVisibleColumns,
+        // même clé "Urgency" que PlanningPage.ApplyTaskColumnVisibility).
+        var urgencyColumnVisible = Db.GetTasksVisibleColumns().Split(',', StringSplitOptions.RemoveEmptyEntries).Contains("Urgency");
+        var urgencyVisibility = urgencyColumnVisible ? Visibility.Visible : Visibility.Collapsed;
+        TasksUrgency1Chip.Visibility = urgencyVisibility;
+        TasksUrgency1Run.Visibility = urgencyVisibility;
+        TasksUrgency1Divider.Visibility = urgencyVisibility;
+        TasksUrgency2Chip.Visibility = urgencyVisibility;
+        TasksUrgency2Run.Visibility = urgencyVisibility;
+        TasksUrgency2Divider.Visibility = urgencyVisibility;
+        TasksUrgency3Chip.Visibility = urgencyVisibility;
+        TasksUrgency3Run.Visibility = urgencyVisibility;
+        TasksUrgency3Divider.Visibility = urgencyVisibility;
+
+        // ✅ 28e passe (demande de Joe) : widget "Comptabilité", Total TTC du 1er tableau de la
+        // page Comptabilité ("Totaux par entreprise"), même critère d'éligibilité (bons
+        // Validé) et même formule de prix, réutilisés depuis AccountingPage.
+        var accountingTotalTtc = Db.GetWorkOrdersForAccounting(project.Id)
+            .Where(AccountingPage.IsAccountingEligible)
+            .Sum(AccountingPage.ComputeTtc);
+        AccountingTotalTtcTextBlock.Text = accountingTotalTtc.ToString("0.00", CultureInfo.InvariantCulture);
     }
 
     // ✅ 31.07.2026 (demande de Joe) : "lien hyperactif" -- Archivés/Corbeille ouvrent leur
@@ -216,6 +339,7 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
     // 2 pilules pour empêcher le clic de "remonter" (bubbling) jusqu'au gestionnaire de la
     // carte englobante, qui ouvrirait sinon aussi "Bons d'intervention" juste après.
     private void BonsStatusTable_Click(object sender, MouseButtonEventArgs e) => _host.ShowDashboard();
+    private void AccountingCard_Click(object sender, MouseButtonEventArgs e) => _host.ShowAccounting();
 
     private void ArchivedRow_Click(object sender, MouseButtonEventArgs e)
     {
@@ -227,5 +351,159 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
     {
         e.Handled = true;
         _host.ShowTrash();
+    }
+
+    private void TasksArchivedRow_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        _host.ShowArchivesTasks();
+    }
+
+    // ✅ Bloc-notes (demande de Joe) : plusieurs notes indépendantes par dossier, construites
+    // dynamiquement (pas de binding/ObservableCollection ici, cohérent avec le reste de cette
+    // page). Reconstruit la liste entière à chaque ajout/suppression -- volume attendu faible
+    // (quelques notes), pas besoin d'une mise à jour incrémentale.
+    private void RebuildNotesList()
+    {
+        NotesListPanel.Children.Clear();
+
+        var notes = _noteProjectId > 0 ? Db.GetDashboardNotes(_noteProjectId) : new List<Db.DashboardNote>();
+        NotesCountTextBlock.Text = $"({notes.Count})";
+
+        foreach (var note in notes)
+            NotesListPanel.Children.Add(BuildNoteTile(note));
+    }
+
+    // ✅ Style "mosaïque" (demande de Joe, 2e essai après la version en liste empilée) : petits
+    // post-its de couleurs variées, façon vrais post-its papier. Couleur fixée à la création
+    // (Db.DashboardNote.ColorHex, choisie parmi cette palette dans AddNoteButton_Click) plutôt
+    // que recalculée par position à chaque affichage (demande de Joe : "les notes gardent leur
+    // couleur du début à la fin" -- sinon, supprimer une note décalait l'index de toutes les
+    // suivantes et changeait leur couleur).
+    private static readonly string[] NoteTileColors = { "#FEF9C3", "#FCE7F3", "#DBEAFE", "#DCFCE7", "#FFEDD5" };
+
+    private Border BuildNoteTile(Db.DashboardNote note)
+    {
+        // ✅ Repli sur la 1ère couleur de la palette pour les notes créées avant l'ajout de
+        // cette colonne (ColorHex vide en base).
+        var tileColorHex = string.IsNullOrWhiteSpace(note.ColorHex) ? NoteTileColors[0] : note.ColorHex;
+
+        // ✅ Qualifié en System.Windows.Controls.* / System.Windows.Media.Color (piège connu de
+        // ce fichier : WPF + WinForms référencés, TextBox/Button/Color sinon ambigus, CS0104).
+        var textBox = new System.Windows.Controls.TextBox
+        {
+            Text = note.Text,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0F, 0x17, 0x2A)),
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 14, 0, 0),
+        };
+        // ✅ Enregistrement automatique à la perte de focus (demande de Joe), même principe
+        // que les autres réglages "légers" de cette page (Db.SetDefaultXxx) -- pas de bouton
+        // "Enregistrer" séparé.
+        textBox.LostFocus += (s, e) => Db.UpdateDashboardNoteText(note.Id, textBox.Text);
+
+        // ✅ Double-clic -> NoteEditWindow (demande de Joe) : agrandit la note dans une petite
+        // fenêtre. PreviewMouseLeftButtonDown + e.Handled=true (pas d'événement dédié
+        // "MouseDoubleClick" sur TextBox) : évite aussi le comportement par défaut de
+        // sélection du mot au double-clic, qu'on remplace ici par l'ouverture de la fenêtre.
+        textBox.PreviewMouseLeftButtonDown += (s, e) =>
+        {
+            if (e.ClickCount != 2)
+                return;
+
+            e.Handled = true;
+
+            var editWindow = new NoteEditWindow(textBox.Text, tileColorHex) { Owner = System.Windows.Window.GetWindow(this) };
+            if (editWindow.ShowDialog() == true)
+            {
+                textBox.Text = editWindow.ResultText;
+                Db.UpdateDashboardNoteText(note.Id, editWindow.ResultText);
+            }
+        };
+
+        var deleteButton = new System.Windows.Controls.Button
+        {
+            Content = "✕",
+            Style = (Style)Resources["NoteDeleteButtonStyle"],
+            Width = 18,
+            Height = 18,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+        };
+        deleteButton.Click += (s, e) =>
+        {
+            Db.DeleteDashboardNote(note.Id);
+            RebuildNotesList();
+        };
+
+        // ✅ Superposition simple (Grid à une seule cellule) : la croix flotte dans le coin
+        // haut-droit, le TextBox garde une marge haute (14px) pour ne pas passer dessous.
+        var content = new Grid();
+        content.Children.Add(textBox);
+        content.Children.Add(deleteButton);
+
+        return new Border
+        {
+            Background = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(tileColorHex)),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(8),
+            Width = 140,
+            Height = 110,
+            Margin = new Thickness(0, 0, 8, 8),
+            Child = content,
+        };
+    }
+
+    private void AddNoteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_noteProjectId <= 0)
+            return;
+
+        // ✅ Couleur choisie une fois pour toutes ici, à la création (demande de Joe : "les
+        // notes gardent leur couleur du début à la fin") -- cycle selon le nombre de notes
+        // déjà existantes, comme le faisait l'ancien calcul par index, mais figé en base.
+        var newNoteColorHex = NoteTileColors[Db.GetDashboardNotes(_noteProjectId).Count % NoteTileColors.Length];
+        Db.InsertDashboardNote(_noteProjectId, "", newNoteColorHex);
+        RebuildNotesList();
+
+        // ✅ Focus direct sur la nouvelle note (dernier post-it ajouté), demande implicite de
+        // fluidité : pas besoin de chercher le post-it vide à la main après un clic "+".
+        if (NotesListPanel.Children.Count > 0 &&
+            NotesListPanel.Children[NotesListPanel.Children.Count - 1] is Border lastTile &&
+            lastTile.Child is Grid lastContent)
+        {
+            foreach (var child in lastContent.Children)
+            {
+                if (child is System.Windows.Controls.TextBox lastTextBox)
+                {
+                    lastTextBox.Focus();
+                    break;
+                }
+            }
+        }
+    }
+
+    // ✅ 27e passe (demande de Joe) : "tous les titres de widgets doivent avoir un lien avec
+    // leur page associée" -- "Tâches" ouvre Planification, "Dossier actif" ouvre la Banque de
+    // dossiers (même fenêtre que SettingsPage > Banque de dossiers).
+    private void TasksCard_Click(object sender, MouseButtonEventArgs e) => _host.ShowPlanning();
+
+    private void ProjectCard_Click(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            var win = new ProjectsWindow
+            {
+                Owner = System.Windows.Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
+            };
+            win.ShowDialog();
+        }
+        catch { }
     }
 }

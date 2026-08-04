@@ -109,9 +109,12 @@
             <Setter Property="BorderBrush" Value="#FCA5A5"/>
         </Style>
 
+        <!-- ✅ Gris neutre (demande de Joe, 04.08.2026) : convention plus courante pour
+             "Archiver" (action réversible, non destructive), remplace le vert précédent qui
+             évoque plutôt une action positive/validation. -->
         <Style x:Key="ArchiveSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
-            <Setter Property="Foreground" Value="#15803D"/>
-            <Setter Property="BorderBrush" Value="#15803D"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="BorderBrush" Value="Black"/>
         </Style>
 
         <!-- ✅ Bouton "Banque de projets" : avant, il réutilisait ButtonWithChevronStyle
@@ -541,55 +544,92 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
+                    <!-- ✅ Fix (demande de Joe, 04.08.2026) : colonnes 3-4-5-6 (séparateur/
+                         Carnet d'adresses/gap/ancien bouton Banque de dossiers) supprimées,
+                         cet accès est déplacé dans la barre de navigation globale (MainWindow),
+                         plus besoin ici. Ne restent que "Bons actifs" (colonne "*", récupère
+                         tout l'espace libéré) et les compteurs. -->
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="220"/>
-                        <ColumnDefinition Width="8"/>
-                        <ColumnDefinition Width="122"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Ligne 1 : Bons actifs + actions ... Nom, Adresse -->
-                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left">
+                    <!-- ✅ Titre sur la même ligne que les boutons (demande de Joe, 04.08.2026) :
+                         StackPanel Horizontal au lieu de Vertical. Boutons Height="34" (même
+                         dimension que la page Planification, demande de Joe). -->
+                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                         <TextBlock Text="Bons actifs"
                                    FontSize="13"
                                    FontWeight="SemiBold"
                                    Foreground="#111827"
-                                   HorizontalAlignment="Left"
-                                   Margin="0,0,0,6"/>
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
 
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="NewWorkOrderTopButton"
-                                    Content="+ Nouveau bon"
-                                    Style="{StaticResource PrimaryButtonStyle}"
-                                    Click="NewWorkOrder_Click"
-                                    VerticalContentAlignment="Center"
-                                    HorizontalContentAlignment="Center"
-                                    Padding="10,0"
-                                    Margin="0,0,6,0"/>
+                        <Button x:Name="NewWorkOrderTopButton"
+                                Content="+ Nouveau bon"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Click="NewWorkOrder_Click"
+                                VerticalContentAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                Height="34"
+                                Padding="10,0"
+                                Margin="0,0,6,0"/>
 
-                            <Button x:Name="ArchiveSelectionButton"
-                                    Content="Archiver sélection"
-                                    Style="{StaticResource ArchiveSmallButtonStyle}"
-                                    Click="ArchiveSelection_Click"
-                                    IsEnabled="False"
-                                    Margin="0,0,6,0"/>
+                        <Button x:Name="ArchiveSelectionButton"
+                                Content="Archiver sélection"
+                                Style="{StaticResource ArchiveSmallButtonStyle}"
+                                Click="ArchiveSelection_Click"
+                                IsEnabled="False"
+                                FontWeight="SemiBold"
+                                Height="34"
+                                Margin="0,0,6,0"/>
 
-                            <Button x:Name="TrashSelectionButton"
-                                    Content="Déplacer dans la corbeille"
-                                    Style="{StaticResource DangerSmallButtonStyle}"
-                                    Click="TrashSelection_Click"
-                                    IsEnabled="False"
-                                    Margin="0,0,6,0"/>
+                        <Button x:Name="TrashSelectionButton"
+                                Content="Déplacer dans la corbeille"
+                                Style="{StaticResource DangerSmallButtonStyle}"
+                                Click="TrashSelection_Click"
+                                IsEnabled="False"
+                                FontWeight="SemiBold"
+                                Height="34"
+                                Margin="0,0,6,0"/>
 
-                            <Button x:Name="RefreshTopButton"
-                                    Content="Rafraîchir"
-                                    Style="{StaticResource SmallButtonStyle}"
-                                    BorderBrush="Black"
-                                    Click="Refresh_Click"/>
-                        </StackPanel>
+                        <Button x:Name="RefreshTopButton"
+                                Content="Rafraîchir"
+                                Style="{StaticResource SmallButtonStyle}"
+                                BorderBrush="Black"
+                                Click="Refresh_Click"
+                                FontWeight="SemiBold"
+                                Height="34"
+                                Margin="0,0,6,0"/>
+
+                        <!-- ✅ Archives/Corbeille (04.08.2026, demande de Joe : "je n'ai pas de
+                             boutons Archives et Corbeille") : boutons explicites, en plus des
+                             badges compteurs déjà cliquables plus bas, même style que
+                             "Rafraîchir" ci-dessus. Fond gris clair (demande de Joe, 04.08.2026). -->
+                        <Button x:Name="ArchivesTopButton"
+                                Content="Page archives"
+                                Style="{StaticResource SmallButtonStyle}"
+                                Background="#F3F4F6"
+                                BorderBrush="Black"
+                                Click="ArchivesTopButton_Click"
+                                FontWeight="SemiBold"
+                                Height="34"
+                                Margin="0,0,6,0"/>
+
+                        <!-- ✅ Fond rouge clair, police/bordure rouges (demande de Joe, 04.08.2026),
+                             même couleur que le badge "Bons Corbeille" (#FEE2E2/#B91C1C).
+                             Renommé "Page corbeille" (demande de Joe, 04.08.2026). -->
+                        <Button x:Name="TrashTopButton"
+                                Content="Page corbeille"
+                                Style="{StaticResource SmallButtonStyle}"
+                                Background="#FEE2E2"
+                                Foreground="#B91C1C"
+                                BorderBrush="#B91C1C"
+                                FontWeight="SemiBold"
+                                Height="34"
+                                Click="TrashTopButton_Click"/>
                     </StackPanel>
 
                     <!-- Ligne de séparation verticale entre "Bons actifs" et les compteurs -->
@@ -605,9 +645,8 @@
                          largeur), le symbole "compteur" (jauge + aiguille, dessiné en
                          vectoriel plutôt qu'un emoji ambigu selon les polices) est donc placé à
                          gauche de la pile plutôt que dans le premier badge. Bons actifs/
-                         archivés + tâches en cours de la page Planning (une tâche "en cours" =
-                         au moins une info écrite dans une de ses colonnes, voir
-                         CountInProgressPlanningTasks). -->
+                         archivés/à la Corbeille (04.08.2026, demande de Joe : remplace le
+                         3e badge "Tâches planning en cours"). -->
                     <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Top"
@@ -620,65 +659,45 @@
                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
 
+                        <!-- ✅ Espacement +1mm (4px, demande de Joe, 04.08.2026) : 6 -> 10px entre
+                             les 3 badges. -->
                         <StackPanel Orientation="Vertical">
-                            <Border Width="230" Background="#F3F4F6" CornerRadius="6" Padding="8,4" Margin="0,0,0,6">
+                            <!-- ✅ Fond vert clair (demande de Joe, 04.08.2026, section
+                                 compteurs), même principe que "Bons Corbeille" en rouge clair. -->
+                            <Border Width="230" Background="#DCFCE7" CornerRadius="6" Padding="8,4" Margin="0,0,0,10">
                                 <TextBlock FontSize="14" Foreground="#111827">
                                     <Run Text="Bons actifs : "/>
                                     <Run x:Name="ActiveWorkOrdersCountRun" Text="0" FontWeight="SemiBold"/>
                                 </TextBlock>
                             </Border>
-                            <Border Width="230" Background="#F3F4F6" CornerRadius="6" Padding="8,4" Margin="0,0,0,6">
+                            <!-- ✅ Cliquable (04.08.2026, demande de Joe, compromis "menu trop
+                                 long") : ouvre directement les Archives (Bons), même mécanisme
+                                 que ArchivedRow_Click sur OverviewPage. Remplace l'ancien accès
+                                 par le menu de navigation global. -->
+                            <Border Width="230" Background="#F3F4F6" CornerRadius="6" Padding="8,4" Margin="0,0,0,10"
+                                    Cursor="Hand" MouseLeftButtonDown="ArchivedWorkOrdersBadge_Click">
                                 <TextBlock FontSize="14" Foreground="#111827">
                                     <Run Text="Bons archivés : "/>
                                     <Run x:Name="ArchivedWorkOrdersCountRun" Text="0" FontWeight="SemiBold"/>
                                 </TextBlock>
                             </Border>
-                            <Border Width="230" Background="#DBEAFE" CornerRadius="6" Padding="8,4">
+                            <!-- ✅ Remplace "Tâches planning en cours" (demande de Joe, 04.08.2026) :
+                                 nombre de bons à la Corbeille, fond rouge clair. Cliquable (même
+                                 raison que ci-dessus) : ouvre directement la Corbeille (Bons). -->
+                            <Border Width="230" Background="#FEE2E2" CornerRadius="6" Padding="8,4"
+                                    Cursor="Hand" MouseLeftButtonDown="TrashedWorkOrdersBadge_Click">
                                 <TextBlock FontSize="14" Foreground="#111827">
-                                    <Run Text="Tâches planning en cours : "/>
-                                    <Run x:Name="TasksInProgressCountRun" Text="0" FontWeight="SemiBold"/>
+                                    <Run Text="Bons Corbeille : "/>
+                                    <Run x:Name="TrashedWorkOrdersCountRun" Text="0" FontWeight="SemiBold"/>
                                 </TextBlock>
                             </Border>
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- ✅ Dossier, sur une seule colonne, disposé comme dans les bons/PDF -->
-                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="4" VerticalAlignment="Top">
-                        <TextBlock x:Name="ProjectNameEditTextBox"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#111827"
-                                   TextWrapping="Wrap"/>
-
-                        <TextBlock x:Name="ProjectAddressEditTextBox"
-                                   FontSize="12"
-                                   Foreground="#4B5563"
-                                   TextWrapping="Wrap"
-                                   Margin="0,4,0,0"/>
-
-                        <TextBlock x:Name="ProjectZipCityEditTextBox"
-                                   FontSize="12"
-                                   Foreground="#4B5563"
-                                   TextWrapping="Wrap"/>
-
-                        <TextBlock x:Name="ProjectManagerLineTextBox"
-                                   FontSize="12"
-                                   Foreground="#4B5563"
-                                   TextWrapping="Wrap"
-                                   Margin="0,12,0,0"/>
-                    </StackPanel>
-
-                    <!-- Ligne de séparation verticale entre les compteurs et infos dossier -->
-                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="3"
-                            Width="1"
-                            Background="Black"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Stretch"
-                            Margin="0,2,0,2"/>
-
                     <!-- ✅ Ligne 2 : recherche (24.07.2026, demande de Joe : garder le champ de
-                         recherche, à gauche de "Résumé demande") + Résumé demande. -->
-                    <Grid Grid.Row="1" Grid.Column="0" Margin="0,-15,0,0">
+                         recherche, à gauche de "Résumé demande") + Résumé demande.
+                         ✅ Descendue de 5mm (19px, demande de Joe, 04.08.2026) : -15 -> 4. -->
+                    <Grid Grid.Row="1" Grid.Column="0" Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="220"/>
                             <ColumnDefinition Width="10"/>
@@ -762,29 +781,6 @@
                           SelectionChanged="ProjectComboBox_SelectionChanged"
                           Visibility="Collapsed"/>
 
-                    <!-- ✅ Accès Banque de projets : en haut à droite -->
-                    <Button x:Name="ManageProjectsButton"
-                        Grid.Row="0"
-                        Grid.Column="6"
-                        Width="122"
-                        Height="48"
-                        Style="{StaticResource ProjectBankButtonStyle}"
-                        Click="ManageProjects_Click"
-                        VerticalAlignment="Top"
-                        ToolTip="Ouvrir la banque de dossiers">
-                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
-                            <TextBlock Text="🗂"
-                                       FontSize="16"
-                                       HorizontalAlignment="Center"
-                                       Margin="0,0,0,2"/>
-                            <TextBlock Text="Banque de dossiers"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"
-                                       TextWrapping="Wrap"
-                                       TextAlignment="Center"
-                                       HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
                 </Grid>
             </Grid>
         </Border>
@@ -941,7 +937,7 @@
                             </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="2">
+                                    <Border CornerRadius="10">
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background" Value="Transparent"/>
@@ -1004,7 +1000,7 @@
                             </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="2">
+                                    <Border CornerRadius="10">
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background" Value="Transparent"/>
@@ -1096,7 +1092,7 @@
                             </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="2">
+                                    <Border CornerRadius="10">
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background" Value="Transparent"/>
@@ -1147,7 +1143,7 @@
                             </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="2">
+                                    <Border CornerRadius="10">
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background" Value="Transparent"/>
@@ -1212,7 +1208,7 @@
                             </DataGridTemplateColumn.Header>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="2">
+                                    <Border CornerRadius="10">
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background" Value="Transparent"/>

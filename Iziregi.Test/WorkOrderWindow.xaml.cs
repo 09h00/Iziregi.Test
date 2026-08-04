@@ -502,6 +502,8 @@ public partial class WorkOrderWindow : Window
 
     // ✅ Champs obligatoires du Devis (20.07.2026, demande de Joe) : Nom toujours obligatoire ;
     // Forfait TTC obligatoire dès qu'un pdf de devis forfaitaire est joint.
+    // ✅ N° du devis (04.08.2026, demande de Joe) : même principe, obligatoire dès qu'un pdf est
+    // joint.
     private bool EnsureQuoteRequiredFieldsOrWarn()
     {
         var hasPdf = _workOrder?.ForfaitPdfFileBytes != null && _workOrder.ForfaitPdfFileBytes.Length > 0;
@@ -511,6 +513,18 @@ public partial class WorkOrderWindow : Window
             System.Windows.MessageBox.Show(
                 this,
                 "Le montant \"Forfait TTC\" est obligatoire lorsqu'un pdf est joint au devis.",
+                "Devis",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        var quoteNumber = (ForfaitQuoteNumberTextBox?.Text ?? "").Trim();
+        if (hasPdf && string.IsNullOrWhiteSpace(quoteNumber))
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "Le \"N° du devis\" est obligatoire lorsqu'un pdf est joint au devis.",
                 "Devis",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -656,6 +670,60 @@ public partial class WorkOrderWindow : Window
     // ✅ Permet à MainWindow de retrouver une fenêtre déjà ouverte pour un bon donné
     // (utilisé pour rafraîchir l'affichage après une synchronisation serveur en tâche de fond).
     public long? CurrentWorkOrderId => _workOrder?.Id > 0 ? _workOrder.Id : (long?)null;
+
+    // ✅ Fix (demande de Joe : "je veux pouvoir travailler sur les 2 fenêtres sans avoir à
+    // les fermer") : cette fenêtre n'est plus modale (voir tous les appels ShowDialog -> Show
+    // dans MainWindow/DashboardPage/AccountingPage/ArchivesPage/TrashPage), donc plusieurs
+    // fenêtres peuvent maintenant être ouvertes en même temps. Deux garde-fous nécessaires
+    // pour éviter un vrai risque de données introduit par ce changement :
+    // 1) Ouvrir DEUX FOIS le même bon existant (par deux endroits différents) donnerait deux
+    //    copies en mémoire qui s'écraseraient l'une l'autre à l'enregistrement -> on active la
+    //    fenêtre déjà ouverte au lieu d'en créer une deuxième (ActivateIfAlreadyOpen).
+    // 2) Le numéro d'un NOUVEAU bon est calculé à l'OUVERTURE (MAX+1, voir CreateDefaultWorkOrder),
+    //    pas à l'enregistrement : ouvrir deux bons "Nouveau" avant d'en enregistrer un premier
+    //    leur donnerait le MÊME numéro -> on empêche d'ouvrir un deuxième bon en création tant
+    //    qu'un premier est encore ouvert (AnyCreateModeWindowOpen), on active celui déjà ouvert.
+    public bool IsCreateMode => _isCreateMode;
+
+    public static bool ActivateIfAlreadyOpen(long workOrderId)
+    {
+        if (workOrderId <= 0) return false;
+
+        foreach (Window w in System.Windows.Application.Current.Windows)
+        {
+            if (w is WorkOrderWindow wow && wow.CurrentWorkOrderId == workOrderId)
+            {
+                try
+                {
+                    if (wow.WindowState == WindowState.Minimized) wow.WindowState = WindowState.Normal;
+                    wow.Activate();
+                }
+                catch { }
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool ActivateExistingCreateModeWindow()
+    {
+        foreach (Window w in System.Windows.Application.Current.Windows)
+        {
+            if (w is WorkOrderWindow wow && wow.IsCreateMode)
+            {
+                try
+                {
+                    if (wow.WindowState == WindowState.Minimized) wow.WindowState = WindowState.Normal;
+                    wow.Activate();
+                }
+                catch { }
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // ✅ Recharge les données du bon depuis la base locale (appelé après une synchro serveur
     // qui a mis à jour ce bon alors que la fenêtre était déjà ouverte) : sans cela, les lignes
@@ -1039,6 +1107,9 @@ public partial class WorkOrderWindow : Window
         SetTextBoxEditable(TravelRateTextBox, devisStandardEditable);
         SetTextBoxEditable(DiscountRateTextBox, devisStandardEditable);
         SetTextBoxEditable(ForfaitTtcTextBox, forfaitTtcEditable);
+        // ✅ N° du devis (04.08.2026, demande de Joe) : même condition d'édition que Forfait TTC,
+        // les deux champs sont liés au même devis PDF.
+        SetTextBoxEditable(ForfaitQuoteNumberTextBox, forfaitTtcEditable);
 
         SetTextBoxEditable(TvaRateTextBox, devisEditable);
         SetTextBoxEditable(QuoteNotesTextBox, devisEditable);
@@ -1117,6 +1188,12 @@ public partial class WorkOrderWindow : Window
             var name = _workOrder?.ForfaitPdfFileName ?? "";
             CompanyPdfFileNameTextBlock.Text = string.IsNullOrWhiteSpace(name) ? "" : name;
         }
+
+        // ✅ N° du devis (04.08.2026, demande de Joe) : la ligne n'apparaît que si un pdf est
+        // joint -- économise de la hauteur pour un devis détaillé (sans pdf).
+        var quoteNumberVisibility = hasPdf ? Visibility.Visible : Visibility.Collapsed;
+        if (ForfaitQuoteNumberLabel != null) ForfaitQuoteNumberLabel.Visibility = quoteNumberVisibility;
+        if (ForfaitQuoteNumberTextBox != null) ForfaitQuoteNumberTextBox.Visibility = quoteNumberVisibility;
     }
 
     private static void SetEnabled(WpfUIElement? e, bool enabled)
@@ -1280,6 +1357,11 @@ public partial class WorkOrderWindow : Window
             _formLocked = !_isCreateMode && _workOrder.Id > 0;
 
             BdrNumberTextBox.Text = _workOrder.BdrNumber.ToString(CultureInfo.InvariantCulture);
+            // ✅ Fix (demande de Joe : "sur le bon, il m'écrit P1") : ce TextBlock n'était
+            // jamais rempli en code, il gardait donc le texte de conception figé dans le XAML
+            // ("- P1", un ancien préfixe jamais mis à jour) au lieu du vrai tag du dossier
+            // (WorkOrder.ProjectTag, en "D" depuis le renommage).
+            ProjectTagTextBlock.Text = string.IsNullOrWhiteSpace(_workOrder.ProjectTag) ? "" : $"- {_workOrder.ProjectTag}";
             RequestDatePicker.SelectedDate = _workOrder.RequestDate == default ? DateTime.Today : _workOrder.RequestDate;
 
             ReserveComboBox.Text = _workOrder.Reserve ?? "";
@@ -1303,6 +1385,7 @@ public partial class WorkOrderWindow : Window
             TravelRateTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.TravelRate);
 
             ForfaitTtcTextBox.Text = FormatMoney2DecOrEmpty(_workOrder.ForfaitTtc);
+            ForfaitQuoteNumberTextBox.Text = _workOrder.ForfaitQuoteNumber ?? "";
 
             var tvaRate = _workOrder.TvaRate <= 0 ? 8.1 : _workOrder.TvaRate;
             TvaRateTextBox.Text = tvaRate.ToString("0.00", CultureInfo.InvariantCulture);
@@ -1375,6 +1458,7 @@ public partial class WorkOrderWindow : Window
         Add(TravelRateTextBox.Text);
         Add(DiscountRateTextBox.Text);
         Add(ForfaitTtcTextBox.Text);
+        Add(ForfaitQuoteNumberTextBox.Text);
         Add(TvaRateTextBox.Text);
         Add(QuoteNotesTextBox.Text);
         Add(SignatureNameComboBox.Text);
@@ -2015,6 +2099,7 @@ public partial class WorkOrderWindow : Window
         // à l'ancien Forfait HT, celui-ci reste éditable dans l'UI). Même règle B que l'ancien
         // forfait quand utilisé : force à 0 les autres montants + rabais.
         _workOrder.ForfaitTtc = ParseDouble(ForfaitTtcTextBox.Text, 0);
+        _workOrder.ForfaitQuoteNumber = (ForfaitQuoteNumberTextBox.Text ?? "").Trim();
         var forfaitTtcUsed = Math.Abs(_workOrder.ForfaitTtc) > 0.0000000001;
 
         if (forfaitUsed || forfaitTtcUsed)
@@ -2671,8 +2756,11 @@ public partial class WorkOrderWindow : Window
 
             // ✅ Le montant Forfait TTC est effacé quand le pdf est supprimé (20.07.2026, 4e
             // demande de Joe) : un montant forfait sans le pdf qui le justifie n'a plus de sens.
+            // ✅ Même règle pour le N° du devis (04.08.2026, demande de Joe).
             if (ForfaitTtcTextBox != null) ForfaitTtcTextBox.Text = "";
             _workOrder.ForfaitTtc = 0;
+            if (ForfaitQuoteNumberTextBox != null) ForfaitQuoteNumberTextBox.Text = "";
+            _workOrder.ForfaitQuoteNumber = "";
 
             // ✅ ApplyFieldPermissions (au lieu de UpdateCompanyPdfButtons seul) : recalcule aussi
             // l'état du champ Forfait TTC.
