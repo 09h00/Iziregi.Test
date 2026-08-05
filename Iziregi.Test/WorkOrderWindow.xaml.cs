@@ -68,6 +68,12 @@ public partial class WorkOrderWindow : Window
     private bool _isCreateMode;
     private bool _isLoading;
 
+    // ✅ Bouton 2 positions Devis standard/Devis PDF (04.08.2026, demande de Joe) : None = zone
+    // neutre (bon neuf, aucune position choisie -- rien de remplissable), voir
+    // SetQuoteMode/ApplyQuoteModeUi/DetectQuoteModeFromData.
+    private enum QuoteMode { None, Standard, Pdf }
+    private QuoteMode _quoteMode = QuoteMode.None;
+
     // ✅ Lecture seule par défaut (23.07.2026, demande de Joe) : un bon déjà enregistré s'ouvre
     // verrouillé pour éviter les modifications accidentelles (frappe clavier, trait dans la
     // signature...). Le bouton "Modifier" déverrouille explicitement. Un nouveau bon (création)
@@ -293,7 +299,8 @@ public partial class WorkOrderWindow : Window
     }
 
     private const int QuoteNotesMaxCharsPerLine = 26;
-    private const int QuoteNotesMaxLines = 5;
+    // ✅ 5 -> 7 (04.08.2026, demande de Joe).
+    private const int QuoteNotesMaxLines = 7;
 
     private bool _quoteNotesGuard;
     private bool _quoteNotesLimitHooked;
@@ -500,19 +507,22 @@ public partial class WorkOrderWindow : Window
         catch { }
     }
 
-    // ✅ Champs obligatoires du Devis (20.07.2026, demande de Joe) : Nom toujours obligatoire ;
-    // Forfait TTC obligatoire dès qu'un pdf de devis forfaitaire est joint.
-    // ✅ N° du devis (04.08.2026, demande de Joe) : même principe, obligatoire dès qu'un pdf est
-    // joint.
+    // ✅ Champs obligatoires du Devis PDF (04.08.2026, demande de Joe : "enlever les obligations
+    // entre les champs 'Ajouter pdf' et 'Montant TTC du pdf'") : les 3 conditions (pdf joint, N°
+    // du devis, Montant TTC) sont désormais indépendantes -- chacune obligatoire par elle-même en
+    // position "Devis PDF", plutôt que "Montant TTC"/"N° du devis" obligatoires SEULEMENT SI un
+    // pdf est déjà joint. Bloque l'enregistrement (voir SaveWorkOrder) tant que les 3 ne sont pas
+    // toutes remplies.
     private bool EnsureQuoteRequiredFieldsOrWarn()
     {
+        if (_quoteMode != QuoteMode.Pdf) return true;
+
         var hasPdf = _workOrder?.ForfaitPdfFileBytes != null && _workOrder.ForfaitPdfFileBytes.Length > 0;
-        var forfaitTtc = ParseDouble(ForfaitTtcTextBox?.Text, 0);
-        if (hasPdf && Math.Abs(forfaitTtc) < 0.0000000001)
+        if (!hasPdf)
         {
             System.Windows.MessageBox.Show(
                 this,
-                "Le montant \"Forfait TTC\" est obligatoire lorsqu'un pdf est joint au devis.",
+                "En mode \"Devis pdf\", l'ajout de votre devis pdf est obligatoire",
                 "Devis",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -520,11 +530,23 @@ public partial class WorkOrderWindow : Window
         }
 
         var quoteNumber = (ForfaitQuoteNumberTextBox?.Text ?? "").Trim();
-        if (hasPdf && string.IsNullOrWhiteSpace(quoteNumber))
+        if (string.IsNullOrWhiteSpace(quoteNumber))
         {
             System.Windows.MessageBox.Show(
                 this,
-                "Le \"N° du devis\" est obligatoire lorsqu'un pdf est joint au devis.",
+                "En mode \"Devis pdf\", le numéro de votre devis pdf est obligatoire",
+                "Devis",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
+        }
+
+        var forfaitTtc = ParseDouble(ForfaitTtcTextBox?.Text, 0);
+        if (Math.Abs(forfaitTtc) < 0.0000000001)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "En mode \"Devis pdf\", le montant TTC de votre pdf est obligatoire",
                 "Devis",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -1039,6 +1061,9 @@ public partial class WorkOrderWindow : Window
         UpdatePdfButtonVisibility();
         UpdateExportButtonsVisibility();
         UpdateCompanyPdfButtons();
+        // ✅ Rafraîchit l'affichage selon _quoteMode courant (ne le redétecte pas, voir
+        // DetectQuoteModeFromData, appelé une seule fois au chargement).
+        ApplyQuoteModeUi();
     }
 
     private void UpdateExportButtonsVisibility()
@@ -1086,17 +1111,18 @@ public partial class WorkOrderWindow : Window
 
         var devisEditable = isArchitecte || isEntreprise;
 
-        // ✅ Forfait (ancien, donnée existante) : si utilisé, désactive Matériel/MO/Déplacements/
-        // Rabais. Forfait TTC (nouveau, 20.07.2026, demande de Joe) : même principe, exclusivité
-        // mutuelle avec le devis détaillé. Le champ Forfait TTC lui-même reste cliquable même sans
-        // pdf joint (20.07.2026, 3e demande de Joe : un clic sans pdf doit avertir par pop-up
-        // plutôt que d'être simplement désactivé — voir ForfaitTtcTextBox_GotFocus) ; il n'est
-        // en revanche verrouillé (IsEnabled=false) que si les autres totaux ne sont pas à 0.
-        var forfaitUsed = IsForfaitUsedFromUi();
-        var forfaitTtcUsed = IsForfaitTtcUsedFromUi();
+        // ✅ Boutons 2 positions grisés hors édition (04.08.2026, demande de Joe) : sinon un clic
+        // sur "Devis standard"/"Devis PDF" en lecture seule ne fait rien visiblement, sans
+        // indiquer pourquoi.
+        if (QuoteModeStandardButton != null) QuoteModeStandardButton.IsEnabled = devisEditable;
+        if (QuoteModePdfButton != null) QuoteModePdfButton.IsEnabled = devisEditable;
 
-        var devisStandardEditable = devisEditable && !forfaitUsed && !forfaitTtcUsed;
-        var forfaitTtcEditable = devisEditable && !forfaitUsed && (forfaitTtcUsed || AreStandardQuoteFieldsAllZero());
+        // ✅ Bouton 2 positions Devis standard/Devis PDF (04.08.2026, demande de Joe) : remplace
+        // l'ancienne détection implicite (forfaitUsed/forfaitTtcUsed dérivés des valeurs saisies)
+        // par la position explicitement choisie -- _quoteMode est maintenant la seule source de
+        // vérité. Zone neutre (QuoteMode.None) : aucun des deux n'est éditable.
+        var devisStandardEditable = devisEditable && _quoteMode == QuoteMode.Standard;
+        var forfaitTtcEditable = devisEditable && _quoteMode == QuoteMode.Pdf;
 
         SetTextBoxEditable(QuoteNameTextBox, devisEditable);
         SetEnabled(QuoteDatePicker, devisEditable);
@@ -1155,16 +1181,6 @@ public partial class WorkOrderWindow : Window
         ApplyMode();
     }
 
-    // ✅ Lit désormais _workOrder (plus de ForfaitQtyTextBox/ForfaitUnitPriceTextBox, ligne
-    // supprimée du tableau — 20.07.2026) : préserve le comportement pour un bon existant qui
-    // avait déjà un montant forfait enregistré avant ce changement.
-    private bool IsForfaitUsedFromUi()
-    {
-        if (_workOrder == null) return false;
-        var total = _workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice;
-        return Math.Abs(total) > 0.0000000001;
-    }
-
     private void UpdateCompanyPdfButtons()
     {
         var hasPdf = false;
@@ -1179,9 +1195,12 @@ public partial class WorkOrderWindow : Window
         if (CompanyPdfOpenButton != null) CompanyPdfOpenButton.IsEnabled = hasPdf;
         if (CompanyPdfRemoveButton != null) CompanyPdfRemoveButton.IsEnabled = hasPdf && !_formLocked;
 
-        // ✅ Réplique Blazor (22.07.2026, demande de Joe) : bouton "Ajouter PDF" grisé si un
-        // montant existe déjà dans le devis standard.
-        if (CompanyPdfUploadButton != null) CompanyPdfUploadButton.IsEnabled = AreStandardQuoteFieldsAllZero() && !_formLocked;
+        // ✅ Fix (04.08.2026, demande de Joe : "hide don't delete" au changement de position) :
+        // l'exclusivité standard/pdf est désormais assurée par _quoteMode (le bouton n'est même
+        // plus visible hors position "Devis PDF", voir QuotePdfSection) -- ne dépend plus de
+        // AreStandardQuoteFieldsAllZero, qui resterait faux si d'anciennes données standard sont
+        // encore présentes mais masquées.
+        if (CompanyPdfUploadButton != null) CompanyPdfUploadButton.IsEnabled = !_formLocked;
 
         if (CompanyPdfFileNameTextBlock != null)
         {
@@ -1189,11 +1208,79 @@ public partial class WorkOrderWindow : Window
             CompanyPdfFileNameTextBlock.Text = string.IsNullOrWhiteSpace(name) ? "" : name;
         }
 
-        // ✅ N° du devis (04.08.2026, demande de Joe) : la ligne n'apparaît que si un pdf est
-        // joint -- économise de la hauteur pour un devis détaillé (sans pdf).
-        var quoteNumberVisibility = hasPdf ? Visibility.Visible : Visibility.Collapsed;
-        if (ForfaitQuoteNumberLabel != null) ForfaitQuoteNumberLabel.Visibility = quoteNumberVisibility;
-        if (ForfaitQuoteNumberTextBox != null) ForfaitQuoteNumberTextBox.Visibility = quoteNumberVisibility;
+        // ✅ N° du devis (04.08.2026, demande de Joe) : reste toujours visible désormais (comme
+        // "Montant TTC du pdf"), plus de masquage tant qu'aucun pdf n'est joint -- seule
+        // l'obligation à l'enregistrement subsiste (voir EnsureQuoteRequiredFieldsOrWarn).
+    }
+
+    // =========================
+    // ✅ Bouton 2 positions Devis standard/Devis PDF (04.08.2026, demande de Joe)
+    // =========================
+
+    // ✅ Pré-sélection automatique à l'ouverture d'un bon existant : PDF déjà joint -> position
+    // PDF ; lignes/Main d'œuvre/Déplacements/Rabais déjà remplis -> position standard ; sinon
+    // (bon neuf) -> zone neutre, aucune position choisie.
+    private QuoteMode DetectQuoteModeFromData()
+    {
+        if (_workOrder == null) return QuoteMode.None;
+
+        var hasPdf = _workOrder.ForfaitPdfFileBytes != null && _workOrder.ForfaitPdfFileBytes.Length > 0;
+        if (hasPdf) return QuoteMode.Pdf;
+
+        // ✅ Ancien Forfait (ForfaitQty*UnitPrice, gelé depuis le 20.07.2026 -- plus de champ UI
+        // pour le saisir, voir historique Git) : compté comme donnée "standard" pour ne pas
+        // renvoyer en zone neutre un bon très ancien qui l'utilisait déjà.
+        var hasStandardData =
+            _lines.Any(l => !string.IsNullOrWhiteSpace(l.Label) || Math.Abs(l.LineTotal) > 0.0000000001)
+            || Math.Abs(_workOrder.LaborHours) > 0.0000000001
+            || Math.Abs(_workOrder.LaborRate) > 0.0000000001
+            || Math.Abs(_workOrder.TravelQty) > 0.0000000001
+            || Math.Abs(_workOrder.TravelRate) > 0.0000000001
+            || Math.Abs(_workOrder.DiscountRate) > 0.0000000001
+            || Math.Abs(_workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice) > 0.0000000001;
+
+        return hasStandardData ? QuoteMode.Standard : QuoteMode.None;
+    }
+
+    private void QuoteModeStandardButton_Click(object sender, RoutedEventArgs e) => TrySwitchQuoteMode(QuoteMode.Standard);
+    private void QuoteModePdfButton_Click(object sender, RoutedEventArgs e) => TrySwitchQuoteMode(QuoteMode.Pdf);
+
+    // ✅ Changement de position après coup (demande de Joe) : les données de l'AUTRE mode ne
+    // sont jamais effacées, seulement masquées -- reclique sur le premier mode pour les
+    // retrouver. Pas de confirmation nécessaire puisque rien n'est perdu.
+    private void TrySwitchQuoteMode(QuoteMode mode)
+    {
+        if (_formLocked) return;
+        if (_quoteMode == mode) return;
+
+        _quoteMode = mode;
+        ApplyQuoteModeUi();
+        QueueRecomputeTotals();
+    }
+
+    private void ApplyQuoteModeUi()
+    {
+        if (QuoteModeStandardButton == null || QuoteModePdfButton == null) return;
+
+        var standard = _quoteMode == QuoteMode.Standard;
+        var pdf = _quoteMode == QuoteMode.Pdf;
+
+        QuoteModeStandardButton.Style = (Style)FindResource(standard ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+        QuoteModePdfButton.Style = (Style)FindResource(pdf ? "QuotePdfButtonActiveStyle" : "SecondaryButtonStyle");
+
+        var standardVisibility = standard ? Visibility.Visible : Visibility.Collapsed;
+        if (QuoteLineButtonsPanel != null) QuoteLineButtonsPanel.Visibility = standardVisibility;
+        if (LinesGrid != null) LinesGrid.Visibility = standardVisibility;
+        if (TotalMaterialBox != null) TotalMaterialBox.Visibility = standardVisibility;
+
+        var standardRowHeight = standard ? new GridLength(26) : new GridLength(0);
+        if (LaborRowDef != null) LaborRowDef.Height = standardRowHeight;
+        if (TravelRowDef != null) TravelRowDef.Height = standardRowHeight;
+        if (DiscountRowDef != null) DiscountRowDef.Height = standardRowHeight;
+
+        if (QuotePdfSection != null) QuotePdfSection.Visibility = pdf ? Visibility.Visible : Visibility.Collapsed;
+
+        UpdateCompanyPdfButtons();
     }
 
     private static void SetEnabled(WpfUIElement? e, bool enabled)
@@ -1421,6 +1508,11 @@ public partial class WorkOrderWindow : Window
                 _lines.Add(new WorkOrderLine());
 
             TrimTrailingEmptyLinesToMax();
+
+            // ✅ Bouton 2 positions Devis standard/Devis PDF (04.08.2026, demande de Joe) :
+            // pré-sélection automatique à partir des données existantes, une seule fois au
+            // chargement (pas à chaque ApplyMode(), qui ne fait que rafraîchir l'affichage).
+            _quoteMode = DetectQuoteModeFromData();
 
             RecomputeTotals();
             ApplyMode();
@@ -1750,8 +1842,11 @@ public partial class WorkOrderWindow : Window
     }
 
     // ✅ Forfait TTC : mutuelle exclusivité avec le devis détaillé (20.07.2026, demande de Joe).
+    // ✅ Fix (04.08.2026, demande de Joe : "hide don't delete" au changement de position) :
+    // exige aussi _quoteMode == Pdf, sinon un montant TTC resté dans le champ (masqué, pas
+    // effacé) continuerait à piloter le calcul des totaux même en position "Devis standard".
     private bool IsForfaitTtcUsedFromUi()
-        => Math.Abs(ParseDouble(ForfaitTtcTextBox?.Text, 0)) > 0.0000000001;
+        => _quoteMode == QuoteMode.Pdf && Math.Abs(ParseDouble(ForfaitTtcTextBox?.Text, 0)) > 0.0000000001;
 
     // ✅ Pop-up d'avertissement au clic sans pdf joint (20.07.2026, 3e demande de Joe) : le champ
     // reste cliquable (voir ApplyFieldPermissions), mais on retire aussitôt le focus si aucun pdf
@@ -1769,26 +1864,6 @@ public partial class WorkOrderWindow : Window
             MessageBoxImage.Warning);
 
         Keyboard.ClearFocus();
-    }
-
-    private bool AreStandardQuoteFieldsAllZero()
-    {
-        double materialTotal = 0;
-        foreach (var l in _lines)
-        {
-            if (l == null) continue;
-            if (IsLineEmpty(l)) continue;
-            materialTotal += l.LineTotal;
-        }
-
-        var laborTotal = ParseDouble(LaborHoursTextBox?.Text) * ParseDouble(LaborRateTextBox?.Text);
-        var travelTotal = ParseDouble(TravelQtyTextBox?.Text) * ParseDouble(TravelRateTextBox?.Text);
-        var discountRate = ParseDouble(DiscountRateTextBox?.Text, 0);
-
-        return Math.Abs(materialTotal) < 0.0000000001
-            && Math.Abs(laborTotal) < 0.0000000001
-            && Math.Abs(travelTotal) < 0.0000000001
-            && Math.Abs(discountRate) < 0.0000000001;
     }
 
     private static double ParseDouble(string? value, double def = 0)
@@ -2090,42 +2165,59 @@ public partial class WorkOrderWindow : Window
         _workOrder.QuoteName = (QuoteNameTextBox.Text ?? "").Trim();
         _workOrder.QuoteDate = QuoteDatePicker.SelectedDate ?? DateTime.Today;
 
-        // ✅ Plus de champ UI pour saisir le forfait (ligne supprimée du tableau, 20.07.2026) :
-        // _workOrder.ForfaitQty/ForfaitUnitPrice ne sont donc plus jamais réécrits ici — la
-        // valeur existante (bon créé avant ce changement) reste telle quelle.
-        var forfaitUsed = Math.Abs(_workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice) > 0.0000000001;
-
-        // ✅ Forfait TTC (20.07.2026, demande de Joe) : toujours lu depuis son champ (contrairement
-        // à l'ancien Forfait HT, celui-ci reste éditable dans l'UI). Même règle B que l'ancien
-        // forfait quand utilisé : force à 0 les autres montants + rabais.
-        _workOrder.ForfaitTtc = ParseDouble(ForfaitTtcTextBox.Text, 0);
-        _workOrder.ForfaitQuoteNumber = (ForfaitQuoteNumberTextBox.Text ?? "").Trim();
-        var forfaitTtcUsed = Math.Abs(_workOrder.ForfaitTtc) > 0.0000000001;
-
-        if (forfaitUsed || forfaitTtcUsed)
+        // ✅ Exclusivité DS/DF à l'enregistrement (05.08.2026, demande de Joe : "c'est ou l'un ou
+        // l'autre") : le va-et-vient entre positions pendant l'édition reste réversible (rien
+        // n'est perdu tant qu'on n'enregistre pas, voir TrySwitchQuoteMode/ApplyQuoteModeUi),
+        // mais au moment d'Enregistrer, seules les données de la position _quoteMode active sont
+        // conservées -- celles de l'autre position sont réellement effacées (pas juste masquées),
+        // pour empêcher les 2 jeux de données de coexister en base.
+        if (_quoteMode == QuoteMode.Pdf)
         {
-            // ✅ règle B : on force à 0 les autres montants + rabais
             _workOrder.LaborHours = 0;
             _workOrder.LaborRate = 0;
             _workOrder.TravelQty = 0;
             _workOrder.TravelRate = 0;
             _workOrder.DiscountRate = 0;
+            _workOrder.ForfaitQty = 0;
+            _workOrder.ForfaitUnitPrice = 0;
 
             if (LaborHoursTextBox != null) LaborHoursTextBox.Text = "";
             if (LaborRateTextBox != null) LaborRateTextBox.Text = "";
             if (TravelQtyTextBox != null) TravelQtyTextBox.Text = "";
             if (TravelRateTextBox != null) TravelRateTextBox.Text = "";
             if (DiscountRateTextBox != null) DiscountRateTextBox.Text = "";
+
+            _workOrder.ForfaitTtc = ParseDouble(ForfaitTtcTextBox.Text, 0);
+            _workOrder.ForfaitQuoteNumber = (ForfaitQuoteNumberTextBox.Text ?? "").Trim();
         }
         else
         {
-            _workOrder.LaborHours = ParseDouble(LaborHoursTextBox.Text);
-            _workOrder.LaborRate = ParseDouble(LaborRateTextBox.Text);
-            _workOrder.TravelQty = ParseDouble(TravelQtyTextBox.Text);
-            _workOrder.TravelRate = ParseDouble(TravelRateTextBox.Text);
+            _workOrder.ForfaitTtc = 0;
+            _workOrder.ForfaitQuoteNumber = "";
+            _workOrder.ForfaitPdfFileBytes = null;
+            _workOrder.ForfaitPdfFileName = "";
+            if (ForfaitTtcTextBox != null) ForfaitTtcTextBox.Text = "";
+            if (ForfaitQuoteNumberTextBox != null) ForfaitQuoteNumberTextBox.Text = "";
 
-            _workOrder.DiscountRate = ParseDouble(DiscountRateTextBox.Text, 0);
-            if (_workOrder.DiscountRate < 0) _workOrder.DiscountRate = 0;
+            if (_quoteMode == QuoteMode.Standard)
+            {
+                _workOrder.LaborHours = ParseDouble(LaborHoursTextBox.Text);
+                _workOrder.LaborRate = ParseDouble(LaborRateTextBox.Text);
+                _workOrder.TravelQty = ParseDouble(TravelQtyTextBox.Text);
+                _workOrder.TravelRate = ParseDouble(TravelRateTextBox.Text);
+
+                _workOrder.DiscountRate = ParseDouble(DiscountRateTextBox.Text, 0);
+                if (_workOrder.DiscountRate < 0) _workOrder.DiscountRate = 0;
+            }
+            else
+            {
+                // QuoteMode.None : aucune position choisie, rien à conserver côté devis.
+                _workOrder.LaborHours = 0;
+                _workOrder.LaborRate = 0;
+                _workOrder.TravelQty = 0;
+                _workOrder.TravelRate = 0;
+                _workOrder.DiscountRate = 0;
+            }
         }
 
         _workOrder.TvaRate = ParseDouble(TvaRateTextBox.Text, 8.1);
@@ -2161,7 +2253,8 @@ public partial class WorkOrderWindow : Window
         if (_workOrder.Id > 0)
             Db.UpdateWorkOrderValidationDecision(_workOrder.Id, _workOrder.ValidationDecision);
 
-        // ✅ si forfait utilisé => on supprime toutes les lignes matériel en base
+        // ✅ position "Devis PDF" => on supprime toutes les lignes matériel en base (exclusivité
+        // DS/DF à l'enregistrement, voir plus haut).
         if (_workOrder.Id > 0)
         {
             foreach (var l in _lines)
@@ -2169,7 +2262,7 @@ public partial class WorkOrderWindow : Window
 
             TrimTrailingEmptyLinesToMax();
 
-            if (forfaitUsed)
+            if (_quoteMode == QuoteMode.Pdf)
             {
                 _lines.Clear();
                 _lines.Add(new WorkOrderLine());
@@ -2638,11 +2731,10 @@ public partial class WorkOrderWindow : Window
     {
         try
         {
-            // ✅ Réplique Blazor (22.07.2026, demande de Joe) : impossible d'ajouter un pdf
-            // forfait si un montant existe déjà dans le devis standard.
-            if (!AreStandardQuoteFieldsAllZero())
-                return;
-
+            // ✅ Fix (04.08.2026, demande de Joe : "hide don't delete") : l'exclusivité
+            // standard/pdf est désormais assurée par _quoteMode (ce bouton n'est visible qu'en
+            // position "Devis PDF", voir QuotePdfSection) -- d'anciennes données standard
+            // masquées ne doivent plus bloquer silencieusement l'ajout d'un pdf.
             if (_workOrder == null)
                 _workOrder = CreateDefaultWorkOrder();
 

@@ -1009,6 +1009,10 @@ public partial class MainWindow : Window
         // utilisent ce mode. Voir WorkOrder.ForfaitTtc / WorkOrderWindow.RecomputeTotals.
         public double ForfaitTtc { get; set; }
 
+        // ✅ N° du devis (05.08.2026, réplique BDR razor) : saisi par l'entreprise en position
+        // "Devis PDF", voir WorkOrder.ForfaitQuoteNumber.
+        public string ForfaitQuoteNumber { get; set; } = "";
+
         public double DiscountRate { get; set; }
         public double TvaRate { get; set; }
 
@@ -1150,6 +1154,9 @@ public partial class MainWindow : Window
                         // sur le forfait HT legacy si l'entreprise a utilisé ce mode (les deux ne
                         // sont normalement jamais non-zéro en même temps côté formulaire web).
                         wo.ForfaitTtc = payload.ForfaitTtc;
+
+                        // ✅ N° du devis (05.08.2026, réplique BDR razor).
+                        wo.ForfaitQuoteNumber = (payload.ForfaitQuoteNumber ?? "").Trim();
 
                         wo.DiscountRate = payload.DiscountRate;
                         wo.TvaRate = payload.TvaRate;

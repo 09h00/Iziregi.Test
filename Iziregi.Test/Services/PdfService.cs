@@ -833,55 +833,109 @@ public static class PdfService
                             r.RelativeItem(0.65f).AlignRight().AlignMiddle().PaddingRight(8).Text($"Devis créé le : {dateText}").FontSize(10).FontColor(textMain);
                         });
 
-                        var printableLines = lines
-                            .Where(l =>
-                            {
-                                var label = (l.Label ?? "").Trim();
-                                var hasNumbers =
-                                    Math.Abs(l.Qty) > 0.0000000001 ||
-                                    Math.Abs(l.UnitPrice) > 0.0000000001 ||
-                                    Math.Abs(l.LineTotal) > 0.0000000001;
-                                return !string.IsNullOrWhiteSpace(label) || hasNumbers;
-                            })
-                            .ToList();
+                        // ✅ Position "Devis PDF" (05.08.2026, réplique de la structure WPF/Blazor
+                        // QuoteMode) : le tableau Libellé/Matériel est remplacé par le rectangle
+                        // bleu "Devis PDF" en pleine largeur (au lieu de rester coincé dans la
+                        // colonne "Note" de 130pt), et les lignes Main d'œuvre/Déplacements/Rabais/
+                        // Total Matériel disparaissent des totaux (toujours à 0 dans ce mode,
+                        // l'exclusivité DS/DF étant maintenant appliquée à l'enregistrement, voir
+                        // WorkOrderWindow.SaveWorkOrder).
+                        bool isPdfMode = hasForfaitTtc;
 
-                        // ✅ Bordure basse fermant le tableau (23.07.2026) : les lignes n'ont plus
-                        // que leur bordure haute (voir CellBody/CellBodyWhite), donc rien ne fermait
-                        // le bas de la dernière ligne, quel que soit son nombre.
-                        section.Item().PaddingTop(6).BorderBottom(0.75f).BorderColor("#000000").Table(t =>
+                        if (!isPdfMode)
                         {
-                            t.ColumnsDefinition(c =>
+                            var printableLines = lines
+                                .Where(l =>
+                                {
+                                    var label = (l.Label ?? "").Trim();
+                                    var hasNumbers =
+                                        Math.Abs(l.Qty) > 0.0000000001 ||
+                                        Math.Abs(l.UnitPrice) > 0.0000000001 ||
+                                        Math.Abs(l.LineTotal) > 0.0000000001;
+                                    return !string.IsNullOrWhiteSpace(label) || hasNumbers;
+                                })
+                                .ToList();
+
+                            // ✅ Bordure basse fermant le tableau (23.07.2026) : les lignes n'ont plus
+                            // que leur bordure haute (voir CellBody/CellBodyWhite), donc rien ne fermait
+                            // le bas de la dernière ligne, quel que soit son nombre.
+                            section.Item().PaddingTop(6).BorderBottom(0.75f).BorderColor("#000000").Table(t =>
                             {
-                                c.RelativeColumn(1);
-                                c.ConstantColumn(55);
-                                c.ConstantColumn(72);
-                                c.ConstantColumn(82);
+                                t.ColumnsDefinition(c =>
+                                {
+                                    c.RelativeColumn(1);
+                                    c.ConstantColumn(55);
+                                    c.ConstantColumn(72);
+                                    c.ConstantColumn(82);
+                                });
+
+                                t.Header(h =>
+                                {
+                                    // ✅ Réplique serveur : "Qt" centré (.col-qt.c), "Prix/pc"/"Total" alignés à droite (.r).
+                                    h.Cell().Element(CellHeader).Text("Libellé / Matériel");
+                                    h.Cell().Element(CellHeader).AlignCenter().Text("Qt");
+                                    h.Cell().Element(CellHeader).AlignRight().Text("Prix/pc");
+                                    h.Cell().Element(CellHeaderLast).AlignRight().Text("Total");
+                                });
+
+                                foreach (var l in printableLines)
+                                {
+                                    var label = (l.Label ?? "").Trim();
+                                    if (string.IsNullOrWhiteSpace(label)) label = "—";
+
+                                    t.Cell().Element(CellBodyWhite).Text(label);
+                                    t.Cell().Element(CellBodyWhite).AlignCenter().Text(FormatQty(l.Qty));
+                                    t.Cell().Element(CellBodyWhite).AlignRight().Text(FmtOptInv(l.UnitPrice));
+                                    t.Cell().Element(CellBody).AlignRight().Text(FmtInv(l.LineTotal));
+                                }
                             });
+                        }
+                        else
+                        {
+                            // ✅ Rectangle "Devis PDF" (05.08.2026, demande de Joe : "trop imposant
+                            // dans le pdf, manque de blanc") : plus en pleine largeur ici -- bord
+                            // gauche aligné sur la colonne des totaux (même largeur ConstantItem(130)
+                            // + ConstantItem(6) que la ligne Note/Totaux juste en dessous), pour que
+                            // le bord gauche tombe exactement au-dessus de "Total HT". Reste dans la
+                            // même position (remplace le tableau Libellé/Matériel), juste plus étroit.
+                            var quoteNumber = (wo.ForfaitQuoteNumber ?? "").Trim();
 
-                            t.Header(h =>
+                            section.Item().PaddingTop(6).Row(outerRow =>
                             {
-                                // ✅ Réplique serveur : "Qt" centré (.col-qt.c), "Prix/pc"/"Total" alignés à droite (.r).
-                                h.Cell().Element(CellHeader).Text("Libellé / Matériel");
-                                h.Cell().Element(CellHeader).AlignCenter().Text("Qt");
-                                h.Cell().Element(CellHeader).AlignRight().Text("Prix/pc");
-                                h.Cell().Element(CellHeaderLast).AlignRight().Text("Total");
+                                outerRow.RelativeItem(1f);
+                                outerRow.ConstantItem(6);
+
+                                outerRow.RelativeItem(1.7f).Background("#4C6D8E").CornerRadius(4).Padding(8).Column(box =>
+                                {
+                                    box.Item().Text("Devis PDF").Italic().SemiBold().FontSize(9).FontColor(Colors.White);
+
+                                    if (!string.IsNullOrWhiteSpace(quoteNumber))
+                                    {
+                                        box.Item().PaddingTop(6).Row(r =>
+                                        {
+                                            r.RelativeItem().Text("N° du devis").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
+                                            r.RelativeItem().AlignRight().Text(quoteNumber).SemiBold().FontSize(10).FontColor(Colors.White);
+                                        });
+                                    }
+
+                                    box.Item().PaddingTop(6).Row(r =>
+                                    {
+                                        r.RelativeItem().Text("MONTANT TTC du pdf").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
+                                        r.RelativeItem().AlignRight().Text(FmtInv(forfaitTtc)).SemiBold().FontSize(10).FontColor(Colors.White);
+                                    });
+                                });
                             });
+                        }
 
-                            foreach (var l in printableLines)
-                            {
-                                var label = (l.Label ?? "").Trim();
-                                if (string.IsNullOrWhiteSpace(label)) label = "—";
-
-                                t.Cell().Element(CellBodyWhite).Text(label);
-                                t.Cell().Element(CellBodyWhite).AlignCenter().Text(FormatQty(l.Qty));
-                                t.Cell().Element(CellBodyWhite).AlignRight().Text(FmtOptInv(l.UnitPrice));
-                                t.Cell().Element(CellBody).AlignRight().Text(FmtInv(l.LineTotal));
-                            }
-                        });
-
+                        // ✅ Ratio 1 / 1.7 (05.08.2026, demande de Joe : "65% partout") : la colonne
+                        // Totaux occupait ~75% de la largeur ici (ConstantItem(130) fixe pour Note,
+                        // puis RelativeItem() prenant tout le reste, sur une page pdf plus large que
+                        // la carte WPF) au lieu des ~65% du BI (Grid "1*, 7, 1.7*", voir
+                        // WorkOrderWindow.xaml). Mêmes proportions relatives ici pour un rendu
+                        // identique quelle que soit la largeur de page.
                         section.Item().PaddingTop(8).Row(row =>
                         {
-                            row.ConstantItem(130).Column(left =>
+                            row.RelativeItem(1f).Column(left =>
                             {
                                 left.Item().Text("Note").SemiBold().FontSize(9).FontColor(Colors.Grey.Darken4);
 
@@ -905,42 +959,11 @@ public static class PdfService
                                         foreach (var ln in noteLines)
                                             list.Item().Text(string.IsNullOrWhiteSpace(ln) ? " " : ln).FontSize(9);
                                     });
-
-                                // ✅ Rectangle "Devis PDF" (23.07.2026, demande de Joe) : n'existait pas
-                                // du tout dans le PDF jusqu'ici (le montant Forfait TTC était pris en
-                                // compte dans les totaux, mais rien n'indiquait visuellement qu'un pdf
-                                // forfaitaire avait été joint). Réplique du rectangle bleu foncé
-                                // (#1E3A8A) affiché dans le WPF/Blazor, mêmes textes ("Devis PDF" /
-                                // "MONTANT TTC du pdf").
-                                if (hasForfaitTtc)
-                                {
-                                    left.Item()
-                                        .PaddingTop(6)
-                                        .Background("#1E3A8A")
-                                        .CornerRadius(4)
-                                        .Padding(8)
-                                        .Column(box =>
-                                        {
-                                            box.Item().Text("Devis PDF").Italic().SemiBold().FontSize(9).FontColor(Colors.White);
-
-                                            // ✅ N° du devis (04.08.2026, demande de Joe) : au-dessus de
-                                            // "MONTANT TTC du pdf", même ordre que le WPF.
-                                            var quoteNumber = (wo.ForfaitQuoteNumber ?? "").Trim();
-                                            if (!string.IsNullOrWhiteSpace(quoteNumber))
-                                            {
-                                                box.Item().PaddingTop(6).Text("N° du devis").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
-                                                box.Item().PaddingTop(2).Text(quoteNumber).SemiBold().FontSize(10).FontColor(Colors.White);
-                                            }
-
-                                            box.Item().PaddingTop(6).Text("MONTANT TTC du pdf").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
-                                            box.Item().PaddingTop(2).Text(FmtInv(forfaitTtc)).SemiBold().FontSize(10).FontColor(Colors.White);
-                                        });
-                                }
                             });
 
                             row.ConstantItem(6);
 
-                            row.RelativeItem().Table(t =>
+                            row.RelativeItem(1.7f).Table(t =>
                             {
                                 t.ColumnsDefinition(c =>
                                 {
@@ -950,30 +973,41 @@ public static class PdfService
                                     c.ConstantColumn(82);
                                 });
 
-                                // ✅ Bordure haute ET basse (23.07.2026, demande de Joe) : avant, un
-                                // Cell séparé (ColumnSpan+PaddingVertical) simulait la ligne du bas
-                                // avec un espace ; remplacé par une vraie bordure directement sur la
-                                // ligne, comme Total HT/Total TTC.
-                                AddTotalsRow4Cols(t, "Total Matériel", "", "", FmtInv(materialTotal),
-                                    isStrong: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, greyBackground: true);
+                                if (!isPdfMode)
+                                {
+                                    // ✅ Bordure haute ET basse (23.07.2026, demande de Joe) : avant, un
+                                    // Cell séparé (ColumnSpan+PaddingVertical) simulait la ligne du bas
+                                    // avec un espace ; remplacé par une vraie bordure directement sur la
+                                    // ligne, comme Total HT/Total TTC.
+                                    AddTotalsRow4Cols(t, "Total Matériel", "", "", FmtInv(materialTotal),
+                                        isStrong: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, greyBackground: true);
 
-                                AddTotalsRow4Cols(t, "Main d’œuvre",
-                                    qtyText: FormatQty(wo.LaborHours),
-                                    unitPriceText: FmtOptInv(wo.LaborRate),
-                                    totalText: FmtInv(laborTotal),
-                                    isStrong: true, blueBackground: true);
+                                    AddTotalsRow4Cols(t, "Main d’œuvre",
+                                        qtyText: FormatQty(wo.LaborHours),
+                                        unitPriceText: FmtOptInv(wo.LaborRate),
+                                        totalText: FmtInv(laborTotal),
+                                        isStrong: true, blueBackground: true);
 
-                                AddTotalsRow4Cols(t, "Déplacements",
-                                    qtyText: FormatQty(wo.TravelQty),
-                                    unitPriceText: FmtOptInv(wo.TravelRate),
-                                    totalText: FmtInv(travelTotal),
-                                    isStrong: true, blueBackground: true);
+                                    AddTotalsRow4Cols(t, "Déplacements",
+                                        qtyText: FormatQty(wo.TravelQty),
+                                        unitPriceText: FmtOptInv(wo.TravelRate),
+                                        totalText: FmtInv(travelTotal),
+                                        isStrong: true, blueBackground: true);
 
-                                // ✅ Réplique serveur : le taux va dans la colonne Qt, le libellé reste statique,
-                                // et le total est toujours préfixé d'un "-" littéral (même à 0 : "-0.00").
-                                AddTotalsRow4Cols(t, "Rabais (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
+                                    // ✅ Réplique serveur : le taux va dans la colonne Qt, le libellé reste statique,
+                                    // et le total est toujours préfixé d'un "-" littéral (même à 0 : "-0.00").
+                                    AddTotalsRow4Cols(t, "Rabais (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
 
-                                AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true);
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true);
+                                }
+                                else
+                                {
+                                    // ✅ Total HT devient la première ligne du tableau en position
+                                    // "Devis PDF" (05.08.2026) : bordure haute explicite (comme "Total
+                                    // Matériel" en position standard) puisque plus rien ne la précède.
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f);
+                                }
+
                                 AddTotalsRow4Cols(t, "TVA (%)", FormatQty(tvaRate), "", FmtInv(tvaAmount), isStrong: false, blueBackground: true, bluePrixDecorative: true);
                                 AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true, bottomBorderThickness: 0.9f, noInnerDividers: true);
                             });
