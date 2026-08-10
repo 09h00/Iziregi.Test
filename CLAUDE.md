@@ -82,6 +82,13 @@ donner une commande sans cette précision. Communication en français, tutoiemen
 5. **Commentaires XAML** : `<!-- ... -->` ne tolère pas `--` à l'intérieur du texte (erreur
    de compilation MC3000, "An XML comment cannot contain '--'"). Piège récurrent avec les
    tirets doubles utilisés comme ponctuation en français — préférer une virgule ou un point.
+6. **Ambiguïté de types WPF vs WinForms/System.Drawing** : ce projet référence les deux
+   (voir piège `Button` déjà noté pour `MainWindow.xaml.cs`), donc tout type dont le nom
+   existe dans les deux univers déclenche une erreur CS0104 "référence ambiguë" — rencontré
+   pour `Point` (`System.Windows.Point` vs `System.Drawing.Point`) et `Panel`
+   (`System.Windows.Controls.Panel` vs `System.Windows.Forms.Panel`) dans
+   `PlanningPage.xaml.cs`. Réflexe dès qu'une erreur CS0104 apparaît : qualifier
+   explicitement en `System.Windows.X` plutôt que de chercher une autre cause.
 
 ## Export complet des données (17.07.2026)
 

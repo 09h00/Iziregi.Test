@@ -20,15 +20,20 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
     private readonly MainWindow _host;
     private ArchitectIdentityPage? _identityPage;
 
+    // ✅ Les 7 premières pages de la barre de nav principale, dans leur ordre gauche à
+    // droite (demande de Joe, 10.08.2026). Archives/Corbeille retirées : ce ne sont plus
+    // des boutons de nav à part entière (accessibles via le sous-menu ▾ de "Bons
+    // d'intervention"), remplacées ici par Carnet d'adresses et Paramètres, désormais
+    // dans les 7 premiers boutons. Aide/Contact (8e/9e) restent hors de cette liste.
     private static readonly (string Key, string Display)[] StartupPageOptions =
     {
         ("", "Tableau de bord"),
-        ("Bons", "Bons d'intervention"),
-        ("Archives", "Archives"),
-        ("Corbeille", "Corbeille"),
-        ("Listes", "Listes"),
-        ("Comptabilité", "Comptabilité"),
         ("Planning", "Planification"),
+        ("Bons", "Bons d'intervention"),
+        ("Comptabilité", "Comptabilité"),
+        ("Listes", "Listes"),
+        ("AddressBook", "Carnet d'adresses"),
+        ("Settings", "Paramètres"),
     };
 
     public SettingsPage(MainWindow host)

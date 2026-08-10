@@ -1653,6 +1653,8 @@ public partial class MainWindow : Window
             case "Listes": ShowLists(); break;
             case "Comptabilité": ShowAccounting(); break;
             case "Planning": ShowPlanning(); break;
+            case "AddressBook": ShowAddressBook(); break;
+            case "Settings": ShowSettings(); break;
             default: ShowOverview(); break;
         }
     }

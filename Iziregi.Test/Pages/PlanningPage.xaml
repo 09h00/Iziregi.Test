@@ -673,6 +673,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -739,32 +740,6 @@
                             Style="{StaticResource PlanningDatePickerStyle}"
                             SelectedDateChanged="EndDatePicker_SelectedDateChanged"/>
 
-                <!-- ✅ Archives/Corbeille (04.08.2026, demande de Joe : "mettre les boutons à
-                     côté des dates") : déplacées ici depuis la colonne de droite (à côté de
-                     "Générer PDF"), deviennent le sous-menu d'accès pour la variante Tâches
-                     (ShowArchivesTasks/ShowTrashedTasks, MainWindow.xaml.cs). -->
-                <!-- ✅ Décalé de 10mm/38px vers la droite (demande de Joe) : marge gauche
-                     14 -> 52 (le bouton "Voir Corbeille" suit, sans marge propre, dans le même
-                     StackPanel). Renommé "Voir Archives" (demande de Joe). -->
-                <Button x:Name="PlanningArchivesButton"
-                        Content="Voir Archives"
-                        Style="{StaticResource WeekNavButtonStyle}"
-                        Background="#F3F4F6"
-                        Height="30"
-                        Padding="10,0"
-                        Margin="52,0,6,0"
-                        Click="PlanningArchivesButton_Click"/>
-                <!-- ✅ Fond rouge clair, police/bordure rouges (demande de Joe, 04.08.2026).
-                     Renommé "Voir Corbeille" (demande de Joe). -->
-                <Button x:Name="PlanningTrashButton"
-                        Content="Voir Corbeille"
-                        Style="{StaticResource WeekNavButtonStyle}"
-                        Background="#FEE2E2"
-                        Foreground="#B91C1C"
-                        BorderBrush="#B91C1C"
-                        Height="30"
-                        Padding="10,0"
-                        Click="PlanningTrashButton_Click"/>
             </StackPanel>
 
             <!-- ✅ Marge droite de 8 pour aligner le bord droit avec la pastille "Dossier" de
@@ -773,6 +748,36 @@
                  marge droite de 12 dans son StackPanel — 12+8-12 = 8 de marge ici pour
                  compenser exactement l'écart. -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                <!-- ✅ Raccourcis de navigation (demande de Joe) : liste des tâches pouvant devenir
+                     très longue, ces 4 boutons évitent de devoir scroller manuellement jusqu'à
+                     une section. Placés dans cette barre du haut (déjà figée, hors du
+                     ScrollViewer) plutôt qu'un rail flottant séparé, à la demande de Joe. -->
+                <Button x:Name="ScrollToTopHeaderButton"
+                        Content="Haut de page"
+                        Style="{StaticResource WeekNavButtonStyle}"
+                        Height="30"
+                        Padding="10,0"
+                        Margin="0,0,4,0"
+                        Click="ScrollToTopButton_Click"/>
+                <Button Content="Planning"
+                        Style="{StaticResource WeekNavButtonStyle}"
+                        Height="30"
+                        Padding="10,0"
+                        Margin="0,0,4,0"
+                        Click="ScrollToWeeklyButton_Click"/>
+                <Button Content="Image"
+                        Style="{StaticResource WeekNavButtonStyle}"
+                        Height="30"
+                        Padding="10,0"
+                        Margin="0,0,4,0"
+                        Click="ScrollToImageButton_Click"/>
+                <Button Content="Bas de page"
+                        Style="{StaticResource WeekNavButtonStyle}"
+                        Height="30"
+                        Padding="10,0"
+                        Margin="0,0,14,0"
+                        Click="ScrollToBottomButton_Click"/>
+
                 <Button x:Name="ExportPdfButton"
                         Content="Générer PDF"
                         Style="{StaticResource PdfButtonStyle}"
@@ -784,7 +789,286 @@
             </StackPanel>
         </Grid>
 
-        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto">
+        <!-- ✅ Bloc "Ajouter"/"Supprimer" + en-tête de colonnes des Tâches, placés en dur ici
+             (demande de Joe) : zone figée au même titre que la barre "Début/Fin" au-dessus
+             (Grid.Row="2", hors du ScrollViewer), plus besoin de bascule dynamique ni de calcul
+             de seuil, juste un placement statique. Le scroll de la page (MainScrollViewer,
+             Row="3") démarre donc directement à la 1ère ligne de tâches. L'en-tête de colonnes
+             ci-dessous est "détaché" de TasksDataGrid (qui a HeadersVisibility="None" plus bas)
+             : mêmes libellés/boutons de filtre (réutilisent TaskColumnFilterButton_Click), mais
+             largeurs liées en live à TasksDataGrid.Columns[x].ActualWidth via x:Reference, pour
+             rester alignées même si une colonne se redimensionne ou est masquée/affichée
+             (ActualWidth=0 quand masquée -> la cellule disparaît aussi, sans code supplémentaire). -->
+        <!-- ✅ x:Name ajouté (10.08.2026, demande de Joe) : ce bloc figé se masque désormais
+             quand la grille Tâches est entièrement scrollée hors de vue, pour ne plus se
+             superposer à la section Planning hebdo qui remonte dessous (MainScrollViewer_ScrollChanged). -->
+        <!-- ✅ Padding bas réduit 10->4 (demande de Joe, 10.08.2026) : compense le Margin haut
+             de 2mm ajouté sur la ligne de titres plus bas, qui laissait trop de vide sous les
+             flèches ▾ et donnait l'impression que titres/flèches restaient trop hauts dans la carte. -->
+        <Border x:Name="TasksHeaderFixedBlock"
+                Grid.Row="2"
+                BorderBrush="#6B7280"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="10,10,10,2"
+                Effect="{StaticResource CardShadowEffect}"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <Popup x:Name="TaskColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
+                    <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8" MinWidth="220" MaxHeight="380" Effect="{StaticResource CardShadowEffect}">
+                        <StackPanel>
+                            <CheckBox x:Name="TaskAlphaSortCheckBox"
+                                      Content="Trier par ordre alphabétique (A→Z)"
+                                      Margin="0,0,0,8"/>
+
+                            <Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Margin="0,0,0,6"/>
+
+                            <CheckBox x:Name="TaskFilterSelectAllCheckBox"
+                                      Content="(Tout sélectionner)"
+                                      IsChecked="True"
+                                      FontWeight="Bold"
+                                      Click="TaskFilterSelectAllCheckBox_Click"
+                                      Margin="0,0,0,6"/>
+
+                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="TaskFilterOptionsItemsControl">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding DisplayText}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                                <Button Content="Annuler" Style="{StaticResource OutlineBlueButtonStyle}" Click="TaskColumnFilterCancel_Click" Margin="0,0,6,0"/>
+                                <Button Content="OK" Style="{StaticResource SmallBlueButtonStyle}" Click="TaskColumnFilterApply_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+
+                <!-- ✅ Largeur de colonne 0 ramenée de 178 à 98 (demande de Joe, 10.08.2026) :
+                     "Supprimer définitivement" ajouté à droite poussait Voir Archives/Voir
+                     Corbeille/Colonnes ▾ trop loin. La bordure gauche d'"Ajouter" s'aligne
+                     désormais directement sur la colonne Bâtiment de cette grille-ci (98 =
+                     largeur colonne case à cocher [28] + colonne N° [70]), au lieu de suivre la
+                     référence "Entreprise" du Planning hebdo (178, ancien réglage du
+                     31.07.2026). -->
+                <Grid x:Name="TaskHeaderToolbar" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="98"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="Tâches"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="#111827"
+                               VerticalAlignment="Center"/>
+
+                    <!-- ✅ "Ajouter" décalé de 3mm (11.34px) vers la droite au total (demande de
+                         Joe, 10.08.2026 : 2mm + 1mm supplémentaire). "Archiver sélection" ne bouge
+                         pas (demande de Joe) : son propre Margin réduit d'autant (8 -> 4.22) pour
+                         compenser exactement le décalage d'"Ajouter" et rester à la même position
+                         absolue. -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="AddTaskRowButton"
+                                Content="Ajouter"
+                                Style="{StaticResource SmallBlueButtonStyle}"
+                                Height="34"
+                                Margin="11.34,0,0,0"
+                                Click="AddTaskRowButton_Click"/>
+
+                        <!-- ✅ 30.07.2026 (demande de Joe) : archive la/les tâche(s)
+                             sélectionnée(s) (comme "Supprimer", même sélection) au lieu de
+                             les effacer, consultable/restaurable depuis "Archives tâches".
+                             ✅ Repositionné juste après "Ajouter" (demande de Joe, 04.08.2026).
+                             ✅ Grisé tant qu'aucune ligne n'est sélectionnée (demande de Joe,
+                             04.08.2026), voir RefreshTaskSelectionButtonsState. -->
+                        <Button x:Name="ArchiveTaskRowButton"
+                                Content="Archiver sélection"
+                                Style="{StaticResource ArchiveOutlineButtonStyle}"
+                                Height="34"
+                                Margin="4.22,0,0,0"
+                                IsEnabled="False"
+                                Click="ArchiveTaskRowButton_Click"/>
+
+                        <!-- ✅ Renommé (demande de Joe, 04.08.2026) : ce bouton ne supprime pas
+                             définitivement, il met à la corbeille (voir
+                             RemoveTaskRowButton_Click, IsTrashed/TrashedAt), même principe
+                             que "Déplacer dans la corbeille" sur Bons d'intervention.
+                             ✅ Grisé tant qu'aucune ligne n'est sélectionnée (demande de Joe,
+                             04.08.2026), voir RefreshTaskSelectionButtonsState. -->
+                        <!-- ✅ Rapproché d'"Archiver sélection" (demande de Joe, 10.08.2026) : même
+                             espacement (4.22px) entre les 3 boutons Ajouter/Archiver/Corbeille. -->
+                        <Button x:Name="RemoveTaskRowButton"
+                                Content="Déplacer dans la corbeille"
+                                Style="{StaticResource SmallBlackButtonStyle}"
+                                IsEnabled="False"
+                                Height="34"
+                                Margin="4.22,0,0,0"
+                                Click="RemoveTaskRowButton_Click"/>
+
+                        <!-- ✅ "Supprimer définitivement" (demande de Joe, 10.08.2026) : retire la
+                             tâche directement, sans passer par la Corbeille (PermanentlyDeleteTaskRowButton_Click,
+                             PlanningPage.xaml.cs), même style que "Voir Corbeille"/DangerSmallButtonStyle
+                             ailleurs dans l'app (fond rouge clair, texte/bordure rouges) pour bien la
+                             distinguer visuellement de "Déplacer dans la corbeille" (réversible). -->
+                        <Button x:Name="PermanentlyDeleteTaskRowButton"
+                                Content="Supprimer définitivement"
+                                Style="{StaticResource SmallBlackButtonStyle}"
+                                Background="#FEE2E2"
+                                Foreground="#B91C1C"
+                                BorderBrush="#B91C1C"
+                                IsEnabled="False"
+                                Height="34"
+                                Margin="4.22,0,0,0"
+                                Click="PermanentlyDeleteTaskRowButton_Click"/>
+                    </StackPanel>
+
+                    <!-- ✅ "Voir Archives"/"Voir Corbeille" déplacés ici (demande de Joe, 10.08.2026),
+                         à droite de "Déplacer dans la corbeille". Bordure gauche de "Voir Archives"
+                         alignée verticalement sur la bordure gauche de "Haut de page" (barre du
+                         dessus) : alignement recalculé en live par AlignArchivesTrashButtons()
+                         (PlanningPage.xaml.cs), pas possible à figer en dur en XAML puisque la
+                         position de "Haut de page" dépend de la largeur de la fenêtre. -->
+                    <StackPanel x:Name="ArchivesTrashButtonsPanel"
+                                Grid.Column="2"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center">
+                        <Button x:Name="PlanningArchivesButton"
+                                Content="Voir Archives"
+                                Style="{StaticResource WeekNavButtonStyle}"
+                                Background="#F3F4F6"
+                                Height="30"
+                                Padding="10,0"
+                                Margin="0,0,6,0"
+                                Click="PlanningArchivesButton_Click"/>
+                        <Button x:Name="PlanningTrashButton"
+                                Content="Voir Corbeille"
+                                Style="{StaticResource WeekNavButtonStyle}"
+                                Background="#FEE2E2"
+                                Foreground="#B91C1C"
+                                BorderBrush="#B91C1C"
+                                Height="30"
+                                Padding="10,0"
+                                Click="PlanningTrashButton_Click"/>
+                    </StackPanel>
+
+                    <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
+                         (mémorisé entre les sessions via Db.GetTasksVisibleColumns/
+                         SetTasksVisibleColumns). -->
+                    <Button x:Name="TaskColumnsButton"
+                            Grid.Column="3"
+                            Content="Colonnes ▾"
+                            Style="{StaticResource OutlineBlueButtonStyle}"
+                            Height="34"
+                            Click="TaskColumnsButton_Click"/>
+                </Grid>
+
+                <Popup x:Name="TaskColumnsPopup"
+                       PlacementTarget="{Binding ElementName=TaskColumnsButton}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="White"
+                            BorderBrush="#D1D5DB"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="10"
+                            Effect="{StaticResource CardShadowEffect}">
+                        <StackPanel>
+                            <TextBlock Text="Colonnes visibles" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                            <CheckBox x:Name="ColShowBuildingCheckBox" Content="Bâtiment" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                            <CheckBox x:Name="ColShowFloorCheckBox" Content="Étage" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                            <CheckBox x:Name="ColShowCategoryCheckBox" Content="Catégorie" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                            <CheckBox x:Name="ColShowCompanyCheckBox" Content="Intervenants" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                            <CheckBox x:Name="ColShowUrgencyCheckBox" Content="Urg." Margin="0,2" Click="TaskColumnVisibility_Changed"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+
+                <!-- ✅ Margin haut 7.56px = 2mm (demande de Joe, 10.08.2026) : titres décalés vers le bas. -->
+                <StackPanel Orientation="Horizontal" Margin="0,7.56,0,0">
+                    <!-- ✅ Case "tout sélectionner" (demande de Joe, 10.08.2026) : réutilise
+                         TaskSelectAllCheckBox_Click, déjà écrit le 30.07.2026 pour la case
+                         équivalente dans l'en-tête natif de TasksDataGrid (TaskSelectColumn),
+                         mais jamais visible depuis que cet en-tête est masqué
+                         (HeadersVisibility="None", remplacé par ce bloc détaché). Même x:Name,
+                         sans collision : celui du DataGridTemplateColumn.HeaderTemplate vit dans
+                         son propre NameScope (DataTemplate), jamais instancié tant que l'en-tête
+                         natif reste masqué. -->
+                    <Border Width="28">
+                        <CheckBox x:Name="TaskSelectAllCheckBox"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Click="TaskSelectAllCheckBox_Click"/>
+                    </Border>
+                    <Border Width="70">
+                        <TextBlock Text="N°" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                    </Border>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskBuildingColumn}}">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding DataContext.BuildingLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                            <Button Content="▾" Tag="Building" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskFloorColumn}}">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding DataContext.FloorLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                            <Button Content="▾" Tag="Floor" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskTodoColumn}}">
+                        <TextBlock Text="Descriptif" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                    </Border>
+                    <Border Width="56"/>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCategoryColumn}}">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding DataContext.TaskCategoryLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                            <Button Content="▾" Tag="Category" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCompanyColumn}}">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                            <Button Content="▾" Tag="Company" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskUrgentColumn}}">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding DataContext.TaskUrgencyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                            <Button Content="▾" Tag="Urgent" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Width="90">
+                        <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                            <TextBlock Text="Effectuée" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
+                            <Button Content="▾" Tag="Done" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ✅ Ligne de séparation de repli (demande de Joe, 10.08.2026) : visible seulement
+             quand TasksHeaderFixedBlock est masqué (grille Planning remontée), pour combler le
+             vide laissé entre la barre Début/Fin/Haut de page et les sections qui suivent.
+             Basculée par MainScrollViewer_ScrollChanged (PlanningPage.xaml.cs), même Grid.Row
+             que TasksHeaderFixedBlock, jamais visible en même temps que lui. -->
+        <Border x:Name="TasksHeaderCollapsedSeparator"
+                Grid.Row="2"
+                Height="2"
+                Background="#E2E8F0"
+                Margin="0,0,0,12"
+                Visibility="Collapsed"/>
+
+        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="3" VerticalScrollBarVisibility="Auto" ScrollChanged="MainScrollViewer_ScrollChanged">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -802,153 +1086,14 @@
 				        Padding="10"
 		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- ✅ Popup de filtre façon Excel (demande de Joe), même mécanisme que
-                             DashboardPage/ArchivesPage (bouton "▾" dans l'en-tête d'une colonne
-                             ouvre ce popup unique, positionné dynamiquement sur ce bouton via
-                             PlacementTarget en code-behind). Seulement le panneau "Texte" (pas de
-                             panneau "Date" ici : aucune des colonnes filtrées de cette grille
-                             n'est une date). -->
-                        <Popup x:Name="TaskColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
-                            <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8" MinWidth="220" MaxHeight="380" Effect="{StaticResource CardShadowEffect}">
-                                <StackPanel>
-                                    <CheckBox x:Name="TaskAlphaSortCheckBox"
-                                              Content="Trier par ordre alphabétique (A→Z)"
-                                              Margin="0,0,0,8"/>
-
-                                    <Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Margin="0,0,0,6"/>
-
-                                    <CheckBox x:Name="TaskFilterSelectAllCheckBox"
-                                              Content="(Tout sélectionner)"
-                                              IsChecked="True"
-                                              FontWeight="Bold"
-                                              Click="TaskFilterSelectAllCheckBox_Click"
-                                              Margin="0,0,0,6"/>
-
-                                    <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
-                                        <ItemsControl x:Name="TaskFilterOptionsItemsControl">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <CheckBox Content="{Binding DisplayText}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,2"/>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
-
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                                        <Button Content="Annuler" Style="{StaticResource OutlineBlueButtonStyle}" Click="TaskColumnFilterCancel_Click" Margin="0,0,6,0"/>
-                                        <Button Content="OK" Style="{StaticResource SmallBlueButtonStyle}" Click="TaskColumnFilterApply_Click"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-                        </Popup>
-
-                        <!-- ✅ 31.07.2026 (demande de Joe) : tous les boutons "Ajouter" (gauche) de
-                             chaque section de la page Planning doivent s'aligner verticalement,
-                             Planning hebdo servant de référence fixe (178 = largeur colonne case à
-                             cocher [28] + colonne Entreprise [MinWidth 150]), plus aligné sur la
-                             colonne Bâtiment (98) de cette grille-ci depuis le 30.07.2026. -->
-                        <Grid x:Name="TaskHeaderToolbar"
-                              Grid.Row="0"
-                              Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="178"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0"
-                                       Text="Tâches"
-							           FontSize="14"
-							           FontWeight="SemiBold"
-							           Foreground="#111827"
-							           VerticalAlignment="Center"/>
-
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <Button x:Name="AddTaskRowButton"
-								        Content="Ajouter"
-								        Style="{StaticResource SmallBlueButtonStyle}"
-								        Height="34"
-								        Click="AddTaskRowButton_Click"/>
-
-                                <!-- ✅ 30.07.2026 (demande de Joe) : archive la/les tâche(s)
-                                     sélectionnée(s) (comme "Supprimer", même sélection) au lieu de
-                                     les effacer, consultable/restaurable depuis "Archives tâches".
-                                     ✅ Repositionné juste après "Ajouter" (demande de Joe, 04.08.2026).
-                                     ✅ Grisé tant qu'aucune ligne n'est sélectionnée (demande de Joe,
-                                     04.08.2026), voir RefreshTaskSelectionButtonsState. -->
-                                <Button x:Name="ArchiveTaskRowButton"
-								        Content="Archiver sélection"
-								        Style="{StaticResource ArchiveOutlineButtonStyle}"
-								        Height="34"
-								        Margin="8,0,0,0"
-								        IsEnabled="False"
-								        Click="ArchiveTaskRowButton_Click"/>
-
-                                <!-- ✅ Renommé (demande de Joe, 04.08.2026) : ce bouton ne supprime pas
-                                     définitivement, il met à la corbeille (voir
-                                     RemoveTaskRowButton_Click, IsTrashed/TrashedAt), même principe
-                                     que "Déplacer dans la corbeille" sur Bons d'intervention.
-                                     ✅ Grisé tant qu'aucune ligne n'est sélectionnée (demande de Joe,
-                                     04.08.2026), voir RefreshTaskSelectionButtonsState. -->
-                                <Button x:Name="RemoveTaskRowButton"
-								        Content="Déplacer dans la corbeille"
-								        Style="{StaticResource SmallBlackButtonStyle}"
-								        IsEnabled="False"
-								        Height="34"
-								        Margin="8,0,0,0"
-								        Click="RemoveTaskRowButton_Click"/>
-                            </StackPanel>
-
-                            <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
-                                 (mémorisé entre les sessions via Db.GetTasksVisibleColumns/
-                                 SetTasksVisibleColumns). -->
-                            <Button x:Name="TaskColumnsButton"
-                                    Grid.Column="3"
-							        Content="Colonnes ▾"
-							        Style="{StaticResource OutlineBlueButtonStyle}"
-							        Height="34"
-							        Click="TaskColumnsButton_Click"/>
-                        </Grid>
-
-                        <Popup x:Name="TaskColumnsPopup"
-                               PlacementTarget="{Binding ElementName=TaskColumnsButton}"
-                               Placement="Bottom"
-                               StaysOpen="False"
-                               AllowsTransparency="True">
-                            <Border Background="White"
-                                    BorderBrush="#D1D5DB"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="10"
-                                    Effect="{StaticResource CardShadowEffect}">
-                                <StackPanel>
-                                    <TextBlock Text="Colonnes visibles" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
-                                    <CheckBox x:Name="ColShowCompanyCheckBox" Content="Entreprise" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
-                                    <CheckBox x:Name="ColShowBuildingCheckBox" Content="Bâtiment" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
-                                    <CheckBox x:Name="ColShowFloorCheckBox" Content="Étage" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
-                                    <CheckBox x:Name="ColShowCategoryCheckBox" Content="Catégorie" Margin="0,2" Click="TaskColumnVisibility_Changed"/>
-                                    <CheckBox x:Name="ColShowUrgencyCheckBox" Content="Urg." Margin="0,2" Click="TaskColumnVisibility_Changed"/>
-                                </StackPanel>
-                            </Border>
-                        </Popup>
-
-                        <!-- ✅ Fix (demande de Joe : "je ne vois aucun filtre") : ColumnHeaderHeight
-                             surchargé à 44 (au lieu des 28 de PlanningGridStyle, partagé avec
-                             Planning hebdo ci-dessous, non touché). Les en-têtes filtrables ont
-                             maintenant 2 lignes (libellé + bouton ▾), 28px ne laissait aucune
-                             place visible pour la 2e ligne, le bouton était rogné/invisible. -->
+                    <!-- ✅ En-tête de colonnes masqué (HeadersVisibility="None") : remplacé par le
+                         bloc détaché placé en dur au-dessus du ScrollViewer (demande de Joe,
+                         voir plus haut), avec ses propres Popups TaskColumnFilterPopup et
+                         TaskColumnsPopup désormais définis là-bas. -->
                         <DataGrid x:Name="TasksDataGrid"
-						          Grid.Row="1"
-						          Style="{StaticResource PlanningGridStyle}"
-						          ColumnHeaderHeight="44"
-						          AutoGenerateColumns="False"
+					          Style="{StaticResource PlanningGridStyle}"
+					          HeadersVisibility="None"
+					          AutoGenerateColumns="False"
 						          CanUserAddRows="False"
 						          RowHeaderWidth="0"
 						          SelectionUnit="FullRow"
@@ -1277,7 +1422,6 @@
                                 </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
-                    </Grid>
                 </Border>
 
                 <!-- 2) Planning hebdo -->
@@ -2492,5 +2636,6 @@
 
             </Grid>
         </ScrollViewer>
+
     </Grid>
 </UserControl>

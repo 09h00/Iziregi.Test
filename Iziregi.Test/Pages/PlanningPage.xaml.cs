@@ -1176,6 +1176,61 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     private void PlanningTrashButton_Click(object sender, RoutedEventArgs e) => _main.ShowTrashedTasks();
 
+    // ✅ Raccourcis de navigation (demande de Joe) : aligne le haut de la section visée sur le
+    // haut du ScrollViewer -- BringIntoView() ne garantit pas cet alignement (juste "visible
+    // quelque part"), d'où ce calcul explicite via TransformToAncestor.
+    private void ScrollSectionToTop(FrameworkElement section)
+    {
+        var position = section.TransformToAncestor(MainScrollViewer).Transform(new System.Windows.Point(0, 0));
+        MainScrollViewer.ScrollToVerticalOffset(MainScrollViewer.VerticalOffset + position.Y);
+    }
+
+    // ✅ 10.08.2026 (demande de Joe) : le bloc "Tâches" (TasksHeaderFixedBlock, Grid.Row="2")
+    // est figé hors du MainScrollViewer -- toujours visible pour rester alignée avec
+    // TasksDataGrid pendant qu'on scrolle DANS la section Tâches. Problème : une fois la
+    // grille Tâches entièrement scrollée hors de vue, ce bloc restait affiché en permanence
+    // et se superposait au haut de la section "Planning hebdo" (WeeklySectionBorder) qui
+    // remonte dessous, prêtant à confusion. On le masque donc dès que le bas de
+    // TaskSectionBorder est passé au-dessus du haut du viewport.
+    private void MainScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (!IsLoaded || TaskSectionBorder.ActualHeight <= 0) return;
+
+        var bottomOfTasksSection = TaskSectionBorder
+            .TransformToAncestor(MainScrollViewer)
+            .Transform(new System.Windows.Point(0, TaskSectionBorder.ActualHeight)).Y;
+
+        var headerVisible = bottomOfTasksSection > 0;
+        TasksHeaderFixedBlock.Visibility = headerVisible ? Visibility.Visible : Visibility.Collapsed;
+        // ✅ Ligne de repli (demande de Joe, 10.08.2026) : comble le vide laissé par
+        // TasksHeaderFixedBlock quand il se masque, jamais affichée en même temps que lui.
+        TasksHeaderCollapsedSeparator.Visibility = headerVisible ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // ✅ 10.08.2026 (demande de Joe) : aligne la bordure gauche de ArchivesTrashButtonsPanel
+    // ("Voir Archives"/"Voir Corbeille", TaskHeaderToolbar) sur celle de ScrollToTopHeaderButton
+    // ("Haut de page", barre Début/Fin du dessus). Remise à zéro du Margin avant mesure pour
+    // repartir de la position naturelle (juste après "Déplacer dans la corbeille") à chaque
+    // recalcul, sinon un ancien Margin fausserait la mesure suivante.
+    private void AlignArchivesTrashButtons()
+    {
+        if (!IsLoaded) return;
+
+        ArchivesTrashButtonsPanel.Margin = new Thickness(0);
+        UpdateLayout();
+
+        var targetX = ScrollToTopHeaderButton.TransformToAncestor(this).Transform(new System.Windows.Point(0, 0)).X;
+        var naturalX = ArchivesTrashButtonsPanel.TransformToAncestor(this).Transform(new System.Windows.Point(0, 0)).X;
+        var delta = Math.Max(0, targetX - naturalX);
+
+        ArchivesTrashButtonsPanel.Margin = new Thickness(delta, 0, 0, 0);
+    }
+
+    private void ScrollToTopButton_Click(object sender, RoutedEventArgs e) => MainScrollViewer.ScrollToVerticalOffset(0);
+    private void ScrollToWeeklyButton_Click(object sender, RoutedEventArgs e) => ScrollSectionToTop(WeeklySectionBorder);
+    private void ScrollToImageButton_Click(object sender, RoutedEventArgs e) => ScrollSectionToTop(PlanSectionBorder);
+    private void ScrollToBottomButton_Click(object sender, RoutedEventArgs e) => MainScrollViewer.ScrollToEnd();
+
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -2744,6 +2799,24 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     // en corbeille (même principe qu'Archiver, voir ArchiveTaskRowButton_Click),
     // disparaît de la grille active via TaskRowVisibleInCurrentWeek, consultable/
     // restaurable depuis TrashedTasksPage.
+    // ✅ 10.08.2026 (demande de Joe) : même principe que RemovePlanningRowButton_Click pour
+    // PlanningDataGrid ("_planningRows.Count == 0 -> Add(new PlanningRow())"), appliqué à la
+    // grille des Tâches. Ici on regarde la vue de la semaine courante (TaskRowsForCurrentWeek),
+    // pas _taskRows.Count brut : mettre TOUTES les tâches de la semaine à la corbeille/en
+    // archive ne vide pas _taskRows (juste IsTrashed/IsArchived), la grille se retrouverait
+    // visuellement vide sans qu'aucune des 3 actions (Corbeille/Archiver/Supprimer définitivement)
+    // ne le détecte autrement.
+    private void EnsureAtLeastOneVisibleTaskRow()
+    {
+        if (TaskRowsForCurrentWeek().Any()) return;
+
+        var nextRef = (_taskRows.Count == 0)
+            ? 1
+            : _taskRows.Select(x => int.TryParse(x.Ref, out var n) ? n : 0).DefaultIfEmpty(0).Max() + 1;
+
+        _taskRows.Add(new TaskRow { Ref = nextRef.ToString(), CreatedWeekStart = SnapToStartOfWeek(_startDay, _weekStartDay) });
+    }
+
     private void RemoveTaskRowButton_Click(object sender, RoutedEventArgs e)
     {
         if (!_isPageActive) return;
@@ -2776,12 +2849,49 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // une fois l'action terminée on la redécoche explicitement.
         if (_taskSelectAllCheckBox != null) _taskSelectAllCheckBox.IsChecked = false;
 
+        EnsureAtLeastOneVisibleTaskRow();
         SaveProjectTasks();
 
         // ✅ Fix (04.08.2026, demande de Joe : "les tâches restent affichées tant que je ne
         // change pas de page") : oublié ici, contrairement à ArchiveTaskRowButton_Click -- le
         // filtre de la vue (TaskRowVisibleInCurrentWeek) doit être réévalué pour que la tâche
         // mise à la corbeille disparaisse immédiatement de la grille active.
+        _taskRowsView?.Refresh();
+    }
+
+    // ✅ 10.08.2026 (demande de Joe) : "Supprimer définitivement" directement depuis la grille
+    // active des tâches, sans passer par la Corbeille -- même sélection que "Déplacer dans la
+    // corbeille"/"Archiver sélection", mais retire carrément la ligne de _taskRows (au lieu de
+    // la marquer IsTrashed) et persiste, même principe que TrashedTasksPage.DeleteSelected_Click.
+    private void PermanentlyDeleteTaskRowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isPageActive) return;
+
+        try { TasksDataGrid.CommitEdit(DataGridEditingUnit.Cell, true); TasksDataGrid.CommitEdit(DataGridEditingUnit.Row, true); } catch { }
+
+        var toDelete = _taskRows.Where(r => r.IsSelected).ToList();
+
+        if (toDelete.Count == 0)
+        {
+            toDelete = TasksDataGrid.SelectedItems.Cast<object>().OfType<TaskRow>().ToList();
+            if (toDelete.Count == 0 && TasksDataGrid.SelectedItem is TaskRow one) toDelete.Add(one);
+        }
+
+        if (toDelete.Count == 0) return;
+
+        var msg = toDelete.Count == 1
+            ? $"Supprimer définitivement la tâche N°{toDelete[0].Ref} ?\n\nCette action est irréversible."
+            : $"Supprimer définitivement {toDelete.Count} tâches ?\n\nCette action est irréversible.";
+
+        var ok = System.Windows.MessageBox.Show(msg, "Suppression définitive", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (ok != MessageBoxResult.Yes) return;
+
+        foreach (var r in toDelete) _taskRows.Remove(r);
+
+        if (_taskSelectAllCheckBox != null) _taskSelectAllCheckBox.IsChecked = false;
+
+        EnsureAtLeastOneVisibleTaskRow();
+        SaveProjectTasks();
         _taskRowsView?.Refresh();
     }
 
@@ -2814,6 +2924,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         if (_taskSelectAllCheckBox != null) _taskSelectAllCheckBox.IsChecked = false;
 
+        EnsureAtLeastOneVisibleTaskRow();
         SaveProjectTasks();
 
         // ✅ Le filtre de la vue (TaskRowVisibleInCurrentWeek) doit être réévalué pour que la
@@ -2825,12 +2936,22 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
     // ✅ 30.07.2026 (demande de Joe) : case à cocher d'entête qui sélectionne/désélectionne
     // toutes les lignes de la grille des tâches d'un seul clic.
+    // ✅ BUG CORRIGÉ (10.08.2026, demande de Joe : "supprimer la 1ère ligne vide vide les
+    // archives et la corbeille") : cette case cochait _taskRows EN ENTIER, y compris les
+    // tâches archivées/en corbeille (invisibles à l'écran mais toujours dans _taskRows, voir
+    // LoadProjectTasks/SaveProjectTasks). Une fois cette case rendue fonctionnelle dans
+    // l'en-tête détaché (elle était morte auparavant, l'en-tête natif de TasksDataGrid étant
+    // masqué), "tout sélectionner" puis "Supprimer définitivement" embarquait donc aussi les
+    // tâches archivées/en corbeille de TOUTES les semaines. Ne coche désormais que les lignes
+    // réellement visibles (_taskRowsView, déjà filtré par semaine + Excel), jamais les lignes
+    // masquées.
     private void TaskSelectAllCheckBox_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not WpfCheckBox cb) return;
         _taskSelectAllCheckBox = cb;
         bool select = cb.IsChecked == true;
-        foreach (var r in _taskRows) r.IsSelected = select;
+        var visibleRows = _taskRowsView?.Cast<TaskRow>() ?? TaskRowsForCurrentWeek();
+        foreach (var r in visibleRows) r.IsSelected = select;
     }
 
     // ✅ Éditeur agrandi du Descriptif (16.07.2026, demande de Joe) : ouvre TaskDescriptionWindow
@@ -3081,6 +3202,7 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         var anySelected = _taskRows.Any(r => r.IsSelected) || TasksDataGrid.SelectedItem != null;
         if (ArchiveTaskRowButton != null) ArchiveTaskRowButton.IsEnabled = anySelected;
         if (RemoveTaskRowButton != null) RemoveTaskRowButton.IsEnabled = anySelected;
+        if (PermanentlyDeleteTaskRowButton != null) PermanentlyDeleteTaskRowButton.IsEnabled = anySelected;
     }
 
     private void TasksDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshTaskSelectionButtonsState();
@@ -4278,7 +4400,18 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         Loaded += (_, __) =>
         {
             _isPageActive = true;
+            // État initial du bloc figé "Tâches" (MainScrollViewer_ScrollChanged) : le
+            // premier ScrollChanged automatique peut survenir avant que TaskSectionBorder
+            // ait sa hauteur finale -- recalcul explicite une fois le layout posé.
+            Dispatcher.BeginInvoke(new Action(() => MainScrollViewer_ScrollChanged(this, null!)), System.Windows.Threading.DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(AlignArchivesTrashButtons), System.Windows.Threading.DispatcherPriority.Loaded);
         };
+
+        // ✅ 10.08.2026 (demande de Joe) : "Voir Archives"/"Voir Corbeille" doivent garder leur
+        // bordure gauche alignée sur "Haut de page" (barre du dessus, ScrollToTopHeaderButton),
+        // qui est elle-même right-alignée dans une colonne "*" -- sa position en X dépend donc
+        // de la largeur de la fenêtre. Recalcul à chaque redimensionnement.
+        SizeChanged += (_, __) => AlignArchivesTrashButtons();
 
         Unloaded += (_, __) =>
         {
