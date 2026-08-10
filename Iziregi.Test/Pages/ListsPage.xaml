@@ -281,9 +281,9 @@
             </Grid.ColumnDefinitions>
 
             <!-- Concerne -->
-            <GroupBox x:Name="ReservesGroupBox" Grid.Column="0" ToolTip="Champ associé à:&#10;* 1er champ de la section « Demande » du BI.&#10;* 2è colonne du tableau de bord.">
+            <GroupBox x:Name="ReservesGroupBox" Grid.Column="0" ToolTip="Champ associé à:&#10;* 1er champ de la section « Demande » du BI.&#10;* 2è colonne du tableau Bons actifs.">
                 <DockPanel>
-                    <TextBox x:Name="LabelReserveTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 1er champ de la section « Demande » du BI.&#10;* 2è colonne du tableau de bord."/>
+                    <TextBox x:Name="LabelReserveTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 1er champ de la section « Demande » du BI.&#10;* 2è colonne du tableau Bons actifs."/>
                     <TextBlock DockPanel.Dock="Top" Text="(20 caractères max. sur le bon)" Foreground="#9CA3AF" FontSize="10" Margin="0,-6,0,8"/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultReserveComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
@@ -304,9 +304,9 @@
             </GroupBox>
 
             <!-- Demandé par -->
-            <GroupBox x:Name="RequestersGroupBox" Grid.Column="2" ToolTip="Champ associé à:&#10;* 2è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau de bord.">
+            <GroupBox x:Name="RequestersGroupBox" Grid.Column="2" ToolTip="Champ associé à:&#10;* 2è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau Bons actifs.">
                 <DockPanel>
-                    <TextBox x:Name="LabelRequestedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 2è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau de bord."/>
+                    <TextBox x:Name="LabelRequestedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 2è champ de la section « Demande » du BI.&#10;* 3è colonne du tableau Bons actifs."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultRequesterComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 
@@ -372,9 +372,9 @@
             </GroupBox>
 
             <!-- Entreprise -->
-            <GroupBox x:Name="CompaniesGroupBox" Grid.Column="8" ToolTip="Champ associé à:&#10;* 5è champ de la section « Demande » du BI.&#10;* 4è colonne du tableau de bord.&#10;* 7è colonne du tableau des tâches.&#10;* 1è colonne du tableau planning hebdo.">
+            <GroupBox x:Name="CompaniesGroupBox" Grid.Column="8" ToolTip="Champ associé à:&#10;* 5è champ de la section « Demande » du BI.&#10;* 4è colonne du tableau Bons actifs.&#10;* 7è colonne du tableau des tâches.&#10;* 1è colonne du tableau planning hebdo.">
                 <DockPanel>
-                    <TextBox x:Name="LabelPerformedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 5è champ de la section « Demande » du BI.&#10;* 4è colonne du tableau de bord.&#10;* 7è colonne du tableau des tâches.&#10;* 1è colonne du tableau planning hebdo."/>
+                    <TextBox x:Name="LabelPerformedByTextBox" DockPanel.Dock="Top" Style="{StaticResource ListLabelTextBoxStyle}" TextChanged="AnyLabelTextBox_TextChanged" GotFocus="AnyLabelTextBox_GotFocus" LostFocus="AnyLabelTextBox_LostFocus" ToolTip="Champ associé à:&#10;* 5è champ de la section « Demande » du BI.&#10;* 4è colonne du tableau Bons actifs.&#10;* 7è colonne du tableau des tâches.&#10;* 1è colonne du tableau planning hebdo."/>
                     <TextBlock DockPanel.Dock="Top" Text="Sélection par défaut" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,4"/>
                     <ComboBox x:Name="DefaultCompanyComboBox" DockPanel.Dock="Top" IsEditable="True" Margin="0,0,0,10" Style="{StaticResource DefaultValueComboBoxStyle}" TextBoxBase.TextChanged="AnyDefaultComboBox_TextChanged"/>
 

@@ -382,6 +382,9 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
 
         if (DeleteSelectionButton != null)
             DeleteSelectionButton.IsEnabled = anySelected;
+
+        if (PermanentlyDeleteSelectionButton != null)
+            PermanentlyDeleteSelectionButton.IsEnabled = anySelected;
     }
 
     private void ArchivedTasksGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBatchSelectionUi();
@@ -504,6 +507,38 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
             t.IsTrashed = true;
             t.TrashedAt = DateTime.Now;
         }
+
+        PersistAllTasks();
+        Reload();
+    }
+
+    // ✅ 10.08.2026 (demande de Joe) : "Supprimer définitivement" directement depuis Archives,
+    // sans passer par la Corbeille -- même principe que TrashedTasksPage.DeleteSelected_Click
+    // (_allTasks.Remove, irréversible).
+    private void PermanentlyDeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(ArchivedTasksGrid));
+
+        if (sel.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                "Coche une ou plusieurs tâches (colonne de gauche).",
+                "Info",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var msg = sel.Count == 1
+            ? $"Supprimer définitivement la tâche N°{sel[0].Ref} ?\n\nCette action est irréversible."
+            : $"Supprimer définitivement {sel.Count} tâches ?\n\nCette action est irréversible.";
+
+        var ok = System.Windows.MessageBox.Show(msg, "Suppression définitive", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        foreach (var t in sel)
+            _allTasks.Remove(t);
 
         PersistAllTasks();
         Reload();

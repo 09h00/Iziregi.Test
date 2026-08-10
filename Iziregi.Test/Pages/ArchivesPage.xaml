@@ -45,6 +45,40 @@
 			<Setter Property="BorderBrush" Value="#FCA5A5"/>
 		</Style>
 
+		<!-- ✅ "Supprimer définitivement" (demande de Joe, 10.08.2026) : DangerSmallButtonStyle
+		     hérite du Template de SmallButtonStyle, qui n'a pas de Trigger IsEnabled=False (ce
+		     bouton restait coloré/cliquable visuellement même grisé en code, même piège que
+		     celui déjà corrigé sur TrashSelectionButtonStyle/RestoreSelectionButtonStyle
+		     ci-dessous, mêmes valeurs). -->
+		<Style x:Key="PermanentDeleteButtonStyle" TargetType="Button" BasedOn="{StaticResource DangerSmallButtonStyle}">
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bd"
+								Background="{TemplateBinding Background}"
+								BorderBrush="{TemplateBinding BorderBrush}"
+								BorderThickness="{TemplateBinding BorderThickness}"
+								CornerRadius="6"
+								SnapsToDevicePixels="True">
+							<ContentPresenter Margin="{TemplateBinding Padding}"
+											  HorizontalAlignment="Center"
+											  VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+							</Trigger>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#D1D5DB"/>
+								<Setter Property="Foreground" Value="#9CA3AF"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
 		<!-- ✅ Même vert que "Archiver" dans Dashboard (24.07.2026, demande de Joe : couleurs
 		     cohérentes entre les pages pour les boutons Corbeille/Rétablir). -->
 		<Style x:Key="RestoreSmallButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallButtonStyle}">
@@ -510,6 +544,16 @@
 	        Height="34"
 	        Margin="0,0,6,0"/>
 
+	<!-- ✅ "Supprimer définitivement" (demande de Joe, 10.08.2026) : retire le bon directement
+	     depuis Archives, sans passer par la Corbeille, même style que sur TrashPage. -->
+	<Button x:Name="DeleteSelectionButton"
+	        Content="Supprimer définitivement"
+	        Style="{StaticResource PermanentDeleteButtonStyle}"
+	        Click="DeleteSelectionPermanently_Click"
+	        IsEnabled="False"
+	        Height="34"
+	        Margin="0,0,6,0"/>
+
 	<Button Content="Rafraîchir"
 	        Style="{StaticResource SmallButtonStyle}"
 	        BorderBrush="Black"
@@ -530,8 +574,9 @@
 
 	<!-- ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis Archives, va
 	     directement à Corbeille sans repasser par "Bons d'intervention". Fond rouge clair,
-	     même couleur que "Page corbeille" sur Bons d'intervention/Planification. -->
-	<Button Content="Page corbeille"
+	     même couleur que "Voir corbeille" sur Bons d'intervention/Planification.
+	     ✅ Renommé "Page corbeille" -> "Voir corbeille" (demande de Joe, 10.08.2026). -->
+	<Button Content="Voir corbeille"
 	        Style="{StaticResource SmallButtonStyle}"
 	        Background="#FEE2E2"
 	        Foreground="#B91C1C"

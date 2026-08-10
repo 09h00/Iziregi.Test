@@ -367,6 +367,16 @@
 						Height="34"
 						Margin="0,0,6,0"/>
 
+				<!-- ✅ "Supprimer définitivement" (demande de Joe, 10.08.2026) : retire la tâche
+				     directement depuis Archives, sans passer par la Corbeille. -->
+				<Button x:Name="PermanentlyDeleteSelectionButton"
+						Content="Supprimer définitivement"
+						Style="{StaticResource DangerSmallButtonStyle}"
+						Click="PermanentlyDeleteSelected_Click"
+						IsEnabled="False"
+						Height="34"
+						Margin="0,0,6,0"/>
+
 				<Button Content="Rafraîchir"
 						Style="{StaticResource SmallButtonStyle}"
 						Height="34"
@@ -386,8 +396,9 @@
 
 				<!-- ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis
 				     Archives tâches, va directement à Corbeille tâches sans repasser par
-				     "Planification". Fond rouge clair, même couleur que "Page corbeille". -->
-				<Button Content="Page corbeille"
+				     "Planification". Fond rouge clair, même couleur que "Voir corbeille".
+				     ✅ Renommé "Page corbeille" -> "Voir corbeille" (demande de Joe, 10.08.2026). -->
+				<Button Content="Voir corbeille"
 				        Style="{StaticResource SmallButtonStyle}"
 				        Background="#FEE2E2"
 				        Foreground="#B91C1C"

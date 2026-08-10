@@ -577,6 +577,9 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
 
         if (TrashSelectionButton != null)
             TrashSelectionButton.IsEnabled = anySelected;
+
+        if (DeleteSelectionButton != null)
+            DeleteSelectionButton.IsEnabled = anySelected;
     }
 
     private void ArchivedGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshBatchSelectionUi();
@@ -679,6 +682,37 @@ public partial class ArchivesPage : System.Windows.Controls.UserControl, IReload
 
         foreach (var wo in sel)
             Db.SetTrashed(wo.Id, true);
+
+        Reload();
+    }
+
+    // ✅ 10.08.2026 (demande de Joe) : "Supprimer définitivement" directement depuis Archives,
+    // sans passer par la Corbeille -- même appel DB que TrashPage.DeleteSelected_Click
+    // (Db.DeleteWorkOrderPermanently).
+    private void DeleteSelectionPermanently_Click(object sender, RoutedEventArgs e)
+    {
+        var sel = GetActionSelectionOrFallbackToRow(GetSelectedRow(ArchivedGrid));
+
+        if (sel.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                "Coche un ou plusieurs bons (colonne de gauche).",
+                "Info",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var msg = sel.Count == 1
+            ? $"Supprimer définitivement le bon {sel[0].BdrDisplay} ?\n\nCette action est irréversible."
+            : $"Supprimer définitivement {sel.Count} bons ?\n\nCette action est irréversible.";
+
+        var ok = System.Windows.MessageBox.Show(msg, "Suppression définitive", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        foreach (var wo in sel)
+            Db.DeleteWorkOrderPermanently(wo.Id);
 
         Reload();
     }

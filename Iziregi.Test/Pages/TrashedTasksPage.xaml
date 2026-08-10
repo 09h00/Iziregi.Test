@@ -223,8 +223,9 @@
 
 				<!-- ✅ Accès direct à l'autre sous-page (demande de Joe, 04.08.2026) : depuis
 				     Corbeille tâches, va directement à Archives tâches sans repasser par
-				     "Planification". Fond gris clair, même couleur que "Page archives". -->
-				<Button Content="Page archives"
+				     "Planification". Fond gris clair, même couleur que "Voir archives".
+				     ✅ Renommé "Page archives" -> "Voir archives" (demande de Joe, 10.08.2026). -->
+				<Button Content="Voir archives"
 				        Style="{StaticResource SmallButtonStyle}"
 				        Background="#F3F4F6"
 				        BorderBrush="Black"
