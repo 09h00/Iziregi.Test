@@ -125,6 +125,89 @@
 			<Setter Property="Padding" Value="4,2"/>
 		</Style>
 
+		<!-- ✅ Boutons OK/Annuler du popup de filtre, copiés tels quels de PlanningPage.xaml
+			 (demande de Joe : "comme dans grille des tâches") : remplace SmallButtonStyle
+			 (gris) utilisé lors du 1er essai. -->
+		<Style x:Key="SmallBlueButtonStyle" TargetType="Button">
+			<Setter Property="Background" Value="#2563EB"/>
+			<Setter Property="Foreground" Value="White"/>
+			<Setter Property="BorderBrush" Value="#1D4ED8"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="Padding" Value="10,0"/>
+			<Setter Property="Height" Value="22"/>
+			<Setter Property="FontSize" Value="13"/>
+			<Setter Property="FontWeight" Value="SemiBold"/>
+			<Setter Property="VerticalAlignment" Value="Center"/>
+			<Setter Property="HorizontalAlignment" Value="Right"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bd"
+								Background="{TemplateBinding Background}"
+								BorderBrush="{TemplateBinding BorderBrush}"
+								BorderThickness="{TemplateBinding BorderThickness}"
+								CornerRadius="6"
+								SnapsToDevicePixels="True">
+							<ContentPresenter HorizontalAlignment="Center"
+											  VerticalAlignment="Center"
+											  Margin="{TemplateBinding Padding}"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Bd" Property="Background" Value="#1D4ED8"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#1E40AF"/>
+								<Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+							</Trigger>
+							<Trigger Property="IsPressed" Value="True">
+								<Setter TargetName="Bd" Property="Background" Value="#1E40AF"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#1E3A8A"/>
+							</Trigger>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="Bd" Property="Background" Value="#93C5FD"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#93C5FD"/>
+								<Setter Property="Foreground" Value="#F9FAFB"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<Style x:Key="OutlineBlueButtonStyle" TargetType="Button" BasedOn="{StaticResource SmallBlueButtonStyle}">
+			<Setter Property="Background" Value="White"/>
+			<Setter Property="Foreground" Value="#2563EB"/>
+			<Setter Property="BorderBrush" Value="#2563EB"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bd"
+								Background="{TemplateBinding Background}"
+								BorderBrush="{TemplateBinding BorderBrush}"
+								BorderThickness="{TemplateBinding BorderThickness}"
+								CornerRadius="6"
+								SnapsToDevicePixels="True">
+							<ContentPresenter HorizontalAlignment="Center"
+											  VerticalAlignment="Center"
+											  Margin="{TemplateBinding Padding}"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+							</Trigger>
+							<Trigger Property="IsPressed" Value="True">
+								<Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+								<Setter TargetName="Bd" Property="Background" Value="#EFF6FF"/>
+							</Trigger>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#BFDBFE"/>
+								<Setter Property="Foreground" Value="#BFDBFE"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
 		<!-- DataGrid -->
 		<Style x:Key="GridStyle" TargetType="DataGrid">
 			<Setter Property="AutoGenerateColumns" Value="False"/>
@@ -241,8 +324,8 @@
 					</ScrollViewer>
 
 					<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-						<Button Content="Annuler" Style="{StaticResource SmallButtonStyle}" Click="ColumnFilterCancel_Click" Margin="0,0,6,0"/>
-						<Button Content="OK" Style="{StaticResource SmallButtonStyle}" Click="ColumnFilterApply_Click"/>
+						<Button Content="Annuler" Style="{StaticResource OutlineBlueButtonStyle}" Click="ColumnFilterCancel_Click" Margin="0,0,6,0"/>
+						<Button Content="OK" Style="{StaticResource SmallBlueButtonStyle}" Click="ColumnFilterApply_Click"/>
 					</StackPanel>
 				</StackPanel>
 			</Border>
@@ -323,9 +406,14 @@
 				Padding="10"
 				Effect="{StaticResource CardShadowEffect}">
 
+			<!-- ✅ Fix (même piège que PlanningPage.xaml, "je ne vois aucun filtre") :
+				 ColumnHeaderHeight surchargé à 44 (au lieu des 34 de GridStyle). Les en-têtes
+				 filtrables ont 2 lignes (libellé + bouton ▾), 34px ne laissait aucune place
+				 visible pour la 2e ligne, le bouton était rogné/invisible. -->
 			<DataGrid x:Name="ArchivedTasksGrid"
 					  Style="{StaticResource GridStyle}"
 					  ColumnWidth="Auto"
+					  ColumnHeaderHeight="44"
 					  SelectionChanged="ArchivedTasksGrid_SelectionChanged">
 
 				<DataGrid.Columns>

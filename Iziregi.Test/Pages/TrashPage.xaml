@@ -251,9 +251,8 @@
 				Effect="{StaticResource CardShadowEffect}">
 
 			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-	<!-- ✅ Renommé "Corbeille des bons" (demande de Joe, 04.08.2026), même principe que
-	     "Archives des bons d'intervention". -->
-	<TextBlock Text="Corbeille des bons"
+	<!-- ✅ Renommé "Corbeille bons" (demande de Joe), même principe que "Archives bons". -->
+	<TextBlock Text="Corbeille bons"
 	           FontSize="18"
 	           FontWeight="SemiBold"
 	           Foreground="#111827"

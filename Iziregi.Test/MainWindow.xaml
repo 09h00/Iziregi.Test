@@ -215,8 +215,8 @@
                             Padding="4"
                             Effect="{StaticResource CardShadowEffect}">
                         <StackPanel>
-                            <Button Content="Page archives" Style="{StaticResource ArchivesMenuItemStyle}" Click="PlanningSubMenuArchives_Click"/>
-                            <Button Content="Page corbeille" Style="{StaticResource ArchivesMenuItemStyle}" Foreground="#B91C1C" Click="PlanningSubMenuTrash_Click"/>
+                            <Button Content="Archives tâches" Style="{StaticResource ArchivesMenuItemStyle}" Click="PlanningSubMenuArchives_Click"/>
+                            <Button Content="Corbeille tâches" Style="{StaticResource ArchivesMenuItemStyle}" Foreground="#B91C1C" Click="PlanningSubMenuTrash_Click"/>
                         </StackPanel>
                     </Border>
                 </Popup>
@@ -233,8 +233,8 @@
                             Padding="4"
                             Effect="{StaticResource CardShadowEffect}">
                         <StackPanel>
-                            <Button Content="Page archives" Style="{StaticResource ArchivesMenuItemStyle}" Click="BonsSubMenuArchives_Click"/>
-                            <Button Content="Page corbeille" Style="{StaticResource ArchivesMenuItemStyle}" Foreground="#B91C1C" Click="BonsSubMenuTrash_Click"/>
+                            <Button Content="Archives bons" Style="{StaticResource ArchivesMenuItemStyle}" Click="BonsSubMenuArchives_Click"/>
+                            <Button Content="Corbeille bons" Style="{StaticResource ArchivesMenuItemStyle}" Foreground="#B91C1C" Click="BonsSubMenuTrash_Click"/>
                         </StackPanel>
                     </Border>
                 </Popup>

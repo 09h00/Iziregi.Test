@@ -298,14 +298,22 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
         SetCount(TasksActiveRun, inProgressTasks);
         SetCount(TasksUrgency1Run, urgency1);
 
-        // ✅ "Niveau d'urgence 1" en rouge + police 1pt plus grand quand non nul (demande de
-        // Joe) : si 0, on ne touche à rien (garde l'apparence posée par SetCount ci-dessus).
+        // ✅ "Niveau d'urgence 1" en rouge + police 2pt plus grande sur toute la ligne (label +
+        // valeur) quand non nul (demande de Joe), sinon retour à la taille normale.
         // Volontairement à part de "alertIfNonZero" (SetCount) : cet écart-là saute à 16
-        // (utilisé ailleurs sur les bons), ici Joe veut seulement +1pt (13 -> 14).
+        // (utilisé ailleurs sur les bons), ici Joe veut +2pt (12 -> 14 pour le label, 13 -> 15
+        // pour la valeur).
         if (urgency1 != 0)
         {
             TasksUrgency1Run.Foreground = AlertCountBrush;
-            TasksUrgency1Run.FontSize = 14;
+            TasksUrgency1Run.FontSize = 15;
+            TasksUrgency1Label.FontSize = 14;
+            TasksUrgency1Chip.BorderBrush = AlertCountBrush;
+        }
+        else
+        {
+            TasksUrgency1Label.FontSize = 12;
+            TasksUrgency1Chip.BorderBrush = System.Windows.Media.Brushes.Transparent;
         }
 
         SetCount(TasksUrgency2Run, urgency2);

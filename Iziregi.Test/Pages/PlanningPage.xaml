@@ -743,18 +743,21 @@
                      côté des dates") : déplacées ici depuis la colonne de droite (à côté de
                      "Générer PDF"), deviennent le sous-menu d'accès pour la variante Tâches
                      (ShowArchivesTasks/ShowTrashedTasks, MainWindow.xaml.cs). -->
+                <!-- ✅ Décalé de 10mm/38px vers la droite (demande de Joe) : marge gauche
+                     14 -> 52 (le bouton "Voir Corbeille" suit, sans marge propre, dans le même
+                     StackPanel). Renommé "Voir Archives" (demande de Joe). -->
                 <Button x:Name="PlanningArchivesButton"
-                        Content="Page archives"
+                        Content="Voir Archives"
                         Style="{StaticResource WeekNavButtonStyle}"
                         Background="#F3F4F6"
                         Height="30"
                         Padding="10,0"
-                        Margin="14,0,6,0"
+                        Margin="52,0,6,0"
                         Click="PlanningArchivesButton_Click"/>
                 <!-- ✅ Fond rouge clair, police/bordure rouges (demande de Joe, 04.08.2026).
-                     Renommé "Page corbeille" (demande de Joe, 04.08.2026). -->
+                     Renommé "Voir Corbeille" (demande de Joe). -->
                 <Button x:Name="PlanningTrashButton"
-                        Content="Page corbeille"
+                        Content="Voir Corbeille"
                         Style="{StaticResource WeekNavButtonStyle}"
                         Background="#FEE2E2"
                         Foreground="#B91C1C"
@@ -1379,12 +1382,12 @@
                                     <!-- ✅ 5 jours en premier (19.07.2026, demande de Joe). -->
                                     <RadioButton x:Name="WeekDayCount5RadioButton"
                                                  GroupName="WeekDayCount"
-                                                 Content="5 jours (+ weekend)"
+                                                 Content="5 jours ouvrés (+ weekend)"
                                                  Margin="0,2"
                                                  Click="WeekDayCount_Changed"/>
                                     <RadioButton x:Name="WeekDayCount6RadioButton"
                                                  GroupName="WeekDayCount"
-                                                 Content="6 jours (+ weekend)"
+                                                 Content="6 jours ouvrés (+ weekend)"
                                                  Margin="0,2"
                                                  Click="WeekDayCount_Changed"/>
 
@@ -1416,7 +1419,7 @@
                                          qui travaille tous les samedis mais jamais les dimanches ne coche
                                          que la première. -->
                                     <Border BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Margin="0,8,0,8"/>
-                                    <TextBlock Text="Colonnes visibles partout" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Colonnes visibles toutes les semaines" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
                                     <CheckBox x:Name="WeekendSaturdayDefaultCheckBox"
                                               Content="Samedi par défaut"
                                               Margin="0,2"

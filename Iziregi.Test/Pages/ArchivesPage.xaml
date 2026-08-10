@@ -486,7 +486,7 @@
 				Effect="{StaticResource CardShadowEffect}">
 
 			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-	<TextBlock Text="Archives des bons d'intervention"
+	<TextBlock Text="Archives bons"
 	           FontSize="18"
 	           FontWeight="SemiBold"
 	           Foreground="#111827"

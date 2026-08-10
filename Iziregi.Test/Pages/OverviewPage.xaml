@@ -184,11 +184,11 @@
 				 exactement à la même hauteur, sans dépendre d'une distribution de RowSpan. -->
 		<StackPanel Grid.Column="0" VerticalAlignment="Top">
 			<!-- ✅ Widget Heure/Date/Semaine (demande de Joe, re-ajouté au-dessus de "Tâches").
-				 ✅ Bordure noire, ombre jaune clair (demande de Joe), même intensité que les
-				 autres widgets (DropShadowEffect Direction/ShadowDepth/BlurRadius/Opacity
-				 identiques, seule la couleur change). -->
+				 ✅ Bordure orange clair (demande de Joe, remplace le noir), ombre jaune clair,
+				 même intensité que les autres widgets (DropShadowEffect Direction/ShadowDepth/
+				 BlurRadius/Opacity identiques, seule la couleur change). -->
 			<Border Style="{StaticResource CardStyle}"
-			        BorderBrush="Black"
+			        BorderBrush="#FDBA74"
 			        Padding="14,10" Margin="0,0,0,10" HorizontalAlignment="Left">
 				<Border.Effect>
 					<DropShadowEffect Color="#FDE047" Direction="270" ShadowDepth="6" BlurRadius="30" Opacity="0.42"/>
@@ -244,8 +244,8 @@
 						<TextBlock Grid.Row="0" Grid.Column="1" x:Name="TasksActiveRun" Text="0" FontSize="15" FontWeight="Bold" Foreground="#0F172A" HorizontalAlignment="Right" Margin="0,0,0,3"/>
 						<Rectangle Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource RowDividerStyle}"/>
 
-						<Border x:Name="TasksUrgency1Chip" Grid.Row="1" Grid.Column="0" Background="#FECACA" CornerRadius="5" Padding="10,3" HorizontalAlignment="Left" Margin="0,3,0,2">
-							<TextBlock Text="Niveau d'urgence 1" FontSize="12" Foreground="Black"/>
+						<Border x:Name="TasksUrgency1Chip" Grid.Row="1" Grid.Column="0" Background="#FECACA" BorderBrush="Transparent" BorderThickness="2" CornerRadius="5" Padding="10,3" HorizontalAlignment="Left" Margin="0,3,0,2">
+							<TextBlock x:Name="TasksUrgency1Label" Text="Niveau d'urgence 1" FontSize="12" Foreground="Black"/>
 						</Border>
 						<!-- ✅ Décalé de 2cm (76px) vers la gauche (demande de Joe) : les niveaux
 							 d'urgence sont un sous-détail d'"Actives", pas additionnés dans le Total,
@@ -374,6 +374,7 @@
 						<ColumnDefinition Width="Auto"/>
 					</Grid.ColumnDefinitions>
 			<StackPanel Grid.Column="0" VerticalAlignment="Top">
+			<!-- ✅ Décalé de 1mm/4px vers la gauche (demande de Joe) via RenderTransform. -->
 			<Border Style="{StaticResource CardStyle}"
 			        BorderBrush="#15803D"
 			        TextElement.FontFamily="Arial"
@@ -385,6 +386,9 @@
 				<Border.Effect>
 					<DropShadowEffect Color="#15803D" Direction="270" ShadowDepth="6" BlurRadius="30" Opacity="0.42"/>
 				</Border.Effect>
+				<Border.RenderTransform>
+					<TranslateTransform X="-4"/>
+				</Border.RenderTransform>
 				<StackPanel>
 					<!-- ✅ Lien cliquable limité au titre (15e passe, demande de Joe), plus toute
 						 la carte. Flèche "→" pour signaler le lien (27e passe, demande de Joe). -->
@@ -566,14 +570,22 @@
 			 calcul). Bordure/ombre vertes comme BI. -->
 		<!-- ✅ Centré verticalement sur BI (demande de Joe, remplace l'alignement "Bottom"
 			 précédent) : VerticalAlignment="Center", même hauteur de ligne de grille que BI,
-			 mais centré au lieu de calé en bas. -->
+			 mais centré au lieu de calé en bas.
+			 ✅ Remonté de 5mm/19px puis encore 3mm/11px (demande de Joe), total 8mm/30px, puis
+			 redescendu de 1mm/4px (net 26px) et décalé de 3mm/11px vers la gauche (demande de
+			 Joe), via RenderTransform (comme ailleurs dans cette page) : un margin seul ne
+			 suffirait pas à décaler du plein montant avec VerticalAlignment="Center" (le
+			 centrage n'en absorbe que la moitié). -->
 		<Border Grid.Column="1" Style="{StaticResource CardStyle}" BorderBrush="#15803D" VerticalAlignment="Center" Margin="14,0,0,0">
+			<Border.RenderTransform>
+				<TranslateTransform X="-11" Y="-26"/>
+			</Border.RenderTransform>
 			<Border.Effect>
 				<DropShadowEffect Color="#15803D" Direction="270" ShadowDepth="6" BlurRadius="30" Opacity="0.42"/>
 			</Border.Effect>
 			<StackPanel>
 				<TextBlock Style="{StaticResource CardTitleStyle}" Margin="0,0,0,6" Cursor="Hand" MouseLeftButtonDown="AccountingCard_Click">
-					<Run Text="Bons validés"/>
+					<Run Text="Montant actuel des bons validés"/>
 					<Run Text=" &#8594;" Foreground="Black" FontWeight="Normal"/>
 				</TextBlock>
 				<Grid>

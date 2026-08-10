@@ -586,15 +586,22 @@
                                 Height="34"
                                 Margin="0,0,6,0"/>
 
+                        <!-- ✅ Épaisseur de bordure alignée sur les autres boutons de la barre
+                             (demande de Joe) : BorderBrush="#FCA5A5" (DangerSmallButtonStyle) est
+                             trop clair pour bien ressortir en 1px comme les bordures noires/rouge
+                             foncé voisines, passée à 2px pour un poids visuel équivalent. -->
                         <Button x:Name="TrashSelectionButton"
                                 Content="Déplacer dans la corbeille"
                                 Style="{StaticResource DangerSmallButtonStyle}"
+                                BorderThickness="2"
                                 Click="TrashSelection_Click"
                                 IsEnabled="False"
                                 FontWeight="SemiBold"
                                 Height="34"
                                 Margin="0,0,6,0"/>
 
+                        <!-- ✅ Décalé de 10mm/38px vers la droite (demande de Joe), avec les 2
+                             boutons Archives/Corbeille qui suivent : marge gauche 0 -> 38. -->
                         <Button x:Name="RefreshTopButton"
                                 Content="Rafraîchir"
                                 Style="{StaticResource SmallButtonStyle}"
@@ -602,14 +609,15 @@
                                 Click="Refresh_Click"
                                 FontWeight="SemiBold"
                                 Height="34"
-                                Margin="0,0,6,0"/>
+                                Margin="38,0,6,0"/>
 
                         <!-- ✅ Archives/Corbeille (04.08.2026, demande de Joe : "je n'ai pas de
                              boutons Archives et Corbeille") : boutons explicites, en plus des
                              badges compteurs déjà cliquables plus bas, même style que
-                             "Rafraîchir" ci-dessus. Fond gris clair (demande de Joe, 04.08.2026). -->
+                             "Rafraîchir" ci-dessus. Fond gris clair (demande de Joe, 04.08.2026).
+                             Renommé "Voir Archives" (demande de Joe). -->
                         <Button x:Name="ArchivesTopButton"
-                                Content="Page archives"
+                                Content="Voir Archives"
                                 Style="{StaticResource SmallButtonStyle}"
                                 Background="#F3F4F6"
                                 BorderBrush="Black"
@@ -620,9 +628,9 @@
 
                         <!-- ✅ Fond rouge clair, police/bordure rouges (demande de Joe, 04.08.2026),
                              même couleur que le badge "Bons Corbeille" (#FEE2E2/#B91C1C).
-                             Renommé "Page corbeille" (demande de Joe, 04.08.2026). -->
+                             Renommé "Voir Corbeille" (demande de Joe). -->
                         <Button x:Name="TrashTopButton"
-                                Content="Page corbeille"
+                                Content="Voir Corbeille"
                                 Style="{StaticResource SmallButtonStyle}"
                                 Background="#FEE2E2"
                                 Foreground="#B91C1C"

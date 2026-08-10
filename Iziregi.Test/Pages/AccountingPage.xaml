@@ -171,48 +171,60 @@
              ========================= -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
 
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Comptabilité"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
+            <!-- ✅ "Rafraîchir"/"Masquer graphique catégories"/"Générer PDF" poussés à droite de
+                 la page (demande de Joe) : Grid 2 colonnes (Auto + *), groupe de gauche (titre +
+                 2 boutons Export CSV) en colonne 0, groupe de droite dans une StackPanel alignée
+                 à droite de la colonne 1. -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-                <Button Content="Exporter CSV (détail)"
-                        Width="190"
-                        Margin="16,0,0,0"
-                        Background="#D1D5DB"
-                        Style="{StaticResource RefreshButtonStyle}"
-                        Click="ExportDetailsCsv_Click"/>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="Comptabilité"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
 
-                <Button Content="Exporter CSV (totaux intervenants)"
-                        Width="260"
-                        Margin="8,0,0,0"
-                        Background="#D1D5DB"
-                        Style="{StaticResource RefreshButtonStyle}"
-                        Click="ExportCompaniesCsv_Click"/>
+                    <Button Content="Exporter CSV (détail)"
+                            Width="190"
+                            Margin="16,0,0,0"
+                            Background="#D1D5DB"
+                            Style="{StaticResource RefreshButtonStyle}"
+                            Click="ExportDetailsCsv_Click"/>
 
-                <Button Content="Rafraîchir"
-                        Width="120"
-                        Margin="8,0,0,0"
-                        Style="{StaticResource RefreshButtonStyle}"
-                        Click="Refresh_Click"/>
+                    <Button Content="Exporter CSV (totaux intervenants)"
+                            Width="260"
+                            Margin="8,0,0,0"
+                            Background="#D1D5DB"
+                            Style="{StaticResource RefreshButtonStyle}"
+                            Click="ExportCompaniesCsv_Click"/>
+                </StackPanel>
 
-                <!-- ✅ Afficher/Masquer le graphique des catégories (23.07.2026, demande de Joe). -->
-                <Button x:Name="ToggleCategoryChartButton"
-                        Content="Masquer graphique catégories"
-                        Width="210"
-                        Margin="8,0,0,0"
-                        Foreground="Black"
-                        BorderBrush="Black"
-                        Style="{StaticResource CategoryChartToggleButtonStyle}"
-                        Click="ToggleCategoryChartButton_Click"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Rafraîchir"
+                            Width="120"
+                            Style="{StaticResource RefreshButtonStyle}"
+                            Click="Refresh_Click"/>
 
-                <Button Content="Générer PDF"
-                        Width="150"
-                        Margin="8,0,0,0"
-                        Style="{StaticResource PdfButtonStyle}"
-                        Click="ExportPdf_Click"/>
-            </StackPanel>
+                    <!-- ✅ Afficher/Masquer le graphique des catégories (23.07.2026, demande de Joe). -->
+                    <Button x:Name="ToggleCategoryChartButton"
+                            Content="Masquer graphique catégories"
+                            Width="210"
+                            Margin="8,0,0,0"
+                            Foreground="Black"
+                            BorderBrush="Black"
+                            Style="{StaticResource CategoryChartToggleButtonStyle}"
+                            Click="ToggleCategoryChartButton_Click"/>
+
+                    <Button Content="Générer PDF"
+                            Width="150"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource PdfButtonStyle}"
+                            Click="ExportPdf_Click"/>
+                </StackPanel>
+            </Grid>
 
         </StackPanel>
 
@@ -309,7 +321,7 @@
                                 <!-- Totaux -->
                                 <Border x:Name="TotalsCardBorder"
                                         Grid.Row="0"
-                                        BorderBrush="#D1D5DB"
+                                        BorderBrush="Black"
                                         BorderThickness="1"
                                         CornerRadius="10"
                                         Padding="12"
@@ -455,7 +467,7 @@
                                 <!-- Détail -->
                                 <Border x:Name="DetailsCardBorder"
                                         Grid.Row="2"
-                                        BorderBrush="#D1D5DB"
+                                        BorderBrush="Black"
                                         BorderThickness="1"
                                         CornerRadius="10"
                                         Padding="12"
@@ -470,7 +482,7 @@
                                                 Padding="8,4"
                                                 Margin="0,0,0,10">
                                             <TextBlock x:Name="DetailsTitleTextBlock"
-                                                       Text="Détail — sélectionne un intervenant"
+                                                       Text="Détail — sélectionnez un intervenant"
                                                        FontWeight="Bold"/>
                                         </Border>
 
@@ -562,7 +574,7 @@
 
                             <Border x:Name="ChartCardBorder"
                                     Grid.Row="0"
-                                    BorderBrush="#D1D5DB"
+                                    BorderBrush="Black"
                                     BorderThickness="1"
                                     CornerRadius="10"
                                     Padding="12"
@@ -662,7 +674,7 @@
                                  intégralité. -->
                             <Border x:Name="CategoryChartBorder"
                                     Grid.Row="2"
-                                    BorderBrush="#D1D5DB"
+                                    BorderBrush="Black"
                                     BorderThickness="1"
                                     CornerRadius="10"
                                     Padding="12"

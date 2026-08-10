@@ -250,7 +250,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
             .OrderBy(s => s)
             .ToList();
 
-        CompanyFilterComboBox.ItemsSource = new List<string> { "Toutes" }.Concat(companies).ToList();
+        CompanyFilterComboBox.ItemsSource = new List<string> { "Tous" }.Concat(companies).ToList();
         CompanyFilterComboBox.SelectedIndex = 0;
     }
 
@@ -263,8 +263,8 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
     private string? GetSelectedCompany()
     {
-        var s = CompanyFilterComboBox.SelectedItem?.ToString() ?? "Toutes";
-        if (string.Equals(s, "Toutes", StringComparison.OrdinalIgnoreCase)) return null;
+        var s = CompanyFilterComboBox.SelectedItem?.ToString() ?? "Tous";
+        if (string.Equals(s, "Tous", StringComparison.OrdinalIgnoreCase)) return null;
         return s;
     }
 
@@ -699,7 +699,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         RenderTotalsTableAndChart();
 
         // Reset Détail
-        DetailsTitleTextBlock.Text = "Détail — sélectionne un intervenant";
+        DetailsTitleTextBlock.Text = "Détail — sélectionnez un intervenant";
         DetailsTitleBorder.Background = MediaBrushes.Transparent;
         DetailsTitleTextBlock.Foreground = MediaBrushes.Black;
 
@@ -717,7 +717,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         if (row.IsTotal)
         {
-            DetailsTitleTextBlock.Text = "Détail — sélectionne un intervenant";
+            DetailsTitleTextBlock.Text = "Détail — sélectionnez un intervenant";
             DetailsTitleBorder.Background = MediaBrushes.Transparent;
             DetailsTitleTextBlock.Foreground = MediaBrushes.Black;
 
