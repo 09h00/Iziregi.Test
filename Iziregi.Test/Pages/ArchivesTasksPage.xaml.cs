@@ -1,6 +1,7 @@
 // File: Pages/ArchivesTasksPage.xaml.cs
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -36,6 +37,11 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
     }
 
     private List<TaskRecord> _allTasks = new();
+
+    // ✅ Filtres façon Excel dans les en-têtes de colonne (demande de Joe : "comme dans
+    // Archives des bons d'intervention"), même principe qu'ArchivesPage.xaml.cs mais sans
+    // colonnes date (les tâches archivées n'en ont pas dans cette grille).
+    private List<TaskArchiveRow> _allRows = new();
     private List<TaskArchiveRow> _rows = new();
 
     public ArchivesTasksPage(MainWindow host)
@@ -60,6 +66,7 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         if (!projectIdNullable.HasValue || projectIdNullable.Value <= 0)
         {
             _allTasks = new List<TaskRecord>();
+            _allRows = new List<TaskArchiveRow>();
             _rows = new List<TaskArchiveRow>();
 
             ArchivedTasksGrid.ItemsSource = _rows;
@@ -92,7 +99,7 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         // ET à la corbeille (nouveau cas depuis que "Supprimer définitivement" devient
         // "Déplacer dans la corbeille", voir DeleteSelected_Click), même principe que
         // Db.GetArchivedWorkOrders (WHERE IsTrashed=0 AND IsArchived=1) côté Bons.
-        _rows = _allTasks
+        _allRows = _allTasks
             .Where(t => t.IsArchived && !t.IsTrashed)
             .Select(t =>
             {
@@ -112,10 +119,188 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
             })
             .ToList();
 
+        ApplyFilters();
+        UpdateFilterButtonIndicators();
+    }
+
+    // ✅ Filtres façon Excel (demande de Joe : "comme dans Archives des bons d'intervention"),
+    // même principe qu'ArchivesPage.xaml.cs (ColumnFilterButton_Click/ColumnFilterApply_Click/
+    // ApplyFilters), simplifié : uniquement des colonnes texte/statut ici, pas de colonne date.
+    private string? _sortColumnKey;
+    private ListSortDirection _sortDirection = ListSortDirection.Ascending;
+    private readonly Dictionary<string, HashSet<string>> _activeValueFilters = new();
+    private string? _currentFilterColumnKey;
+    private List<FilterOption> _filterPopupOptions = new();
+
+    public class FilterOption : INotifyPropertyChanged
+    {
+        public string Value { get; set; } = "";
+        public int Count { get; set; }
+        public string DisplayText => $"{Value}  ({Count})";
+
+        private bool _isChecked = true;
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set { _isChecked = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsChecked))); }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    // ✅ "Done" est un statut à 2 valeurs fixes, toujours proposées (comme AllStatusLabels côté
+    // Bons), pas de tri alphabétique proposé pour cette colonne (pas de sens ici non plus).
+    private static readonly string[] AllDoneLabels = { "Effectué", "Non effectué" };
+
+    private static bool IsStatusColumn(string columnKey) => columnKey == "Done";
+
+    private static string GetColumnValue(TaskArchiveRow r, string columnKey) => columnKey switch
+    {
+        "Building" => string.IsNullOrWhiteSpace(r.Task.Building) ? "(Non défini)" : r.Task.Building.Trim(),
+        "Floor" => string.IsNullOrWhiteSpace(r.Task.Floor) ? "(Non défini)" : r.Task.Floor.Trim(),
+        "Category" => string.IsNullOrWhiteSpace(r.Task.Category) ? "(Non défini)" : r.Task.Category.Trim(),
+        "Company" => string.IsNullOrWhiteSpace(r.Task.Company) ? "(Non défini)" : r.Task.Company.Trim(),
+        "Urgency" => string.IsNullOrWhiteSpace(r.Task.Urgent) ? "(Non défini)" : r.Task.Urgent.Trim(),
+        "Done" => r.Task.Done ? "Effectué" : "Non effectué",
+        _ => ""
+    };
+
+    private void ColumnFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not string columnKey) return;
+
+        _currentFilterColumnKey = columnKey;
+        var isStatus = IsStatusColumn(columnKey);
+
+        AlphaSortCheckBox.Visibility = isStatus ? Visibility.Collapsed : Visibility.Visible;
+        AlphaSortCheckBox.IsChecked = _sortColumnKey == columnKey && _sortDirection == ListSortDirection.Ascending;
+
+        var allValues = isStatus
+            ? AllDoneLabels.ToList()
+            : _allRows
+                .Select(r => GetColumnValue(r, columnKey))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+        var counts = _allRows
+            .GroupBy(r => GetColumnValue(r, columnKey), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        var active = _activeValueFilters.TryGetValue(columnKey, out var set) ? set : null;
+
+        _filterPopupOptions = allValues
+            .Select(v => new FilterOption { Value = v, Count = counts.TryGetValue(v, out var c) ? c : 0, IsChecked = active == null || active.Contains(v) })
+            .ToList();
+
+        FilterOptionsItemsControl.ItemsSource = _filterPopupOptions;
+        FilterSelectAllCheckBox.IsChecked = _filterPopupOptions.All(o => o.IsChecked);
+
+        ColumnFilterPopup.PlacementTarget = fe;
+        ColumnFilterPopup.IsOpen = true;
+    }
+
+    private void FilterSelectAllCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        var check = FilterSelectAllCheckBox.IsChecked == true;
+        foreach (var o in _filterPopupOptions)
+            o.IsChecked = check;
+    }
+
+    private void ColumnFilterCancel_Click(object sender, RoutedEventArgs e)
+    {
+        ColumnFilterPopup.IsOpen = false;
+    }
+
+    private void ColumnFilterApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFilterColumnKey == null)
+        {
+            ColumnFilterPopup.IsOpen = false;
+            return;
+        }
+
+        var columnKey = _currentFilterColumnKey;
+
+        var checkedValues = _filterPopupOptions.Where(o => o.IsChecked).Select(o => o.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (checkedValues.Count == _filterPopupOptions.Count)
+            _activeValueFilters.Remove(columnKey);
+        else
+            _activeValueFilters[columnKey] = checkedValues;
+
+        if (!IsStatusColumn(columnKey) && AlphaSortCheckBox.IsChecked == true)
+        {
+            _sortColumnKey = columnKey;
+            _sortDirection = ListSortDirection.Ascending;
+        }
+        else if (_sortColumnKey == columnKey)
+        {
+            _sortColumnKey = null;
+        }
+
+        ColumnFilterPopup.IsOpen = false;
+
+        UpdateFilterButtonIndicators();
+        ApplyFilters();
+    }
+
+    private void UpdateFilterButtonIndicators()
+    {
+        SetFilterHeaderState(BuildingFilterButton, BuildingHeaderBorder, "Building");
+        SetFilterHeaderState(FloorFilterButton, FloorHeaderBorder, "Floor");
+        SetFilterHeaderState(CategoryFilterButton, CategoryHeaderBorder, "Category");
+        SetFilterHeaderState(CompanyFilterButton, CompanyHeaderBorder, "Company");
+        SetFilterHeaderState(UrgencyFilterButton, UrgencyHeaderBorder, "Urgency");
+        SetFilterHeaderState(DoneFilterButton, DoneHeaderBorder, "Done");
+    }
+
+    private bool IsColumnFilterActive(string columnKey) =>
+        _activeValueFilters.ContainsKey(columnKey) || _sortColumnKey == columnKey;
+
+    private void SetFilterHeaderState(System.Windows.Controls.Button? button, System.Windows.Controls.Border? headerBorder, string columnKey)
+    {
+        var active = IsColumnFilterActive(columnKey);
+
+        if (headerBorder != null)
+            headerBorder.BorderBrush = active
+                ? new MediaSolidColorBrush((MediaColor)MediaColorConverter.ConvertFromString("#2563EB")!)
+                : MediaBrushes.Transparent;
+
+        if (button != null)
+            button.Style = (Style)(active
+                ? FindResource("FilterHeaderButtonActiveStyle")
+                : FindResource("FilterHeaderButtonStyle"));
+    }
+
+    private void ApplyFilters()
+    {
+        var filtered = _allRows.Where(r =>
+        {
+            foreach (var kvp in _activeValueFilters)
+            {
+                var value = GetColumnValue(r, kvp.Key);
+                if (!kvp.Value.Contains(value)) return false;
+            }
+            return true;
+        });
+
+        _rows = _sortColumnKey != null
+            ? (_sortDirection == ListSortDirection.Ascending
+                ? filtered.OrderBy(r => GetColumnValue(r, _sortColumnKey), StringComparer.OrdinalIgnoreCase)
+                : filtered.OrderByDescending(r => GetColumnValue(r, _sortColumnKey), StringComparer.OrdinalIgnoreCase)).ToList()
+            : filtered.ToList();
+
         ArchivedTasksGrid.ItemsSource = _rows;
-        ArchivedTasksGrid.Items.Refresh();
 
         RefreshBatchSelectionUi();
+    }
+
+    private void ResetFiltersAndSortToDefault()
+    {
+        _activeValueFilters.Clear();
+        _sortColumnKey = null;
     }
 
     private static MediaBrush BrushFromHexOrDefault(string? hex, MediaBrush def)
@@ -241,7 +426,11 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         RefreshBatchSelectionUi();
     }
 
-    private void Refresh_Click(object sender, RoutedEventArgs e) => Reload();
+    private void Refresh_Click(object sender, RoutedEventArgs e)
+    {
+        ResetFiltersAndSortToDefault();
+        Reload();
+    }
 
     // ✅ Réécrit le fichier complet (actives + archivées) : les TaskRecord passés en
     // paramètre sont les mêmes références que celles dans _allTasks (LINQ Where/Select ne
@@ -342,22 +531,27 @@ public partial class ArchivesTasksPage : System.Windows.Controls.UserControl, IR
         Reload();
     }
 
-    private void DeleteRow_Click(object sender, RoutedEventArgs e)
+    // ✅ Fix (demande de Joe) : le bouton rouge de la colonne Actions supprimait réellement la
+    // tâche (_allTasks.Remove, irréversible) au lieu de la mettre à la corbeille comme
+    // DeleteSelected_Click (sélection groupée) le fait déjà -- même comportement que TrashRow_Click
+    // côté ArchivesPage.xaml.cs (Bons).
+    private void TrashRow_Click(object sender, RoutedEventArgs e)
     {
         var row = GetRow(sender);
         if (row?.Task == null)
             return;
 
         var ok = System.Windows.MessageBox.Show(
-            $"Supprimer définitivement la tâche N°{row.Task.Ref} ?\n\nCette action est irréversible.",
-            "Suppression définitive",
+            $"Mettre la tâche N°{row.Task.Ref} à la corbeille ?",
+            "Confirmation",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
 
         if (ok != MessageBoxResult.Yes)
             return;
 
-        _allTasks.Remove(row.Task);
+        row.Task.IsTrashed = true;
+        row.Task.TrashedAt = DateTime.Now;
 
         PersistAllTasks();
         Reload();
