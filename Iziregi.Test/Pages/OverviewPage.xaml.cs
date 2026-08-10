@@ -279,17 +279,21 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
         }
 
         var allTasks = ProjectTasksStore.Load(project.Id);
-        var activeTasks = allTasks.Where(t => !t.IsArchived && HasContent(t) && VisibleThisWeek(t)).ToList();
+        // ✅ Fix (demande de Joe) : une tâche mise à la Corbeille (IsTrashed, voir
+        // TrashedTasksPage) ne doit plus être comptée comme active -- exclue ici comme
+        // IsArchived l'est déjà.
+        var activeTasks = allTasks.Where(t => !t.IsArchived && !t.IsTrashed && HasContent(t) && VisibleThisWeek(t)).ToList();
         var doneTasks = activeTasks.Count(t => t.Done);
         var inProgressTasks = activeTasks.Count - doneTasks;
         var urgency1 = activeTasks.Count(t => !t.Done && t.Urgent == "1");
         var urgency2 = activeTasks.Count(t => !t.Done && t.Urgent == "2");
         var urgency3 = activeTasks.Count(t => !t.Done && t.Urgent == "3");
 
-        // ✅ Total = Actives + Effectuées + Archivées (demande de Joe) : les niveaux d'urgence
-        // ne s'y ajoutent pas (ce sont déjà un sous-détail d'Actives, pas un total à part). Pas
-        // de Corbeille ici (pas de page Corbeille pour les tâches, contrairement aux Bons).
+        // ✅ Total = Actives + Effectuées + Archivées + Corbeille (demande de Joe, comme côté
+        // Bons) : les niveaux d'urgence ne s'y ajoutent pas (ce sont déjà un sous-détail
+        // d'Actives, pas un total à part).
         var archivedTasksCount = allTasks.Count(t => t.IsArchived && HasContent(t));
+        var trashedTasksCount = allTasks.Count(t => t.IsTrashed && HasContent(t));
 
         SetCount(TasksActiveRun, inProgressTasks);
         SetCount(TasksUrgency1Run, urgency1);
@@ -308,7 +312,8 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
         SetCount(TasksUrgency3Run, urgency3);
         SetCount(TasksDoneRun, doneTasks);
         SetCount(TasksArchivedRun, archivedTasksCount);
-        SetCount(TasksTotalRun, activeTasks.Count + archivedTasksCount);
+        SetCount(TasksTrashedRun, trashedTasksCount);
+        SetCount(TasksTotalRun, activeTasks.Count + archivedTasksCount + trashedTasksCount);
 
         // ✅ 22e passe (demande de Joe) : niveaux d'urgence visibles uniquement si la colonne
         // "Urg." est actuellement affichée dans la grille Planning (Db.GetTasksVisibleColumns,
@@ -357,6 +362,12 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
     {
         e.Handled = true;
         _host.ShowArchivesTasks();
+    }
+
+    private void TasksTrashedRow_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        _host.ShowTrashedTasks();
     }
 
     // ✅ Bloc-notes (demande de Joe) : plusieurs notes indépendantes par dossier, construites
