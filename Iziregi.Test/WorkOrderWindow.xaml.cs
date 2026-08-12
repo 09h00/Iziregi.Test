@@ -298,7 +298,7 @@ public partial class WorkOrderWindow : Window
         return string.Join("\n", outLines);
     }
 
-    private const int QuoteNotesMaxCharsPerLine = 26;
+    private const int QuoteNotesMaxCharsPerLine = 40;
     // ✅ 5 -> 7 (04.08.2026, demande de Joe).
     private const int QuoteNotesMaxLines = 7;
 
@@ -405,50 +405,21 @@ public partial class WorkOrderWindow : Window
         catch { }
     }
 
+    // ✅ Simplifié (demande de Joe, 11.08.2026, "le mot entier doit passer à la ligne même
+    // si on n'a pas atteint les 40 caractères") : réutilise EnforceWordWrap (déjà utilisé pour
+    // Descriptif), qui coupe au dernier espace avant la limite au lieu de couper au milieu d'un
+    // mot -- même principe que EnforceDescriptionRules ci-dessus. Un mot isolé plus long que
+    // QuoteNotesMaxCharsPerLine reste coupé en dur (aucun espace disponible où couper).
     private static string EnforceQuoteNotesRules(string input)
     {
         input = NormalizeNewlines(input);
+        var wrapped = EnforceWordWrap(input, QuoteNotesMaxCharsPerLine);
 
-        var rawLines = SplitLines(input);
-        var resultLines = new List<string>(capacity: QuoteNotesMaxLines);
+        var lines = SplitLines(wrapped);
+        if (lines.Length <= QuoteNotesMaxLines)
+            return wrapped;
 
-        foreach (var raw in rawLines)
-        {
-            var line = raw ?? "";
-
-            if (line.Length == 0)
-            {
-                resultLines.Add("");
-                if (resultLines.Count >= QuoteNotesMaxLines) break;
-                continue;
-            }
-
-            int idx = 0;
-            while (idx < line.Length)
-            {
-                var take = Math.Min(QuoteNotesMaxCharsPerLine, line.Length - idx);
-                resultLines.Add(line.Substring(idx, take));
-                idx += take;
-
-                if (resultLines.Count >= QuoteNotesMaxLines)
-                    break;
-            }
-
-            if (resultLines.Count >= QuoteNotesMaxLines)
-                break;
-        }
-
-        if (resultLines.Count > QuoteNotesMaxLines)
-            resultLines = resultLines.Take(QuoteNotesMaxLines).ToList();
-
-        for (int i = 0; i < resultLines.Count; i++)
-        {
-            var s = resultLines[i] ?? "";
-            if (s.Length > QuoteNotesMaxCharsPerLine)
-                resultLines[i] = s.Substring(0, QuoteNotesMaxCharsPerLine);
-        }
-
-        return string.Join("\n", resultLines);
+        return string.Join("\n", lines.Take(QuoteNotesMaxLines));
     }
 
     private static string NormalizeNewlines(string s)
@@ -1150,8 +1121,8 @@ public partial class WorkOrderWindow : Window
             AddLineButton.Content = $"+ Ajouter ligne ({_lines.Count} / {QuoteMaxLines} max.)";
 
         var validationEditable = isArchitecte || isSignataire;
-        SetEnabled(SignatureNameComboBox, validationEditable);
-        SetEnabled(SignatureDatePicker, validationEditable);
+        SetReadOnlyLook(SignatureNameComboBox, validationEditable);
+        SetReadOnlyLook(SignatureDatePicker, validationEditable);
 
         SetEnabled(DecisionValidateRadio, validationEditable);
         SetEnabled(DecisionRefuseRadio, validationEditable);
@@ -1294,6 +1265,20 @@ public partial class WorkOrderWindow : Window
         if (tb == null) return;
         tb.IsReadOnly = !editable;
         tb.IsEnabled = true;
+    }
+
+    // ✅ 11.08.2026 (demande de Joe) : "Nom"/"Date" (section Validation) restaient grisés
+    // (IsEnabled=False, via SetEnabled) dès qu'un BI existant est ouvert par l'architecte
+    // (_formLocked=true) -- le texte déjà saisi devenait illisible en gris clair. Même
+    // principe que SetTextBoxEditable : IsHitTestVisible bloque l'interaction (clic,
+    // ouverture du calendrier/de la liste) sans jamais désactiver le contrôle, donc le texte
+    // garde son rendu normal (noir) au lieu du gris "disabled" du thème WPF.
+    private static void SetReadOnlyLook(System.Windows.FrameworkElement? e, bool editable)
+    {
+        if (e == null) return;
+        e.IsHitTestVisible = editable;
+        e.Focusable = editable;
+        e.IsEnabled = true;
     }
 
     private void ApplyDemandLabels()
@@ -2505,6 +2490,37 @@ public partial class WorkOrderWindow : Window
         return href;
     }
 
+    // ✅ 11.08.2026 (demande de Joe) : édite le modèle par défaut de texte avant/après le lien
+    // devis (LinkTextWindow), enregistré immédiatement (Db.SetQuoteLinkTextBefore/After) --
+    // réutilisé automatiquement au prochain "Envoyer lien pour devis" (celui-ci ou un futur BI).
+    private void QuoteLinkTextButton_Click(object sender, RoutedEventArgs e)
+    {
+        var win = new LinkTextWindow("Texte du lien devis", Db.GetQuoteLinkTextBefore(), Db.GetQuoteLinkTextAfter())
+        {
+            Owner = this
+        };
+
+        if (win.ShowDialog() == true)
+        {
+            Db.SetQuoteLinkTextBefore(win.BeforeText);
+            Db.SetQuoteLinkTextAfter(win.AfterText);
+        }
+    }
+
+    private void SignatureLinkTextButton_Click(object sender, RoutedEventArgs e)
+    {
+        var win = new LinkTextWindow("Texte du lien validation", Db.GetSignatureLinkTextBefore(), Db.GetSignatureLinkTextAfter())
+        {
+            Owner = this
+        };
+
+        if (win.ShowDialog() == true)
+        {
+            Db.SetSignatureLinkTextBefore(win.BeforeText);
+            Db.SetSignatureLinkTextAfter(win.AfterText);
+        }
+    }
+
     private async void ExportQuoteRequestButton_Click(object sender, RoutedEventArgs e)
     {
         if (!ConfirmSaveBeforeSendingLink()) return;
@@ -2535,13 +2551,24 @@ public partial class WorkOrderWindow : Window
 
             var link = await CreateMagicLinkAsync(role: "company", workOrderRef: workOrderRef);
 
-            System.Windows.Clipboard.SetText(link);
+            // ✅ Texte avant/après personnalisable (demande de Joe, 11.08.2026, bouton "+ texte") :
+            // remplace l'ancien texte codé en dur, voir Db.GetQuoteLinkTextBefore/After.
+            var before = Db.GetQuoteLinkTextBefore().Replace("{ref}", workOrderRef);
+            var after = Db.GetQuoteLinkTextAfter().Replace("{ref}", workOrderRef);
+            var plainBody = $"{before}\r\n\r\n{link}\r\n\r\n{after}";
+
+            // ✅ Fix (demande de Joe, 11.08.2026, "les textes d'accompagnement ne s'inscrivent
+            // pas") : le presse-papier ne contenait que le lien nu -- si l'ouverture automatique
+            // du mail (ci-dessous) échoue silencieusement (pas de client mail par défaut
+            // configuré), coller depuis le presse-papier ne donnait donc jamais le texte
+            // avant/après. Le presse-papier contient maintenant le message complet.
+            System.Windows.Clipboard.SetText(plainBody);
 
             // ✅ Option B : ouvre un nouveau mail (destinataire vide) avec le lien
             try
             {
                 var subject = Uri.EscapeDataString($"Iziregi — Bon {workOrderRef} — Devis à compléter");
-                var body = Uri.EscapeDataString($"Bonjour,\r\n\r\nVoici le lien pour compléter le devis du bon {workOrderRef} :\r\n{link}\r\n");
+                var body = Uri.EscapeDataString(plainBody);
                 var mailto = $"mailto:?subject={subject}&body={body}";
                 Process.Start(new ProcessStartInfo(mailto) { UseShellExecute = true });
             }
@@ -2599,13 +2626,22 @@ public partial class WorkOrderWindow : Window
 
             var link = await CreateMagicLinkAsync(role: "signer", workOrderRef: workOrderRef);
 
-            System.Windows.Clipboard.SetText(link);
+            // ✅ Texte avant/après personnalisable (demande de Joe, 11.08.2026, bouton "+ texte") :
+            // remplace l'ancien texte codé en dur, voir Db.GetSignatureLinkTextBefore/After.
+            var before = Db.GetSignatureLinkTextBefore().Replace("{ref}", workOrderRef);
+            var after = Db.GetSignatureLinkTextAfter().Replace("{ref}", workOrderRef);
+            var plainBody = $"{before}\r\n\r\n{link}\r\n\r\n{after}";
+
+            // ✅ Fix (demande de Joe, 11.08.2026, "les textes d'accompagnement ne s'inscrivent
+            // pas") : voir le même correctif sur ExportQuoteRequestButton_Click -- le
+            // presse-papier contient maintenant le message complet, pas juste le lien nu.
+            System.Windows.Clipboard.SetText(plainBody);
 
             // ✅ Option B : ouvre un nouveau mail (destinataire vide) avec le lien
             try
             {
                 var subject = Uri.EscapeDataString($"Iziregi — Bon {workOrderRef} — Validation / signature");
-                var body = Uri.EscapeDataString($"Bonjour,\r\n\r\nVoici le lien pour valider et signer le bon {workOrderRef} :\r\n{link}\r\n");
+                var body = Uri.EscapeDataString(plainBody);
                 var mailto = $"mailto:?subject={subject}&body={body}";
                 Process.Start(new ProcessStartInfo(mailto) { UseShellExecute = true });
             }

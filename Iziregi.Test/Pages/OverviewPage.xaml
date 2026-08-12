@@ -172,10 +172,11 @@
 			 actif + Tâches en Row1 (colonne gauche), BI en Row1 colonne droite, le haut de BI
 			 s'aligne ainsi précisément sur le haut de "Dossier actif" (pas sur Date), via la
 			 grille elle-même plutôt qu'une marge devinée au pixel. -->
+		<!-- ✅ Écart réduit de 2mm (14 -> 6.44px, demande de Joe, 11.08.2026, "widgets coupés sur petit écran") -->
 		<Grid Grid.Row="1" VerticalAlignment="Top">
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="Auto"/>
-				<ColumnDefinition Width="14"/>
+				<ColumnDefinition Width="6.44"/>
 				<ColumnDefinition Width="*"/>
 			</Grid.ColumnDefinitions>
 			<!-- ✅ Fix (demande de Joe : layout cassé, "Tâches" pas vraiment en haut) : grille à
@@ -352,10 +353,17 @@
 				 horizontalement sur le bas de BI") : 3 colonnes désormais (Auto=BI, Auto=TTC,
 				 *=Dossier actif), TTC en VerticalAlignment="Bottom" pour que son bas coïncide
 				 avec le bas de BI (même hauteur de ligne de grille). -->
+			<!-- ✅ Colonne d'espacement fixe de 14px ajoutée (demande de Joe, 11.08.2026, "harmoniser
+				 les espaces entre les 4 colonnes de widgets") : avant, cette dernière colonne était
+				 "*" avec le contenu droit-aligné (HorizontalAlignment="Right", voir plus bas), donc
+				 l'écart avec le groupe États des statuts/Montant BI variait avec la largeur de la
+				 fenêtre au lieu d'être fixe comme les 2 autres écarts (14px, Tâches<->reste et États
+				 des statuts<->Montant BI). -->
 			<Grid Grid.Column="2">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto"/>
-					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="6.44"/>
+					<ColumnDefinition Width="Auto"/>
 				</Grid.ColumnDefinitions>
 
 				<!-- ✅ Fix (demande de Joe : "remettre Statistiques au milieu de BI") : BI et
@@ -374,7 +382,8 @@
 						<ColumnDefinition Width="Auto"/>
 					</Grid.ColumnDefinitions>
 			<StackPanel Grid.Column="0" VerticalAlignment="Top">
-			<!-- ✅ Décalé de 1mm/4px vers la gauche (demande de Joe) via RenderTransform. -->
+			<!-- ✅ Décalé de 1mm/4px vers la gauche (demande de Joe), puis 1mm/3.78px vers la
+				 droite (demande de Joe, 11.08.2026), net -0.22px, via RenderTransform. -->
 			<Border Style="{StaticResource CardStyle}"
 			        BorderBrush="#15803D"
 			        TextElement.FontFamily="Arial"
@@ -387,7 +396,7 @@
 					<DropShadowEffect Color="#15803D" Direction="270" ShadowDepth="6" BlurRadius="30" Opacity="0.42"/>
 				</Border.Effect>
 				<Border.RenderTransform>
-					<TranslateTransform X="-4"/>
+					<TranslateTransform X="-0.22"/>
 				</Border.RenderTransform>
 				<StackPanel>
 					<!-- ✅ Lien cliquable limité au titre (15e passe, demande de Joe), plus toute
@@ -573,19 +582,20 @@
 			 mais centré au lieu de calé en bas.
 			 ✅ Remonté de 5mm/19px puis encore 3mm/11px (demande de Joe), total 8mm/30px, puis
 			 redescendu de 1mm/4px (net 26px) et décalé de 3mm/11px vers la gauche (demande de
-			 Joe), via RenderTransform (comme ailleurs dans cette page) : un margin seul ne
+			 Joe), puis 3mm/11.34px vers la droite (demande de Joe, 11.08.2026, net +0.34px),
+			 via RenderTransform (comme ailleurs dans cette page) : un margin seul ne
 			 suffirait pas à décaler du plein montant avec VerticalAlignment="Center" (le
 			 centrage n'en absorbe que la moitié). -->
-		<Border Grid.Column="1" Style="{StaticResource CardStyle}" BorderBrush="#15803D" VerticalAlignment="Center" Margin="14,0,0,0">
+		<Border Grid.Column="1" Style="{StaticResource CardStyle}" BorderBrush="#15803D" VerticalAlignment="Center" Margin="6.44,0,0,0">
 			<Border.RenderTransform>
-				<TranslateTransform X="-11" Y="-26"/>
+				<TranslateTransform X="0.34" Y="-26"/>
 			</Border.RenderTransform>
 			<Border.Effect>
 				<DropShadowEffect Color="#15803D" Direction="270" ShadowDepth="6" BlurRadius="30" Opacity="0.42"/>
 			</Border.Effect>
 			<StackPanel>
 				<TextBlock Style="{StaticResource CardTitleStyle}" Margin="0,0,0,6" Cursor="Hand" MouseLeftButtonDown="AccountingCard_Click">
-					<Run Text="Montant actuel des bons validés"/>
+					<Run Text="Montant actuel dépenses BI"/>
 					<Run Text=" &#8594;" Foreground="Black" FontWeight="Normal"/>
 				</TextBlock>
 				<Grid>
@@ -606,7 +616,11 @@
 			 ✅ Bloc-notes juste sous "Dossier actif" (demande de Joe, retour en arrière sur le
 			 "tout en bas de page" précédent qui le poussait via une ligne "*"), 2 lignes Auto
 			 seulement désormais, empilées directement l'une sous l'autre. -->
-		<Grid Grid.Column="1" HorizontalAlignment="Right">
+		<!-- ✅ Grid.Column 1 -> 2 (nouvelle colonne d'espacement 14px insérée), HorizontalAlignment="Right"
+			 retiré (demande de Joe, 11.08.2026) : ce groupe suivait le bord droit de la page (sous la
+			 pastille dossier) au lieu de suivre le groupe précédent à distance fixe, l'écart avec
+			 "Montant BI" variait donc avec la largeur de fenêtre au lieu d'être fixe comme les autres. -->
+		<Grid Grid.Column="2">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="Auto"/>

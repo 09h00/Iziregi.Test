@@ -812,7 +812,7 @@
                 CornerRadius="12"
                 Padding="10,10,10,2"
                 Effect="{StaticResource CardShadowEffect}"
-                Margin="0,0,0,12">
+                Margin="0,0,0,0">
             <StackPanel>
                 <Popup x:Name="TaskColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
                     <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8" MinWidth="220" MaxHeight="380" Effect="{StaticResource CardShadowEffect}">
@@ -993,7 +993,11 @@
                     </Border>
                 </Popup>
 
-                <!-- ✅ Margin haut 7.56px = 2mm (demande de Joe, 10.08.2026) : titres décalés vers le bas. -->
+                <!-- ✅ Margin haut 7.56px = 2mm (demande de Joe, 10.08.2026) : titres décalés vers le bas.
+                     ✅ Bordure quadrillée (demande de Joe, 10.08.2026) : chaque cellule porte son propre
+                     bord gauche/haut/bas (BorderThickness="1,1,0,1"), la dernière cellule ("Effectuée")
+                     ferme aussi le bord droit, évite les doubles traits entre cellules adjacentes tout
+                     en formant un contour complet autour de toute la ligne de titres. -->
                 <StackPanel Orientation="Horizontal" Margin="0,7.56,0,0">
                     <!-- ✅ Case "tout sélectionner" (demande de Joe, 10.08.2026) : réutilise
                          TaskSelectAllCheckBox_Click, déjà écrit le 30.07.2026 pour la case
@@ -1003,50 +1007,50 @@
                          sans collision : celui du DataGridTemplateColumn.HeaderTemplate vit dans
                          son propre NameScope (DataTemplate), jamais instancié tant que l'en-tête
                          natif reste masqué. -->
-                    <Border Width="28">
+                    <Border Width="28" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <CheckBox x:Name="TaskSelectAllCheckBox"
                                   HorizontalAlignment="Center"
                                   VerticalAlignment="Center"
                                   Click="TaskSelectAllCheckBox_Click"/>
                     </Border>
-                    <Border Width="70">
+                    <Border Width="70" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <TextBlock Text="N°" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskBuildingColumn}}">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskBuildingColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.BuildingLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Building" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskFloorColumn}}">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskFloorColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.FloorLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Floor" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskTodoColumn}}">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskTodoColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <TextBlock Text="Descriptif" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                     </Border>
-                    <Border Width="56"/>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCategoryColumn}}">
+                    <Border Width="56" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1"/>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCategoryColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.TaskCategoryLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Category" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCompanyColumn}}">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCompanyColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Company" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskUrgentColumn}}">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskUrgentColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.TaskUrgencyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Urgent" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="90">
+                    <Border Width="90" BorderBrush="#D1D5DB" BorderThickness="1,1,1,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="Effectuée" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Done" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
@@ -1065,7 +1069,7 @@
                 Grid.Row="2"
                 Height="2"
                 Background="#E2E8F0"
-                Margin="0,0,0,12"
+                Margin="0,0,0,0"
                 Visibility="Collapsed"/>
 
         <ScrollViewer x:Name="MainScrollViewer" Grid.Row="3" VerticalScrollBarVisibility="Auto" ScrollChanged="MainScrollViewer_ScrollChanged">
@@ -1078,12 +1082,16 @@
                 </Grid.RowDefinitions>
 
                 <!-- 1) Tâches -->
+                <!-- ✅ Padding haut retiré (demande de Joe, 10.08.2026, "coller les 2 éléments") :
+                     avec le Margin bas de TasksHeaderFixedBlock ramené à 0, ce Padding top de 10 était
+                     le dernier contributeur à l'espace visible entre l'entête et la 1ère ligne de la
+                     grille des tâches. -->
                 <Border x:Name="TaskSectionBorder"
                         Grid.Row="0"
 				        BorderBrush="#6B7280"
 				        BorderThickness="1"
 				        CornerRadius="12"
-				        Padding="10"
+				        Padding="10,0,10,10"
 		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
                     <!-- ✅ En-tête de colonnes masqué (HeadersVisibility="None") : remplacé par le

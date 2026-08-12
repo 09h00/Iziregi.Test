@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Iziregi"
-#define MyAppVersion "1.0.62"
+#define MyAppVersion "1.0.63"
 #define MyAppPublisher "Iziregi"
 #define MyAppExeName "Iziregi.Test.exe"
 #define MySourceDir "..\publish-installer"

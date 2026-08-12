@@ -89,7 +89,7 @@ public static class PdfService
                                         .Height(52)
                                         .Border(1)
                                         .BorderColor(lineLight)
-                                        .Padding(4)
+                                        .CornerRadius(10)
                                         .Image(logoBytes)
                                         .FitArea();
 
@@ -274,7 +274,7 @@ public static class PdfService
                                         .Height(52)
                                         .Border(1)
                                         .BorderColor(lineLight)
-                                        .Padding(4)
+                                        .CornerRadius(10)
                                         .Image(logoBytes)
                                         .FitArea();
 
@@ -577,7 +577,7 @@ public static class PdfService
                                         .Height(52)
                                         .Border(1)
                                         .BorderColor(lineLight)
-                                        .Padding(4)
+                                        .CornerRadius(10)
                                         .Image(logoBytes)
                                         .FitArea();
 
@@ -633,30 +633,41 @@ public static class PdfService
                                     .SemiBold()
                                     .FontSize(14);
 
+                                // ✅ Noir partout + espacement aligné sur le BI WPF (demande de
+                                // Joe, 11.08.2026) : "N°" [espace] numéro, puis "- {tag}" collé
+                                // directement au numéro (pas de r.Spacing uniforme ici, un seul
+                                // ConstantItem espaceur avant le numéro, comme le Margin="0,0,8,0"
+                                // du TextBlock "N°" côté WPF).
                                 center.Item().AlignCenter().PaddingTop(2).Row(r =>
                                 {
-                                    r.Spacing(4);
-
                                     r.AutoItem()
                                         .AlignBottom()
                                         .Text("N°")
+                                        .SemiBold()
                                         .FontSize(11)
-                                        .FontColor(textMuted);
+                                        .FontColor(Colors.Black);
+
+                                    r.ConstantItem(6);
 
                                     r.AutoItem()
                                         .AlignBottom()
                                         .Text(bdrShort)
                                         .SemiBold()
-                                        .FontSize(16);
+                                        .FontSize(16)
+                                        .FontColor(Colors.Black);
 
                                     if (!string.IsNullOrWhiteSpace(tag))
                                     {
+                                        // ✅ Espace supplémentaire avant le tiret (demande de Joe,
+                                        // 11.08.2026).
+                                        r.ConstantItem(3);
+
                                         r.AutoItem()
                                             .AlignBottom()
-                                            .Text($"-{tag}")
+                                            .Text($"- {tag}")
                                             .SemiBold()
                                             .FontSize(11)
-                                            .FontColor(textMuted);
+                                            .FontColor(Colors.Black);
                                     }
                                 });
 
@@ -892,37 +903,29 @@ public static class PdfService
                         }
                         else
                         {
-                            // ✅ Rectangle "Devis PDF" (05.08.2026, demande de Joe : "trop imposant
-                            // dans le pdf, manque de blanc") : plus en pleine largeur ici -- bord
-                            // gauche aligné sur la colonne des totaux (même largeur ConstantItem(130)
-                            // + ConstantItem(6) que la ligne Note/Totaux juste en dessous), pour que
-                            // le bord gauche tombe exactement au-dessus de "Total HT". Reste dans la
-                            // même position (remplace le tableau Libellé/Matériel), juste plus étroit.
+                            // ✅ Rectangle "Devis PDF" repassé en pleine largeur (demande de Joe,
+                            // 11.08.2026, "partout ailleurs il en est ainsi") : le rétrécissement du
+                            // 05.08.2026 (aligné sur la colonne des totaux) est annulé, comme côté
+                            // WPF (QuotePdfSection) et serveur (.forfait-pdf-box.full).
                             var quoteNumber = (wo.ForfaitQuoteNumber ?? "").Trim();
 
-                            section.Item().PaddingTop(6).Row(outerRow =>
+                            section.Item().PaddingTop(6).Background("#4C6D8E").CornerRadius(4).Padding(8).Column(box =>
                             {
-                                outerRow.RelativeItem(1f);
-                                outerRow.ConstantItem(6);
+                                box.Item().Text("Devis PDF").Italic().SemiBold().FontSize(9).FontColor(Colors.White);
 
-                                outerRow.RelativeItem(1.7f).Background("#4C6D8E").CornerRadius(4).Padding(8).Column(box =>
+                                if (!string.IsNullOrWhiteSpace(quoteNumber))
                                 {
-                                    box.Item().Text("Devis PDF").Italic().SemiBold().FontSize(9).FontColor(Colors.White);
-
-                                    if (!string.IsNullOrWhiteSpace(quoteNumber))
-                                    {
-                                        box.Item().PaddingTop(6).Row(r =>
-                                        {
-                                            r.RelativeItem().Text("N° du devis").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
-                                            r.RelativeItem().AlignRight().Text(quoteNumber).SemiBold().FontSize(10).FontColor(Colors.White);
-                                        });
-                                    }
-
                                     box.Item().PaddingTop(6).Row(r =>
                                     {
-                                        r.RelativeItem().Text("MONTANT TTC du pdf").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
-                                        r.RelativeItem().AlignRight().Text(FmtInv(forfaitTtc)).SemiBold().FontSize(10).FontColor(Colors.White);
+                                        r.RelativeItem().Text("N° du devis").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
+                                        r.RelativeItem().AlignRight().Text(quoteNumber).SemiBold().FontSize(10).FontColor(Colors.White);
                                     });
+                                }
+
+                                box.Item().PaddingTop(6).Row(r =>
+                                {
+                                    r.RelativeItem().Text("MONTANT TTC du pdf").Italic().SemiBold().FontSize(8).FontColor(Colors.White);
+                                    r.RelativeItem().AlignRight().Text(FmtInv(forfaitTtc)).SemiBold().FontSize(10).FontColor(Colors.White);
                                 });
                             });
                         }
@@ -933,9 +936,12 @@ public static class PdfService
                         // la carte WPF) au lieu des ~65% du BI (Grid "1*, 7, 1.7*", voir
                         // WorkOrderWindow.xaml). Mêmes proportions relatives ici pour un rendu
                         // identique quelle que soit la largeur de page.
+                        // ✅ Ratio Note élargi 1/1.7 -> 1.3/1.7 (demande de Joe, 11.08.2026, "ne
+                        // supporte pas la capacité des 40 caractères") : la case Note était trop
+                        // étroite pour la nouvelle limite de 40 caractères/ligne.
                         section.Item().PaddingTop(8).Row(row =>
                         {
-                            row.RelativeItem(1f).Column(left =>
+                            row.RelativeItem(1.3f).Column(left =>
                             {
                                 left.Item().Text("Note").SemiBold().FontSize(9).FontColor(Colors.Grey.Darken4);
 
@@ -998,17 +1004,27 @@ public static class PdfService
                                     // et le total est toujours préfixé d'un "-" littéral (même à 0 : "-0.00").
                                     AddTotalsRow4Cols(t, "Rabais (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
 
-                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true);
+                                    // ✅ Bordure haute ajoutée (demande de Joe, 11.08.2026) : Total HT
+                                    // n'avait que la bordure basse ici, contrairement à la position
+                                    // "Devis PDF" ci-dessous qui en a déjà une (voir commentaire).
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.9f, matchGrandTotalHeight: true);
                                 }
                                 else
                                 {
                                     // ✅ Total HT devient la première ligne du tableau en position
                                     // "Devis PDF" (05.08.2026) : bordure haute explicite (comme "Total
                                     // Matériel" en position standard) puisque plus rien ne la précède.
-                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f);
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.9f, matchGrandTotalHeight: true);
                                 }
 
-                                AddTotalsRow4Cols(t, "TVA (%)", FormatQty(tvaRate), "", FmtInv(tvaAmount), isStrong: false, blueBackground: true, bluePrixDecorative: true);
+                                // ✅ bottomBorderThickness: 0 (demande de Joe, 11.08.2026, "la bordure de
+                                // HT doit être aussi épaisse que celle de TTC") : sans ça, la bordure basse
+                                // par défaut de TVA (0.75) s'ajoutait à la bordure haute de TTC (0.9,
+                                // toujours dessinée pour isGrandTotal), doublant visuellement cette jonction
+                                // par rapport à la jonction HT/TVA (une seule bordure, 0.9). Retirée ici :
+                                // seule la bordure haute de TTC marque désormais cette ligne, un seul trait
+                                // net de 0.9 partout, comme HT.
+                                AddTotalsRow4Cols(t, "TVA (%)", FormatQty(tvaRate), "", FmtInv(tvaAmount), isStrong: false, blueBackground: true, bluePrixDecorative: true, matchGrandTotalHeight: true, bottomBorderThickness: 0f);
                                 AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true, bottomBorderThickness: 0.9f, noInnerDividers: true);
                             });
                         });
@@ -1288,7 +1304,8 @@ public static class PdfService
         bool greyBackground = false,
         float topBorderThickness = 0f,
         bool blueBackground = false,
-        bool bluePrixDecorative = false)
+        bool bluePrixDecorative = false,
+        bool matchGrandTotalHeight = false)
     {
         var fontSize = isGrandTotal ? 12 : 10;
 
@@ -1350,7 +1367,12 @@ public static class PdfService
             if (bottomBorderThickness > 0)
                 c = c.BorderBottom(bottomBorderThickness).BorderColor("#000000");
 
-            c = c.PaddingVertical(isGrandTotal ? 5 : 3).PaddingHorizontal(7);
+            // ✅ Hauteur de ligne Total HT/TVA alignée sur Total TTC (demande de Joe, 11.08.2026) :
+            // matchGrandTotalHeight augmente juste le padding vertical (6 au lieu de 3), sans
+            // toucher à la taille de police ni au fond/bordure -- seule la hauteur doit matcher
+            // Total TTC (fontSize=12/padding=5), pas son style visuel de mise en avant.
+            var paddingV = isGrandTotal ? 5 : (matchGrandTotalHeight ? 6 : 3);
+            c = c.PaddingVertical(paddingV).PaddingHorizontal(7);
 
             return c;
         }

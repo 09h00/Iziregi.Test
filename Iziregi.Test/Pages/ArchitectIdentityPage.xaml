@@ -196,8 +196,13 @@
                             CornerRadius="10"
                             Background="#F9FAFB"
                             Height="110"
-                            Padding="10">
+                            Padding="3">
                         <Grid>
+                            <!-- ✅ Revenu à Uniform (demande de Joe, 11.08.2026) : UniformToFill rognait
+                                 le logo de Joe (probablement large/rectangulaire) au point de ne plus
+                                 montrer que du vide/fond du logo, sans le contenu visible. Uniform montre
+                                 le logo en entier, sans déformation ni rognage ; le Padding du conteneur
+                                 est réduit de 10 à 3 pour qu'il occupe plus d'espace visible. -->
                             <Image x:Name="LogoImage" Stretch="Uniform"/>
                             <TextBlock x:Name="LogoEmptyText"
                                        Text="Aucun logo"

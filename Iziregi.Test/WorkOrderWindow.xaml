@@ -510,12 +510,27 @@ HorizontalAlignment="Left"/>
 Content="Envoyer lien pour devis"
 Style="{StaticResource DevisLinkButtonStyle}"
 Click="ExportQuoteRequestButton_Click"
+Margin="0,0,4,0"/>
+
+                        <!-- ✅ "+ texte" (demande de Joe, 11.08.2026) : édite le modèle de texte
+                             avant/après le lien (LinkTextWindow), même couleur que son bouton
+                             d'envoi respectif. -->
+                        <Button x:Name="QuoteLinkTextButton"
+Content="+ texte"
+Style="{StaticResource DevisLinkButtonStyle}"
+Click="QuoteLinkTextButton_Click"
 Margin="0,0,8,0"/>
 
                         <Button x:Name="ExportSignatureRequestButton"
 Content="Envoyer lien pour validation"
 Style="{StaticResource ValidationLinkButtonStyle}"
 Click="ExportSignatureRequestButton_Click"
+Margin="0,0,4,0"/>
+
+                        <Button x:Name="SignatureLinkTextButton"
+Content="+ texte"
+Style="{StaticResource ValidationLinkButtonStyle}"
+Click="SignatureLinkTextButton_Click"
 Margin="0,0,8,0"/>
 
                         <!-- ✅ "Reset validation" à côté de "Envoyer lien pour validation" (22.07.2026,
@@ -598,9 +613,20 @@ Background="#F9FAFB"
 HorizontalAlignment="Left"
 VerticalAlignment="Top">
                                     <Grid>
+                                        <!-- ✅ Fix (demande de Joe, 11.08.2026) : le logo (fichier réellement
+                                             carré, fond plein bord à bord) ne remplissait pas la case à
+                                             cause du Margin="5" codé en dur ici, plus les coins carrés de
+                                             l'image qui débordaient du coin arrondi du Border (10, 10, ...)
+                                             puisqu'un Border ne clippe jamais son contenu à son propre
+                                             CornerRadius. Margin retiré + Clip arrondi ajouté (64x64 = zone
+                                             utile du Border 66x66 - 1px de bordure de chaque côté, rayon 9
+                                             pour rester visuellement aligné avec le CornerRadius=10 du Border). -->
                                         <Image x:Name="ArchitectLogoImage"
-Stretch="Uniform"
-Margin="5"/>
+Stretch="Uniform">
+                                            <Image.Clip>
+                                                <RectangleGeometry Rect="0,0,64,64" RadiusX="9" RadiusY="9"/>
+                                            </Image.Clip>
+                                        </Image>
                                         <TextBlock x:Name="ArchitectLogoEmptyText"
 Text="Logo"
 Foreground="#9CA3AF"
@@ -667,15 +693,25 @@ HorizontalAlignment="Center"
 Margin="0,10,0,0">
                                     <TextBlock Text="N°"
 VerticalAlignment="Center"
-Foreground="#111827"
+Foreground="#000000"
 FontSize="14"
+FontWeight="SemiBold"
 Margin="0,0,8,0"/>
 
+                                    <!-- ✅ Alignement droite au lieu de centré (demande de Joe, 11.08.2026,
+                                         "-D1 trop éloigné si le numéro est à 2 chiffres") : dans une case
+                                         de largeur fixe (50px), un contenu centré laisse plus de vide de
+                                         chaque côté pour un numéro à 2 chiffres que pour 3, donc la
+                                         distance jusqu'à "-D1" (juste après, sans marge propre) variait
+                                         selon le nombre de chiffres. Aligné à droite, le dernier chiffre
+                                         est toujours à la même position, donc la distance jusqu'à "-D1"
+                                         reste constante. -->
                                     <TextBox x:Name="BdrNumberTextBox"
 Width="50"
 FontSize="24"
 FontWeight="SemiBold"
-HorizontalContentAlignment="Center"
+Foreground="#000000"
+HorizontalContentAlignment="Right"
 VerticalContentAlignment="Center"
 BorderThickness="0"
 Background="Transparent"
@@ -685,7 +721,7 @@ Margin="0"/>
                                     <TextBlock x:Name="ProjectTagTextBlock"
 Text="- P1"
 VerticalAlignment="Bottom"
-Foreground="#111827"
+Foreground="#000000"
 FontSize="16"
 FontWeight="SemiBold"
 Margin="0,0,0,4"/>
@@ -1363,8 +1399,16 @@ Background="White"
 BorderBrush="#9CA3AF"
 BorderThickness="2"
 Padding="10,6,10,6">
+                                    <!-- ✅ FontSize=11 explicite (demande de Joe, 11.08.2026, "on ne peut
+                                         pas mettre 40 caractères") : sans ça, la case n'était pas assez
+                                         large pour afficher réellement 40 caractères par ligne à la taille
+                                         par défaut, le retour à la ligne visuel (TextWrapping="Wrap",
+                                         basé sur la largeur en pixels) intervenait avant la limite logique
+                                         de EnforceQuoteNotesRules (basée sur le nombre de caractères), ce
+                                         qui donnait l'impression qu'on ne pouvait pas taper jusqu'à 40. -->
                                     <TextBox
 x:Name="QuoteNotesTextBox"
+FontSize="11"
 AcceptsReturn="True"
 TextWrapping="Wrap"
 VerticalScrollBarVisibility="Disabled"
@@ -1400,15 +1444,17 @@ CornerRadius="0">
                                          réduites à Height=0 en mode "Devis PDF" ou en zone neutre (voir
                                          ApplyQuoteModeUi), seul "Total HT" reste toujours visible. Rangées
                                          4 et 6 (8px = 2mm, demande de Joe) : espacement fixe HT->TVA et
-                                         TVA->TTC. -->
+                                         TVA->TTC.
+                                         ✅ Total HT (28->44) et TVA (26->44) alignées sur la hauteur de
+                                         Total TTC (demande de Joe, 11.08.2026). -->
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition x:Name="LaborRowDef" Height="26"/>
                                             <RowDefinition x:Name="TravelRowDef" Height="26"/>
                                             <RowDefinition x:Name="DiscountRowDef" Height="26"/>
-                                            <RowDefinition Height="28"/>
+                                            <RowDefinition Height="44"/>
                                             <RowDefinition Height="8"/>
-                                            <RowDefinition Height="26"/>
+                                            <RowDefinition Height="44"/>
                                             <RowDefinition Height="8"/>
                                             <RowDefinition Height="44"/>
                                         </Grid.RowDefinitions>
@@ -1662,12 +1708,12 @@ Margin="0,6,0,0"/>
                                                 <TextBlock x:Name="SignatoryNameLabelTextBlock" Text="Nom (obligatoire)" Style="{StaticResource LabelStyle}"/>
                                                 <!-- ✅ 29.07.2026 (Joe) : la position du champ était déjà bonne, c'est le
                                                      TEXTE À L'INTÉRIEUR du champ qui remontait trop haut. -->
-                                                <ComboBox x:Name="SignatureNameComboBox" Style="{StaticResource ComboStyle}" IsEditable="True" VerticalContentAlignment="Center"/>
+                                                <ComboBox x:Name="SignatureNameComboBox" Style="{StaticResource ComboStyle}" IsEditable="True" Foreground="#000000" VerticalContentAlignment="Center"/>
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
                                                 <TextBlock Text="Date (obligatoire)" Style="{StaticResource LabelStyle}"/>
-                                                <DatePicker x:Name="SignatureDatePicker" Height="32" VerticalContentAlignment="Center"/>
+                                                <DatePicker x:Name="SignatureDatePicker" Height="32" Foreground="#000000" VerticalContentAlignment="Center"/>
                                             </StackPanel>
                                         </Grid>
                                     </Grid>

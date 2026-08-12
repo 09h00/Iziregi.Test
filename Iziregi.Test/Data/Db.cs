@@ -1633,6 +1633,30 @@ public static class Db
     public static string GetArchitectLogoPath() => GetSetting("ArchitectLogoPath") ?? "";
     public static void SetArchitectLogoPath(string value) => SetSetting("ArchitectLogoPath", (value ?? "").Trim());
 
+    // ✅ Texte avant/après le lien magique (demande de Joe, 11.08.2026) : modèle par défaut
+    // réutilisable, éditable via le bouton "+ texte" (WorkOrderWindow), un jeu distinct pour le
+    // lien devis (entreprise) et le lien validation (signataire). "{ref}" est remplacé par la
+    // référence du bon (ex: "24-P1") au moment de l'envoi.
+    public static string GetQuoteLinkTextBefore()
+    {
+        var v = GetSetting("QuoteLinkTextBefore");
+        return string.IsNullOrEmpty(v) ? "Bonjour,\n\nVoici le lien pour compléter le devis du bon {ref} :" : v;
+    }
+    public static void SetQuoteLinkTextBefore(string value) => SetSetting("QuoteLinkTextBefore", value ?? "");
+
+    public static string GetQuoteLinkTextAfter() => GetSetting("QuoteLinkTextAfter") ?? "";
+    public static void SetQuoteLinkTextAfter(string value) => SetSetting("QuoteLinkTextAfter", value ?? "");
+
+    public static string GetSignatureLinkTextBefore()
+    {
+        var v = GetSetting("SignatureLinkTextBefore");
+        return string.IsNullOrEmpty(v) ? "Bonjour,\n\nVoici le lien pour valider et signer le bon {ref} :" : v;
+    }
+    public static void SetSignatureLinkTextBefore(string value) => SetSetting("SignatureLinkTextBefore", value ?? "");
+
+    public static string GetSignatureLinkTextAfter() => GetSetting("SignatureLinkTextAfter") ?? "";
+    public static void SetSignatureLinkTextAfter(string value) => SetSetting("SignatureLinkTextAfter", value ?? "");
+
     public static long? GetCurrentProjectId()
     {
         var s = GetSetting("CurrentProjectId");
