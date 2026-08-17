@@ -27,14 +27,14 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Background="#F6F7FB">
+        Background="{StaticResource PageBackgroundBrush}">
 
     <UserControl.Resources>
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="White"/>
             <Setter Property="BorderBrush" Value="#E2E8F0"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="CornerRadius" Value="14"/>
             <Setter Property="Padding" Value="12"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
             <Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
@@ -100,7 +100,7 @@
              (même action que la croix flottante du coin haut-droit). Bordure noire (demande
              de Joe). -->
         <Style x:Key="CloseButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="32"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="12,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#374151"/>
@@ -126,7 +126,7 @@
         <!-- ✅ Bouton "Envoyer un e-mail" (demande de Joe) : fond blanc, police/bordure bleus
              (remplace le fond bleu plein précédent). -->
         <Style x:Key="EmailButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="32"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="12,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#2563EB"/>
@@ -149,11 +149,59 @@
             </Setter>
         </Style>
 
+        <!-- ✅ "+ Nouveau contact"/"+ Nouveau groupe" : meme style que PrimaryButtonStyle
+             (App.xaml) mais rayon reduit a 6px pour matcher "Importer CSV"/"Exporter CSV"
+             (CopyButtonStyle ci-dessous), demande de Joe, 14.08.2026. -->
+        <Style x:Key="PrimaryButtonRoundedStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1D4ED8"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#1D4ED8"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1E40AF"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#1E40AF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Background" Value="#93C5FD"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#93C5FD"/>
+                                <Setter Property="Foreground" Value="#F8FAFC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- ✅ Bouton "Copier" : discret, bleu au survol. Même taille que "Fermer" (demande de
              Joe : Height/Padding identiques à CloseButtonStyle). Bordure noire arrondie
              (demande de Joe). -->
         <Style x:Key="CopyButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="32"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="12,0"/>
             <Setter Property="Background" Value="#F1F5F9"/>
             <Setter Property="BorderBrush" Value="Black"/>
@@ -195,9 +243,28 @@
         <Style x:Key="FieldTextBoxStyle" TargetType="TextBox">
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="Background" Value="White"/>
             <Setter Property="Padding" Value="6,3"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
+            <!-- ✅ Rayon 6px (demande de Joe, 14.08.2026 : "les champs fiches aussi"), meme
+                 principe que EditableRowTextBoxStyle (ListsPage.xaml). -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
                     <Setter Property="BorderBrush" Value="#2563EB"/>
@@ -236,7 +303,11 @@
 
         <!-- Colonne 1 : liste des contacts (nom cliquable = sélectionne ce contact et affiche
              sa fiche au centre). -->
-        <Grid Grid.Column="0">
+        <!-- ✅ Carte blanche (demande de Joe, 14.08.2026 : "champs latéraux" sans fond, tout
+             bleu si rien n'est sélectionné) : cette colonne n'avait aucun Border/CardStyle,
+             contrairement à la fiche centrale, d'où le fond bleu brut visible autour. -->
+        <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -250,8 +321,8 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Text="Contacts" FontSize="18" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,8"/>
-                <Button Grid.Row="1" x:Name="AddContactButton" Content="+ Nouveau contact" Style="{StaticResource PrimaryButtonStyle}" Height="30" HorizontalAlignment="Stretch" Click="AddContactButton_Click" Margin="0,0,0,8"/>
+                <TextBlock Grid.Row="0" Text="CONTACTS" FontSize="12.5" FontWeight="Bold" Foreground="Black" Margin="0,0,0,8"/>
+                <Button Grid.Row="1" x:Name="AddContactButton" Content="+ Nouveau contact" Style="{StaticResource PrimaryButtonRoundedStyle}" Height="30" HorizontalAlignment="Stretch" Click="AddContactButton_Click" Margin="0,0,0,8"/>
 
                 <!-- ✅ Export/Import CSV (demande de Joe, 04.08.2026) : format propre à l'app
                      (voir ExportContactsCsv_Click/ImportContactsCsv_Click), pas de compatibilité
@@ -262,8 +333,8 @@
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" Content="Exporter CSV" Style="{StaticResource CopyButtonStyle}" Height="28" HorizontalAlignment="Stretch" Click="ExportContactsCsv_Click"/>
-                    <Button Grid.Column="2" Content="Importer CSV" Style="{StaticResource CopyButtonStyle}" Height="28" HorizontalAlignment="Stretch" Click="ImportContactsCsv_Click"/>
+                    <Button Grid.Column="0" Content="Exporter CSV" Style="{StaticResource CopyButtonStyle}" Height="30" HorizontalAlignment="Stretch" Click="ExportContactsCsv_Click"/>
+                    <Button Grid.Column="2" Content="Importer CSV" Style="{StaticResource CopyButtonStyle}" Height="30" HorizontalAlignment="Stretch" Click="ImportContactsCsv_Click"/>
                 </Grid>
 
                 <!-- ✅ Cases à cocher par contact + "Sélectionner tout" (demande de Joe). -->
@@ -285,6 +356,7 @@
                 <StackPanel x:Name="ContactsListPanel"/>
             </ScrollViewer>
         </Grid>
+        </Border>
 
         <!-- Colonne 2 : fiche unique (contact OU groupe, selon la dernière sélection dans
              l'une ou l'autre liste).
@@ -318,7 +390,8 @@
 
         <!-- Colonne 3 : liste des groupes (même principe que les contacts, nom cliquable =
              sélectionne ce groupe et affiche sa fiche au centre). -->
-        <Grid Grid.Column="4">
+        <Border Grid.Column="4" Style="{StaticResource CardStyle}">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -329,13 +402,14 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Text="Groupes" FontSize="18" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,8"/>
-                <Button Grid.Row="1" x:Name="AddGroupButton" Content="+ Nouveau groupe" Style="{StaticResource PrimaryButtonStyle}" Height="30" HorizontalAlignment="Stretch" Click="AddGroupButton_Click"/>
+                <TextBlock Grid.Row="0" Text="GROUPES" FontSize="12.5" FontWeight="Bold" Foreground="Black" Margin="0,0,0,8"/>
+                <Button Grid.Row="1" x:Name="AddGroupButton" Content="+ Nouveau groupe" Style="{StaticResource PrimaryButtonRoundedStyle}" Height="30" HorizontalAlignment="Stretch" Click="AddGroupButton_Click"/>
             </Grid>
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="GroupsListPanel"/>
             </ScrollViewer>
         </Grid>
+        </Border>
     </Grid>
 </UserControl>

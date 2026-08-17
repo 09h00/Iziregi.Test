@@ -511,7 +511,7 @@ public static class PdfService
         double forfaitTtc = Math.Round(wo.ForfaitTtc, 2);
         bool hasForfaitTtc = Math.Abs(forfaitTtc) > 0.0000000001;
 
-        double discountRate = 0, discountAmount, htNet, tvaAmount, ttcTotal;
+        double discountRate = 0, discountRate2 = 0, discountAmount, discountAmount2, htNet, tvaAmount, ttcTotal;
 
         if (hasForfaitTtc)
         {
@@ -519,6 +519,7 @@ public static class PdfService
             htNet = Math.Round(ttcTotal / (1.0 + (tvaRate / 100.0)), 2);
             tvaAmount = Math.Round(ttcTotal - htNet, 2);
             discountAmount = 0;
+            discountAmount2 = 0;
         }
         else
         {
@@ -531,7 +532,16 @@ public static class PdfService
             // ✅ Réplique serveur : montant du rabais toujours positif (magnitude), le "-" est
             // ajouté littéralement à l'affichage — pas déduit d'une soustraction HT net/brut.
             discountAmount = Math.Round(htBrut * (discountRate / 100.0), 2);
-            htNet = Math.Round(htBrut - discountAmount, 2);
+            var htAfterDiscount1 = Math.Round(htBrut - discountAmount, 2);
+
+            // ✅ Rabais 2 (17.08.2026, demande de Joe) : appliqué consécutivement, sur le montant
+            // déjà réduit par Rabais 1 (même logique que WorkOrderWindow.RecomputeTotals).
+            discountRate2 = wo.DiscountRate2;
+            if (double.IsNaN(discountRate2) || double.IsInfinity(discountRate2)) discountRate2 = 0;
+            discountRate2 = Math.Max(0, discountRate2);
+
+            discountAmount2 = Math.Round(htAfterDiscount1 * (discountRate2 / 100.0), 2);
+            htNet = Math.Round(htAfterDiscount1 - discountAmount2, 2);
 
             tvaAmount = Math.Round(htNet * (tvaRate / 100.0), 2);
             ttcTotal = Math.Round(htNet + tvaAmount, 2);
@@ -1000,9 +1010,29 @@ public static class PdfService
                                         totalText: FmtInv(travelTotal),
                                         isStrong: true, blueBackground: true);
 
+                                    // ✅ "Sous-total 1" (18.08.2026, demande de Joe) : affiché uniquement
+                                    // quand Rabais 1 a un taux saisi, même principe que WorkOrderWindow.
+                                    if (discountRate > 0.0000000001)
+                                    {
+                                        var htBrutDisplay = Math.Round(materialTotal + laborTotal + travelTotal + forfaitTotal, 2);
+                                        AddTotalsRow4Cols(t, "Sous-total 1", "", "", FmtInv(htBrutDisplay), isStrong: false, greyBackground: true, noInnerDividers: true);
+                                    }
+
                                     // ✅ Réplique serveur : le taux va dans la colonne Qt, le libellé reste statique,
                                     // et le total est toujours préfixé d'un "-" littéral (même à 0 : "-0.00").
-                                    AddTotalsRow4Cols(t, "Rabais (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
+                                    var discount1Label = string.IsNullOrWhiteSpace(wo.DiscountName) ? "Rabais 1 (%)" : $"Rabais 1 (%) — {wo.DiscountName.Trim()}";
+                                    AddTotalsRow4Cols(t, discount1Label, FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
+
+                                    // ✅ "Sous-total 2" : affiché uniquement quand Rabais 2 a un taux saisi.
+                                    if (discountRate2 > 0.0000000001)
+                                    {
+                                        var afterDiscount1Display = Math.Round((materialTotal + laborTotal + travelTotal + forfaitTotal) * (1.0 - (discountRate / 100.0)), 2);
+                                        AddTotalsRow4Cols(t, "Sous-total 2", "", "", FmtInv(afterDiscount1Display), isStrong: false, greyBackground: true, noInnerDividers: true);
+                                    }
+
+                                    // ✅ Rabais 2 (17.08.2026, demande de Joe) : même structure que Rabais 1.
+                                    var discount2Label = string.IsNullOrWhiteSpace(wo.DiscountName2) ? "Rabais 2 (%)" : $"Rabais 2 (%) — {wo.DiscountName2.Trim()}";
+                                    AddTotalsRow4Cols(t, discount2Label, FormatQty(discountRate2), "", $"-{FmtInv(discountAmount2)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
 
                                     // ✅ Bordure haute ajoutée (demande de Joe, 11.08.2026) : Total HT
                                     // n'avait que la bordure basse ici, contrairement à la position

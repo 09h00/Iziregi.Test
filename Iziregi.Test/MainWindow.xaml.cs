@@ -39,6 +39,11 @@ public partial class MainWindow : Window
     // =========================
     private Project? _selectedProject;
 
+    // ✅ Dossiers verrouillés (18.08.2026, demande de Joe) : une fois le mot de passe (dossier
+    // ou Directeur) validé, le dossier reste déverrouillé pour le reste de la session -- pas
+    // besoin de le ressaisir à chaque fois qu'on y revient dans la même session de travail.
+    private readonly HashSet<long> _unlockedProjectIds = new();
+
     private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
@@ -246,8 +251,12 @@ public partial class MainWindow : Window
         // DB init
         Db.Init();
 
-        // ✅ Restaurer le projet courant depuis Settings (si existant)
-        _selectedProject = Db.GetCurrentProject();
+        // ✅ Restaurer le projet courant depuis Settings (si existant) -- mais si ce dossier est
+        // verrouillé (18.08.2026, demande de Joe), redemande le mot de passe dès le démarrage
+        // au lieu d'y donner accès silencieusement. Annulé/incorrect -> démarre sans dossier
+        // actif plutôt que de rester bloqué.
+        var lastProject = Db.GetCurrentProject();
+        _selectedProject = (lastProject != null && !TryUnlockProject(lastProject)) ? null : lastProject;
         Db.SetCurrentProjectId(_selectedProject?.Id);
 
         // Seeds de base (si vide) - dépend du projet courant
@@ -1014,6 +1023,13 @@ public partial class MainWindow : Window
         public string ForfaitQuoteNumber { get; set; } = "";
 
         public double DiscountRate { get; set; }
+
+        // ✅ Rabais 2 (18.08.2026, réplique BDR razor) : appliqué consécutivement, sur le montant
+        // déjà réduit par DiscountRate. Voir WorkOrder.DiscountRate2/DiscountName/DiscountName2.
+        public double DiscountRate2 { get; set; }
+        public string DiscountName { get; set; } = "";
+        public string DiscountName2 { get; set; } = "";
+
         public double TvaRate { get; set; }
 
         public double TotalHtNet { get; set; }
@@ -1159,6 +1175,9 @@ public partial class MainWindow : Window
                         wo.ForfaitQuoteNumber = (payload.ForfaitQuoteNumber ?? "").Trim();
 
                         wo.DiscountRate = payload.DiscountRate;
+                        wo.DiscountRate2 = payload.DiscountRate2;
+                        wo.DiscountName = (payload.DiscountName ?? "").Trim();
+                        wo.DiscountName2 = (payload.DiscountName2 ?? "").Trim();
                         wo.TvaRate = payload.TvaRate;
 
                         Db.UpdateWorkOrderQuote(wo);
@@ -1858,8 +1877,40 @@ public partial class MainWindow : Window
     // =========================
     public Project? GetSelectedProject() => _selectedProject;
 
+    // ✅ Point de passage unique pour l'activation d'un dossier (18.08.2026, demande de Joe) :
+    // vérifie le mot de passe du dossier (ou le mot de passe Directeur) avant d'y donner
+    // accès. Retourne false si annulé/incorrect -- l'appelant ne doit alors PAS activer ce
+    // dossier. Une fois déverrouillé, reste déverrouillé pour le reste de la session (voir
+    // _unlockedProjectIds).
+    // ✅ internal (18.08.2026) : appelé aussi depuis ProjectsBankPage (ModifyProjectRow_Click)
+    // pour gater "Modifier" par le même mot de passe que l'activation d'un dossier.
+    internal bool TryUnlockProject(Project p)
+    {
+        if (!p.HasPassword || _unlockedProjectIds.Contains(p.Id))
+            return true;
+
+        var prompt = new PasswordPromptWindow(p.Name ?? "", pwd =>
+            Db.VerifyProjectPassword(p.Id, pwd) || Db.VerifyDirectorPassword(pwd));
+
+        // ✅ Fix (18.08.2026) : ce prompt peut être déclenché très tôt (constructeur de
+        // MainWindow, avant que la fenêtre elle-même ne soit affichée) -- assigner Owner=this
+        // à ce moment-là peut planter silencieusement (process qui tourne mais aucune fenêtre
+        // visible, ce que Joe a rencontré). L'Owner n'est qu'un détail de centrage, pas
+        // critique : on l'assigne seulement si ça ne casse rien.
+        try { prompt.Owner = this; } catch { }
+
+        if (prompt.ShowDialog() != true)
+            return false;
+
+        _unlockedProjectIds.Add(p.Id);
+        return true;
+    }
+
     public void SetSelectedProject(Project? p)
     {
+        if (p != null && !TryUnlockProject(p))
+            return;
+
         _selectedProject = p;
         Db.SetCurrentProjectId(_selectedProject?.Id);
 
@@ -2059,8 +2110,7 @@ public partial class MainWindow : Window
         var ok = w.ShowDialog();
         if (ok == true && w.SelectedProject != null)
         {
-            _selectedProject = w.SelectedProject;
-            Db.SetCurrentProjectId(_selectedProject.Id);
+            SetSelectedProject(w.SelectedProject);
         }
 
         var panelForShow = this.FindName("ProjectSelectorPanel") as System.Windows.Controls.Panel;

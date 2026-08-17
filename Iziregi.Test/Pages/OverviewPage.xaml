@@ -7,7 +7,7 @@
 			 mc:Ignorable="d"
 			 d:DesignHeight="820"
 			 d:DesignWidth="1280"
-			 Background="#F6F7FB">
+			 Background="{StaticResource PageBackgroundBrush}">
 
 	<!-- ✅ 31.07.2026 (demande de Joe) : "l'ancien Tableau de bord n'était en fait qu'un
 		 tableau des bons, pas un vrai résumé général", cette page devient le nouveau
@@ -28,16 +28,17 @@
 			<Setter Property="Background" Value="White"/>
 			<Setter Property="BorderBrush" Value="#E2E8F0"/>
 			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="CornerRadius" Value="12"/>
+			<Setter Property="CornerRadius" Value="14"/>
 			<Setter Property="Padding" Value="16,14"/>
 			<Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
 		</Style>
 
-		<!-- ✅ Bold (demande de Joe : "tous les titres widget en bold"). -->
+		<!-- ✅ Titres de carte petits/gris/majuscules (direction Fluent, reprise de ce qui a
+			 fonctionne sur Comptabilite, session du 14.08.2026). -->
 		<Style x:Key="CardTitleStyle" TargetType="TextBlock">
-			<Setter Property="FontSize" Value="15"/>
+			<Setter Property="FontSize" Value="12.5"/>
 			<Setter Property="FontWeight" Value="Bold"/>
-			<Setter Property="Foreground" Value="#0F172A"/>
+			<Setter Property="Foreground" Value="Black"/>
 		</Style>
 
 		<!-- ✅ 31.07.2026, 3e passe (demande de Joe) : "garde la même structure que ma pic",
@@ -219,7 +220,7 @@
 				</Border.Effect>
 				<StackPanel>
 					<TextBlock Style="{StaticResource CardTitleStyle}" Margin="0,0,0,6" Cursor="Hand" MouseLeftButtonDown="TasksCard_Click">
-						<Run Text="Tâches"/>
+						<Run Text="TÂCHES"/>
 						<Run Text=" →" Foreground="Black" FontWeight="Normal"/>
 					</TextBlock>
 
@@ -402,7 +403,7 @@
 					<!-- ✅ Lien cliquable limité au titre (15e passe, demande de Joe), plus toute
 						 la carte. Flèche "→" pour signaler le lien (27e passe, demande de Joe). -->
 					<TextBlock Style="{StaticResource CardTitleStyle}" Margin="0,0,0,10" Cursor="Hand" MouseLeftButtonDown="BonsStatusTable_Click">
-						<Run Text="États des statuts de BI"/>
+						<Run Text="ÉTATS DES STATUTS DE BI"/>
 						<Run Text=" →" Foreground="Black" FontWeight="Normal"/>
 					</TextBlock>
 
@@ -595,7 +596,7 @@
 			</Border.Effect>
 			<StackPanel>
 				<TextBlock Style="{StaticResource CardTitleStyle}" Margin="0,0,0,6" Cursor="Hand" MouseLeftButtonDown="AccountingCard_Click">
-					<Run Text="Montant actuel dépenses BI"/>
+					<Run Text="MONTANT ACTUEL DÉPENSES BI"/>
 					<Run Text=" &#8594;" Foreground="Black" FontWeight="Normal"/>
 				</TextBlock>
 				<Grid>
@@ -637,7 +638,7 @@
 				</Border.Effect>
 				<StackPanel>
 					<TextBlock Style="{StaticResource CardTitleStyle}" Margin="0,0,0,6" Cursor="Hand" MouseLeftButtonDown="ProjectCard_Click">
-						<Run Text="Dossier actif"/>
+						<Run Text="DOSSIER ACTIF"/>
 						<Run Text=" →" Foreground="Black" FontWeight="Normal"/>
 					</TextBlock>
 					<TextBlock x:Name="ProjectNameTextBlock"
@@ -712,7 +713,7 @@
 							<ColumnDefinition Width="Auto"/>
 						</Grid.ColumnDefinitions>
 						<StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-							<TextBlock Style="{StaticResource CardTitleStyle}" Text="Bloc-notes"/>
+							<TextBlock Style="{StaticResource CardTitleStyle}" Text="BLOC-NOTES"/>
 							<TextBlock x:Name="NotesCountTextBlock" Text="(0)" FontSize="13" Foreground="#64748B" Margin="6,0,0,0" VerticalAlignment="Center"/>
 						</StackPanel>
 						<Button Grid.Column="1" x:Name="AddNoteButton" Content="+" Style="{StaticResource PrimaryButtonStyle}" Width="30" Height="26" FontSize="14" Padding="0" Click="AddNoteButton_Click"/>

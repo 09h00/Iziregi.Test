@@ -75,6 +75,8 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         // ✅ Graphique "Tâches par catégorie" (17.07.2026) : recalcule sa propre échelle au
         // resize, indépendamment du graphique par entreprise ci-dessus.
         CategoryChartItems.SizeChanged += (_, __) => RenderTaskCategoryChart();
+
+        ApplyCategoryChartVisibility(Db.GetAccountingCategoryChartVisible());
     }
 
     // =========================
@@ -545,7 +547,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         // 5) garder le titre fixe
         if (ChartTitleTextBlock != null)
-            ChartTitleTextBlock.Text = "Graphique-TTC par intervenants";
+            ChartTitleTextBlock.Text = "GRAPHIQUE-TTC PAR INTERVENANTS";
 
         // 6) GRAPH
         double max = sorted.Count == 0 ? 0 : sorted.Max(r => r.TotalTtc);
@@ -699,7 +701,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         RenderTotalsTableAndChart();
 
         // Reset Détail
-        DetailsTitleTextBlock.Text = "Détail — sélectionnez un intervenant";
+        DetailsTitleTextBlock.Text = "DÉTAIL — sélectionnez un intervenant";
         DetailsTitleBorder.Background = MediaBrushes.Transparent;
         DetailsTitleTextBlock.Foreground = MediaBrushes.Black;
 
@@ -717,7 +719,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
 
         if (row.IsTotal)
         {
-            DetailsTitleTextBlock.Text = "Détail — sélectionnez un intervenant";
+            DetailsTitleTextBlock.Text = "DÉTAIL — sélectionnez un intervenant";
             DetailsTitleBorder.Background = MediaBrushes.Transparent;
             DetailsTitleTextBlock.Foreground = MediaBrushes.Black;
 
@@ -727,7 +729,7 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
         }
 
         var company = row.Company;
-        DetailsTitleTextBlock.Text = $"Détail — {company}";
+        DetailsTitleTextBlock.Text = $"DÉTAIL — {company}";
 
         // ✅ surbrillance du titre avec la couleur entreprise
         var solidTitleBg = GetCompanyBackgroundBrush(company, _companyColorMap);
@@ -845,18 +847,29 @@ public partial class AccountingPage : WpfUserControl, IReloadablePage
     {
         if (CategoryChartBorder == null) return;
 
-        var nowHidden = CategoryChartBorder.Visibility == Visibility.Visible;
-        CategoryChartBorder.Visibility = nowHidden ? Visibility.Collapsed : Visibility.Visible;
+        var nowVisible = CategoryChartBorder.Visibility != Visibility.Visible;
+        ApplyCategoryChartVisibility(nowVisible);
+        Db.SetAccountingCategoryChartVisible(nowVisible);
+    }
+
+    // ✅ Applique l'etat visible/masque du graphique categories, sans forcer de valeur par
+    // defaut a chaque ouverture (demande de Joe, 14.08.2026 : "garder en memoire la derniere
+    // selection"). Appele au chargement de la page (valeur memorisee) et depuis le clic.
+    private void ApplyCategoryChartVisibility(bool visible)
+    {
+        if (CategoryChartBorder == null) return;
+
+        CategoryChartBorder.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 
         if (ToggleCategoryChartButton != null)
         {
-            ToggleCategoryChartButton.Content = nowHidden ? "Afficher graphique catégories" : "Masquer graphique catégories";
+            ToggleCategoryChartButton.Content = visible ? "Masquer graphique catégories" : "Afficher graphique catégories";
 
             // ✅ 29.07.2026 (demande de Joe) : noir quand "Masquer..." (graphique visible),
             // bleu quand "Afficher..." (graphique masqué).
-            var color = nowHidden
-                ? (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom("#1D4ED8")!
-                : System.Windows.Media.Brushes.Black;
+            var color = visible
+                ? System.Windows.Media.Brushes.Black
+                : (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom("#1D4ED8")!;
             ToggleCategoryChartButton.Foreground = color;
             ToggleCategoryChartButton.BorderBrush = color;
         }

@@ -1170,8 +1170,19 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
             {
                 ProjectComboBox.SelectedIndex = 0;
 
+                // ✅ Dossier verrouillé (18.08.2026, demande de Joe) : passe par
+                // MainWindow.SetSelectedProject (demande le mot de passe si nécessaire) au lieu
+                // de Db.SetCurrentProjectId directement -- sinon ce repli "aucun dossier courant
+                // valide -> prend le premier de la liste" activait n'importe quel dossier, verrouillé
+                // ou pas, sans vérification. Différé (Dispatcher) pour éviter la réentrance : cet
+                // appel peut recréer cette page (RecreatePagesForProject) alors qu'on est encore
+                // dans son propre LoadProjects().
                 if (ProjectComboBox.SelectedItem is Project p)
-                    Db.SetCurrentProjectId(p.Id);
+                {
+                    var mw = Window.GetWindow(this) as Iziregi.Test.MainWindow ?? System.Windows.Application.Current.MainWindow as Iziregi.Test.MainWindow;
+                    if (mw != null)
+                        Dispatcher.BeginInvoke(new Action(() => mw.SetSelectedProject(p)));
+                }
             }
             else
             {
@@ -1205,6 +1216,9 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
         if (ProjectComboBox?.SelectedItem is Project project)
         {
             // Informe MainWindow via son API afin qu'il mette à jour son état et l'affichage global
+            // ✅ Dossier verrouillé (18.08.2026, demande de Joe) : pas de repli vers
+            // Db.SetCurrentProjectId direct si mw est introuvable/exception -- ça contournerait la
+            // vérification du mot de passe (voir MainWindow.SetSelectedProject/TryUnlockProject).
             try
             {
                 var mw = Window.GetWindow(this) as Iziregi.Test.MainWindow ?? System.Windows.Application.Current.MainWindow as Iziregi.Test.MainWindow;
@@ -1214,15 +1228,10 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
                     // si MainWindow expose un rafraîchisseur de sélecteur, on l'appelle pour synchroniser l'UI
                     try { mw.RefreshProjectSelector(); } catch { /* non bloquant */ }
                 }
-                else
-                {
-                    Db.SetCurrentProjectId(project.Id);
-                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("ProjectComboBox_SelectionChanged exception: " + ex);
-                Db.SetCurrentProjectId(project.Id);
             }
 
             _lastProjectId = project.Id;
@@ -1270,9 +1279,9 @@ public partial class DashboardPage : System.Windows.Controls.UserControl, IReloa
     {
         if (!EnsureNotDirtyOrWarn()) return;
 
-        if (ProjectComboBox?.SelectedItem is Project project)
-            Db.SetCurrentProjectId(project.Id);
-
+        // ✅ Dossier verrouillé (18.08.2026, demande de Joe) : plus de Db.SetCurrentProjectId
+        // direct ici -- le dossier courant est déjà activé (et vérifié) via
+        // ProjectComboBox_SelectionChanged/MainWindow.SetSelectedProject dès qu'il change.
         OpenWorkOrderWindow(null, createMode: true);
     }
 

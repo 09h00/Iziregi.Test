@@ -3321,13 +3321,6 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         ApplyPlanningHeadersAndSyncDatePickers();
     }
 
-    private void EndDatePicker_SelectedDateChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (!_isPageActive) return;
-        if (_isSyncingDates) return;
-        ApplyPlanningHeadersAndSyncDatePickers();
-    }
-
     private async void PrevWeekButton_Click(object sender, RoutedEventArgs e)
     {
         await AnimateWeekNavigationAsync(-7);
@@ -3832,11 +3825,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         try
         {
             StartDatePicker.SelectedDate = businessDays[0];
-            EndDatePicker.SelectedDate = lastDay;
+            EndDateTextBlock.Text = lastDay.ToString("dd.MM.yyyy");
         }
         finally { _isSyncingDates = false; }
 
-        WeekTextBlock.Text = $"Semaine {ISOWeek.GetWeekOfYear(businessDays[0])}";
+        var firstWeekNumber = ISOWeek.GetWeekOfYear(businessDays[0]);
+        var lastWeekNumber = ISOWeek.GetWeekOfYear(lastDay);
+        WeekTextBlock.Text = firstWeekNumber == lastWeekNumber
+            ? $"Semaine {firstWeekNumber}"
+            : $"Semaine {firstWeekNumber}/{lastWeekNumber}";
     }
 
     private static DateTime SnapToStartOfWeek(DateTime date, DayOfWeek startDay)
@@ -4394,7 +4391,6 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // StartDatePicker.Text/EndDatePicker.Text dans ApplyPlanningHeadersAndSyncDatePickers.
         var frCH = System.Windows.Markup.XmlLanguage.GetLanguage("fr-CH");
         StartDatePicker.Language = frCH;
-        EndDatePicker.Language = frCH;
 
         // ✅ Guard page active/inactive (évite COMException quand on change de page)
         Loaded += (_, __) =>

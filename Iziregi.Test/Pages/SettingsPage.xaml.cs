@@ -1,6 +1,8 @@
 // File: Pages/SettingsPage.xaml.cs
 using System;
 using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,6 +21,7 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
 {
     private readonly MainWindow _host;
     private ArchitectIdentityPage? _identityPage;
+    private ProjectsBankPage? _projectsBankPage;
 
     // ✅ Les 7 premières pages de la barre de nav principale, dans leur ordre gauche à
     // droite (demande de Joe, 10.08.2026). Archives/Corbeille retirées : ce ne sont plus
@@ -42,9 +45,15 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
         _host = host;
     }
 
+    // ✅ Mot de passe Admin (18.08.2026, demande de Joe) : reste déverrouillé pour le reste de
+    // la session une fois saisi (comme le mot de passe Directeur pour les dossiers), pas besoin
+    // de le ressaisir à chaque clic sur "Admin" pendant la même session de travail.
+    private bool _adminUnlockedThisSession;
+
     public void Reload()
     {
-        ShowSection("Identity");
+        // ✅ Landing par défaut = "Démarrage" (18.08.2026, demande de Joe).
+        ShowSection("Startup");
         PopulateConnectionFields();
         PopulateStartupSection();
     }
@@ -56,12 +65,6 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
     {
         if (sender is not System.Windows.Controls.Button btn || btn.Tag is not string tag) return;
 
-        if (tag == "Projects")
-        {
-            OpenProjectsBank();
-            return;
-        }
-
         // ✅ 01.08.2026 (demande de Joe) : "CGU" est un lien externe, comme Aide/Contact
         // ailleurs dans l'app -- réutilise directement le handler de MainWindow (rendu
         // internal) plutôt que de dupliquer la logique d'ouverture de navigateur.
@@ -71,56 +74,315 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
             return;
         }
 
+        // ✅ Page "Admin" (18.08.2026, demande de Joe) : protégée par le mot de passe Admin,
+        // distinct du mot de passe Directeur (voir Db.VerifyAdminPassword). Si aucun mot de
+        // passe Admin n'est encore défini, accès libre (même bootstrap que le mot de passe
+        // Directeur -- le premier réglage se fait sans verrou).
+        if (tag == "Admin" && Db.HasAdminPassword() && !_adminUnlockedThisSession)
+        {
+            var prompt = new PasswordPromptWindow(
+                "Accès Admin",
+                "Cette page est protégée par le mot de passe Admin.",
+                Db.VerifyAdminPassword)
+            {
+                Owner = System.Windows.Window.GetWindow(this)
+            };
+
+            if (prompt.ShowDialog() != true)
+                return;
+
+            _adminUnlockedThisSession = true;
+        }
+
         ShowSection(tag);
     }
 
     private void ShowSection(string tag)
     {
-        IdentityHost.Visibility = tag == "Identity" ? Visibility.Visible : Visibility.Collapsed;
-        ConnectionPanel.Visibility = tag == "Connection" ? Visibility.Visible : Visibility.Collapsed;
+        AdminPanel.Visibility = tag == "Admin" ? Visibility.Visible : Visibility.Collapsed;
+        ProjectsHost.Visibility = tag == "Projects" ? Visibility.Visible : Visibility.Collapsed;
         StartupPanel.Visibility = tag == "Startup" ? Visibility.Visible : Visibility.Collapsed;
-        DataPanel.Visibility = tag == "Data" ? Visibility.Visible : Visibility.Collapsed;
         EthicsPanel.Visibility = tag == "Ethics" ? Visibility.Visible : Visibility.Collapsed;
+
+        // ✅ Sous-menu masqué sur "Banque de dossiers" (18.08.2026, demande de Joe) : la liste
+        // de dossiers a besoin de toute la largeur. Le bouton "Fermer" de ProjectsBankPage
+        // (CloseRequested, voir plus bas) ramène sur "Démarrage" avec le sous-menu réaffiché.
+        SubNavColumn.Width = tag == "Projects" ? new GridLength(0) : new GridLength(200);
+        SubNavSpacerColumn.Width = tag == "Projects" ? new GridLength(0) : new GridLength(20);
+        PageTitleTextBlock.Visibility = tag == "Projects" ? Visibility.Collapsed : Visibility.Visible;
 
         var active = tag switch
         {
-            "Identity" => NavIdentityButton,
-            "Connection" => NavConnectionButton,
+            "Admin" => NavAdminButton,
+            "Projects" => NavProjectsButton,
             "Startup" => NavStartupButton,
-            "Data" => NavDataButton,
             "Ethics" => NavEthicsButton,
-            _ => NavIdentityButton
+            _ => NavProjectsButton
         };
 
-        foreach (var b in new[] { NavIdentityButton, NavProjectsButton, NavConnectionButton, NavStartupButton, NavDataButton, NavEthicsButton })
+        foreach (var b in new[] { NavAdminButton, NavProjectsButton, NavStartupButton, NavEthicsButton })
             b.Style = (Style)FindResource(b == active ? "SubNavButtonActiveStyle" : "SubNavButtonStyle");
 
-        if (tag == "Identity")
+        if (tag == "Admin")
         {
             _identityPage ??= new ArchitectIdentityPage(_host, MainWindow.ServerBaseUrl, MainWindow.ServerApiKey);
             IdentityHost.Content = _identityPage;
             _identityPage.Reload();
+
+            DirectorPasswordBox.Password = "";
+            PopulateDirectorPasswordStatus();
+
+            AdminPasswordBox.Password = "";
+            PopulateAdminPasswordStatus();
+        }
+
+        // ✅ Page embarquée (18.08.2026, demande de Joe) : la fenêtre séparée "Banque de
+        // dossiers" est obsolète, remplacée par ProjectsBankPage affichée directement dans cet
+        // onglet (clic sur "Banque de dossiers" OU landing par défaut de Paramètres, voir Reload).
+        if (tag == "Projects")
+        {
+            if (_projectsBankPage == null)
+            {
+                _projectsBankPage = new ProjectsBankPage(_host);
+                // ✅ "Fermer" (Actions, 18.08.2026, demande de Joe) : ramène sur "Démarrage" avec
+                // le sous-menu réaffiché, au lieu de fermer une fenêtre (page embarquée, plus de
+                // fenêtre à fermer).
+                _projectsBankPage.CloseRequested += (_, __) => ShowSection("Startup");
+            }
+            ProjectsHost.Content = _projectsBankPage;
+            _projectsBankPage.Reload();
         }
     }
 
-    // =========================
-    // Banque de dossiers (ProjectsWindow reste une fenêtre, même principe que le bouton
-    // "Gérer les projets" de la page Bons d'intervention -- pas de conversion en page
-    // embarquée pour l'instant, portée trop large).
-    // =========================
-    private void OpenProjectsBank_Click(object sender, RoutedEventArgs e) => OpenProjectsBank();
+    // ✅ Mot de passe "Admin" (18.08.2026, demande de Joe) : distinct du mot de passe
+    // Directeur -- protège cette page, jamais délégué.
+    private void PopulateAdminPasswordStatus()
+    {
+        AdminPasswordStatusTextBlock.Text = Db.HasAdminPassword()
+            ? "Un mot de passe Admin est actuellement défini."
+            : "Aucun mot de passe Admin défini -- cette page reste accessible à tous tant que tu n'en définis pas un.";
+    }
 
-    private void OpenProjectsBank()
+    private void SaveAdminPassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(AdminPasswordBox.Password))
+        {
+            System.Windows.MessageBox.Show(
+                "Saisis un mot de passe, ou utilise \"Retirer\" pour l'enlever.",
+                "Mot de passe Admin",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        Db.SetAdminPassword(AdminPasswordBox.Password);
+        AdminPasswordBox.Password = "";
+        PopulateAdminPasswordStatus();
+    }
+
+    private void RemoveAdminPassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Db.HasAdminPassword())
+        {
+            System.Windows.MessageBox.Show(
+                "Aucun mot de passe Admin n'est défini.",
+                "Mot de passe Admin",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var ok = System.Windows.MessageBox.Show(
+            "Retirer le mot de passe Admin ? Cette page redeviendra accessible à tous.",
+            "Mot de passe Admin",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        Db.SetAdminPassword(null);
+        AdminPasswordBox.Password = "";
+        PopulateAdminPasswordStatus();
+    }
+
+    // ✅ Mot de passe "Directeur" (18.08.2026, demande de Joe).
+    private void PopulateDirectorPasswordStatus()
+    {
+        DirectorPasswordStatusTextBlock.Text = Db.HasDirectorPassword()
+            ? "Un mot de passe Directeur est actuellement défini."
+            : "Aucun mot de passe Directeur défini.";
+    }
+
+    private void SaveDirectorPassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(DirectorPasswordBox.Password))
+        {
+            System.Windows.MessageBox.Show(
+                "Saisis un mot de passe, ou utilise \"Retirer\" pour l'enlever.",
+                "Mot de passe Directeur",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        Db.SetDirectorPassword(DirectorPasswordBox.Password);
+        DirectorPasswordBox.Password = "";
+        PopulateDirectorPasswordStatus();
+    }
+
+    private void RemoveDirectorPassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Db.HasDirectorPassword())
+        {
+            System.Windows.MessageBox.Show(
+                "Aucun mot de passe Directeur n'est défini.",
+                "Mot de passe Directeur",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var ok = System.Windows.MessageBox.Show(
+            "Retirer le mot de passe Directeur ?",
+            "Mot de passe Directeur",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        Db.SetDirectorPassword(null);
+        DirectorPasswordBox.Password = "";
+        PopulateDirectorPasswordStatus();
+    }
+
+    // =========================
+    // ✅ Reset par email du mot de passe Directeur (18.08.2026, demande de Joe) : le mot de
+    // passe reste local (Db.SetDirectorPassword), le serveur prouve seulement l'identité du
+    // tenant via un code à usage unique envoyé à son email de contact (voir Iziregi.Server,
+    // /internal/password-reset/request et /verify).
+    // =========================
+    private static readonly HttpClient ResetHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+
+    private static string NormalizeServerBaseUrl(string? baseUrl)
+    {
+        var v = (baseUrl ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(v)) v = "https://iziregi.com";
+        return v.TrimEnd('/');
+    }
+
+    private static async Task<HttpResponseMessage> PostWithApiKeyAsync(string url, HttpContent? content)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+        if (!string.IsNullOrWhiteSpace(MainWindow.ServerApiKey))
+            req.Headers.Add("X-Api-Key", MainWindow.ServerApiKey);
+        return await ResetHttp.SendAsync(req);
+    }
+
+    private async void ForgotDirectorPassword_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = System.Windows.MessageBox.Show(
+            "Un code à usage unique va être envoyé par email à l'adresse de contact enregistrée pour ton bureau. Continuer ?",
+            "Mot de passe Directeur oublié",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        var baseUrl = NormalizeServerBaseUrl(MainWindow.ServerBaseUrl);
+
+        try
+        {
+            using var resp = await PostWithApiKeyAsync($"{baseUrl}/internal/password-reset/request", null);
+            var body = await resp.Content.ReadAsStringAsync();
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var error = TryReadJsonError(body);
+                var message = error switch
+                {
+                    "no_contact_email" => "Aucun email de contact n'est enregistré pour ton bureau. Contacte le support Iziregi pour le configurer.",
+                    "rate_limited" => "Une demande a déjà été envoyée récemment. Attends 2 minutes avant de réessayer.",
+                    "email_send_failed" => "L'email n'a pas pu être envoyé. Réessaie plus tard ou contacte le support.",
+                    _ => $"Le serveur a refusé la demande (HTTP {(int)resp.StatusCode})."
+                };
+
+                System.Windows.MessageBox.Show(message, "Mot de passe Directeur oublié", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Impossible de joindre le serveur.\n\n{ex.Message}",
+                "Mot de passe Directeur oublié",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return;
+        }
+
+        var resetWin = new PasswordResetWindow
+        {
+            Owner = System.Windows.Window.GetWindow(this)
+        };
+
+        if (resetWin.ShowDialog() != true)
+            return;
+
+        try
+        {
+            var json = JsonSerializer.Serialize(new { code = resetWin.Code });
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var resp = await PostWithApiKeyAsync($"{baseUrl}/internal/password-reset/verify", content);
+            var body = await resp.Content.ReadAsStringAsync();
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var error = TryReadJsonError(body);
+                var message = error switch
+                {
+                    "invalid_code" => "Code incorrect.",
+                    "too_many_attempts" => "Trop de tentatives incorrectes. Refais une demande de code.",
+                    "no_pending_code" => "Ce code a expiré ou n'existe plus. Refais une demande.",
+                    _ => $"Le serveur a refusé le code (HTTP {(int)resp.StatusCode})."
+                };
+
+                System.Windows.MessageBox.Show(message, "Mot de passe Directeur oublié", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            Db.SetDirectorPassword(resetWin.NewPassword);
+            PopulateDirectorPasswordStatus();
+
+            System.Windows.MessageBox.Show(
+                "Le mot de passe Directeur a été réinitialisé avec succès.",
+                "Mot de passe Directeur oublié",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Impossible de joindre le serveur.\n\n{ex.Message}",
+                "Mot de passe Directeur oublié",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private static string TryReadJsonError(string jsonBody)
     {
         try
         {
-            var win = new ProjectsWindow
-            {
-                Owner = System.Windows.Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
-            };
-            win.ShowDialog();
+            using var doc = JsonDocument.Parse(jsonBody);
+            return doc.RootElement.TryGetProperty("error", out var errProp) ? (errProp.GetString() ?? "") : "";
         }
-        catch { }
+        catch
+        {
+            return "";
+        }
     }
 
     // =========================

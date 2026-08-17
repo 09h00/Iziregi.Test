@@ -27,4 +27,12 @@ public class Project
     public string ManagerContact { get; set; } = "";
 
     public bool IsActive { get; set; }
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : dossier verrouillé par mot de passe. Hash stocké
+    // (jamais le mot de passe en clair), voir Db.SetProjectPassword/VerifyProjectPassword.
+    public string PasswordHash { get; set; } = "";
+
+    public bool HasPassword => !string.IsNullOrWhiteSpace(PasswordHash);
+
+    public string LockIcon => HasPassword ? "🔒" : "";
 }

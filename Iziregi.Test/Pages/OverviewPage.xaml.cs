@@ -513,16 +513,11 @@ public partial class OverviewPage : System.Windows.Controls.UserControl, IReload
     // dossiers (même fenêtre que SettingsPage > Banque de dossiers).
     private void TasksCard_Click(object sender, MouseButtonEventArgs e) => _host.ShowPlanning();
 
+    // ✅ La fenêtre séparée ProjectsWindow est obsolète (18.08.2026, demande de Joe) : "Banque de
+    // dossiers" est maintenant une page embarquée dans Paramètres (ProjectsBankPage), affichée
+    // par défaut dès l'arrivée sur Paramètres (voir SettingsPage.Reload).
     private void ProjectCard_Click(object sender, MouseButtonEventArgs e)
     {
-        try
-        {
-            var win = new ProjectsWindow
-            {
-                Owner = System.Windows.Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow
-            };
-            win.ShowDialog();
-        }
-        catch { }
+        try { _host.ShowSettings(); } catch { }
     }
 }

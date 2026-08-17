@@ -4,9 +4,13 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
 
+        <!-- Fond bleu clair partage par toute l app (direction Fluent, demande de Joe,
+             session du 13.08.2026), un seul endroit a ajuster si la teinte doit bouger. -->
+        <SolidColorBrush x:Key="PageBackgroundBrush" Color="#D9E6FA"/>
+
         <!-- ✅ Style global : bouton principal (bleu) avec survol lisible -->
         <Style x:Key="PrimaryButtonStyle" TargetType="{x:Type Button}">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Background" Value="#2563EB"/>
             <Setter Property="Foreground" Value="White"/>
@@ -24,7 +28,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -142,9 +146,9 @@
         <DropShadowEffect x:Key="CardShadowEffect"
                           Color="#0F172A"
                           Direction="270"
-                          ShadowDepth="1.5"
-                          BlurRadius="10"
-                          Opacity="0.10"/>
+                          ShadowDepth="6"
+                          BlurRadius="28"
+                          Opacity="0.22"/>
 
         <!-- ✅ Icônes vectorielles remplaçant les emojis couleur (✎ 📦 🗑), qui s'affichaient
              en glyphes multicolores façon clip-art selon le rendu Windows — pas cohérent avec
@@ -171,7 +175,7 @@
              fond). Template personnalisé pour garantir que le survol ne soit pas écrasé par
              un déclencheur caché du thème Windows (piège déjà rencontré sur d'autres boutons). -->
         <Style x:Key="PdfButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111827"/>
@@ -187,7 +191,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"

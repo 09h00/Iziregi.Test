@@ -1,4 +1,4 @@
-﻿// File: ProjectsWindow.xaml.cs
+// File: Pages/ProjectsBankPage.xaml.cs
 using System;
 using System.Linq;
 using System.Security.Cryptography;
@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Iziregi.Test.Data;
 using Iziregi.Test.Models;
+using Iziregi.Test.Pages;
 using Microsoft.VisualBasic;
 using System.Runtime.InteropServices;
 
@@ -24,14 +25,25 @@ using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace Iziregi.Test;
 
-public partial class ProjectsWindow : Window
+// ✅ Converti depuis ProjectsWindow (18.08.2026, demande de Joe) : cette page s'ouvrait
+// auparavant dans une fenêtre séparée, jugée obsolète -- embarquée maintenant dans l'onglet
+// "Banque de dossiers" de Paramètres, même principe que ArchitectIdentityWindow ->
+// ArchitectIdentityPage. Les appels "this.Owner is MainWindow mw" d'origine deviennent le champ
+// _host, toujours disponible (plus besoin de vérifier).
+public partial class ProjectsBankPage : System.Windows.Controls.UserControl, IReloadablePage
 {
+    private readonly MainWindow _host;
     private Project? _selectedProject;
     private bool _isLoading;
 
-    public ProjectsWindow()
+    // ✅ "Fermer" (18.08.2026, demande de Joe) : ramène le parent (SettingsPage) sur
+    // "Démarrage" avec le sous-menu réaffiché -- page embarquée, plus de fenêtre à fermer.
+    public event EventHandler? CloseRequested;
+
+    public ProjectsBankPage(MainWindow host)
     {
         InitializeComponent();
+        _host = host;
 
         Db.Init();
 
@@ -43,6 +55,11 @@ public partial class ProjectsWindow : Window
 
         LoadProjects();
         ClearForm();
+    }
+
+    public void Reload()
+    {
+        LoadProjects();
     }
 
     // ✅ Le DataGrid a son propre scroll interne et peut avaler la molette avant qu'elle
@@ -302,7 +319,20 @@ public partial class ProjectsWindow : Window
         StatusTextBlock.Text = $"Dossier sélectionné : {project.Name} (clique sur Modifier)";
     }
 
-    // Bouton XAML: Click="EditProject_Click"
+    // ✅ Colonne "Modifier" de la grille (18.08.2026, demande de Joe) : remplace le bouton
+    // "Modifier" de la section Actions -- sélectionne la ligne cliquée puis réutilise
+    // EditProject_Click (qui gère aussi le mot de passe du dossier).
+    private void ModifyProjectRow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button btn || btn.DataContext is not Project project)
+            return;
+
+        _selectedProject = project;
+        ProjectsGrid.SelectedItem = project;
+
+        EditProject_Click(sender, e);
+    }
+
     private void EditProject_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedProject == null || _selectedProject.Id <= 0)
@@ -314,6 +344,12 @@ public partial class ProjectsWindow : Window
                 MessageBoxImage.Information);
             return;
         }
+
+        // ✅ Mot de passe (18.08.2026, demande de Joe) : redemandé si la session n'est pas
+        // encore ouverte pour ce dossier, avant d'autoriser la modification -- même
+        // vérification que pour l'activer comme dossier courant (MainWindow.TryUnlockProject).
+        if (!_host.TryUnlockProject(_selectedProject))
+            return;
 
         ProjectNameTextBox.Text = _selectedProject.Name ?? "";
 
@@ -327,6 +363,12 @@ public partial class ProjectsWindow : Window
 
         ProjectColorHexTextBox.Text = string.IsNullOrWhiteSpace(_selectedProject.ColorHex) ? "#111827" : _selectedProject.ColorHex;
         UpdateColorPreview();
+
+        // ✅ Mot de passe (18.08.2026, demande de Joe) : jamais réaffiché, juste le statut.
+        ProjectPasswordBox.Password = "";
+        ProjectPasswordStatusTextBlock.Text = _selectedProject.HasPassword
+            ? "Un mot de passe est actuellement défini pour ce dossier. Laisser vide = ne rien changer, ou saisir un nouveau mot de passe pour le remplacer."
+            : "Aucun mot de passe défini. Saisis-en un pour verrouiller ce dossier.";
 
         StatusTextBlock.Text = $"Modification : {_selectedProject.Name}";
     }
@@ -348,6 +390,9 @@ public partial class ProjectsWindow : Window
 
         ProjectColorHexTextBox.Text = "#111827";
         UpdateColorPreview();
+
+        ProjectPasswordBox.Password = "";
+        ProjectPasswordStatusTextBlock.Text = "";
 
         ProjectsGrid.SelectedItem = null;
 
@@ -412,6 +457,20 @@ public partial class ProjectsWindow : Window
             return;
         }
 
+        // ✅ Confirmation (18.08.2026, demande de Joe) : demandée uniquement pour la
+        // modification d'un dossier EXISTANT, pas pour la création d'un nouveau.
+        if (_selectedProject != null && _selectedProject.Id > 0)
+        {
+            var confirmEdit = WpfMessageBox.Show(
+                $"Confirmer les modifications du dossier « {name} » ?",
+                "Dossier",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (confirmEdit != MessageBoxResult.Yes)
+                return;
+        }
+
         try
         {
             long idToUpdateColor;
@@ -436,7 +495,7 @@ public partial class ProjectsWindow : Window
                 idToUpdateColor = _selectedProject.Id;
 
                 if (_selectedProject.IsActive)
-                    Db.SetCurrentProjectId(_selectedProject.Id);
+                    TrySetAsCurrentProject(_selectedProject);
 
                 StatusTextBlock.Text = $"Dossier mis à jour : {name}";
             }
@@ -445,22 +504,29 @@ public partial class ProjectsWindow : Window
             Db.SetProjectColorHex(idToUpdateColor, colorHex);
             Db.SetProjectManager(idToUpdateColor, managerName, managerContact);
 
+            // ✅ Mot de passe (18.08.2026, demande de Joe) : vide = ne rien changer (voir
+            // RemoveProjectPassword_Click pour retirer un mot de passe existant).
+            if (!string.IsNullOrEmpty(ProjectPasswordBox.Password))
+            {
+                Db.SetProjectPassword(idToUpdateColor, ProjectPasswordBox.Password);
+                ProjectPasswordBox.Password = "";
+            }
+
+            // ✅ Fix (18.08.2026, demande de Joe : "je dois sortir et revenir pour voir l'info
+            // notée") : rafraîchit immédiatement le statut affiché sous le champ mot de passe,
+            // au lieu d'attendre un prochain clic sur "Modifier".
+            ProjectPasswordStatusTextBlock.Text = Db.ProjectHasPassword(idToUpdateColor)
+                ? "Un mot de passe est actuellement défini pour ce dossier. Laisser vide = ne rien changer, ou saisir un nouveau mot de passe pour le remplacer."
+                : "Aucun mot de passe défini. Saisis-en un pour verrouiller ce dossier.";
+
             LoadProjects();
             SelectProjectByName(name);
 
-            // Rafraîchir le combobox global si la fenêtre a un Owner MainWindow
-            try
-            {
-                if (this.Owner is Iziregi.Test.MainWindow mw)
-                {
-                    mw.RefreshProjectSelector();
-                }
-            }
-            catch { }
+            try { _host.RefreshProjectSelector(); } catch { }
 
             try
             {
-                System.Diagnostics.Debug.WriteLine($"ProjectsWindow.SaveProject_Click saved id={idToUpdateColor} color={colorHex}");
+                System.Diagnostics.Debug.WriteLine($"ProjectsBankPage.SaveProject_Click saved id={idToUpdateColor} color={colorHex}");
             }
             catch { }
         }
@@ -473,6 +539,12 @@ public partial class ProjectsWindow : Window
                 MessageBoxImage.Error);
         }
     }
+
+    // ✅ Dossier verrouillé (18.08.2026, demande de Joe) : passe par MainWindow.SetSelectedProject
+    // (point de passage unique, demande le mot de passe si nécessaire) plutôt que
+    // Db.SetCurrentProjectId directement, pour ne jamais activer un dossier verrouillé sans
+    // vérification -- même depuis la Banque de dossiers.
+    private void TrySetAsCurrentProject(Project p) => _host.SetSelectedProject(p);
 
     private void SelectProjectByName(string name)
     {
@@ -490,6 +562,47 @@ public partial class ProjectsWindow : Window
                 break;
             }
         }
+    }
+
+    // ✅ Mot de passe (18.08.2026, demande de Joe) : retire le verrou du dossier sélectionné.
+    private void RemoveProjectPassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedProject == null || _selectedProject.Id <= 0)
+        {
+            WpfMessageBox.Show(
+                "Sélectionne d’abord un dossier dans la liste.",
+                "Dossier",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (!_selectedProject.HasPassword)
+        {
+            WpfMessageBox.Show(
+                "Ce dossier n’a pas de mot de passe.",
+                "Dossier",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var ok = WpfMessageBox.Show(
+            $"Retirer le mot de passe du dossier « {_selectedProject.Name} » ?",
+            "Dossier",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (ok != MessageBoxResult.Yes)
+            return;
+
+        Db.SetProjectPassword(_selectedProject.Id, null);
+        _selectedProject.PasswordHash = "";
+        ProjectPasswordStatusTextBlock.Text = "Aucun mot de passe défini. Saisis-en un pour verrouiller ce dossier.";
+        StatusTextBlock.Text = $"Mot de passe retiré : {_selectedProject.Name}";
+
+        LoadProjects();
+        SelectProjectByName(_selectedProject.Name ?? "");
     }
 
     // =========================
@@ -541,7 +654,7 @@ public partial class ProjectsWindow : Window
         try
         {
             Db.SetProjectActive(_selectedProject.Id, true);
-            Db.SetCurrentProjectId(_selectedProject.Id);
+            TrySetAsCurrentProject(_selectedProject);
 
             StatusTextBlock.Text = $"Dossier réactivé : {_selectedProject.Name}";
 
@@ -637,8 +750,5 @@ public partial class ProjectsWindow : Window
     // =========================
     // Fermeture
     // =========================
-    private void Close_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
+    private void Close_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
 }

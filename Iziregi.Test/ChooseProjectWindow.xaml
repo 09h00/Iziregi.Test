@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Choisir un dossier" Height="520" Width="760"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBackgroundBrush}">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -34,6 +35,7 @@
                   SelectionMode="Single"
                   MouseDoubleClick="ProjectsGrid_MouseDoubleClick">
             <DataGrid.Columns>
+                <DataGridTextColumn Header="" Binding="{Binding LockIcon}" Width="28"/>
                 <DataGridTextColumn Header="Nom du chantier" Binding="{Binding Name}" Width="*"/>
                 <DataGridTextColumn Header="Adresse" Binding="{Binding Address}" Width="2*"/>
             </DataGrid.Columns>

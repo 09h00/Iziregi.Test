@@ -36,7 +36,7 @@ internal class ConfigSetupWindow : Window
         Height = 480;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         ResizeMode = ResizeMode.NoResize;
-        Background = new SolidColorBrush(WpfColor.FromRgb(245, 245, 245));
+        Background = new SolidColorBrush(WpfColor.FromRgb(0xD9, 0xE6, 0xFA));
 
         var tabs = new WpfTabControl { Margin = new Thickness(12) };
 

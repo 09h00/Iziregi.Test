@@ -94,7 +94,7 @@
 
         <!-- ✅ Bordure bleue arrondie + police bleue (23.07.2026, demande de Joe). -->
         <Style x:Key="CategoryChartToggleButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#1D4ED8"/>
@@ -110,7 +110,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -131,7 +131,7 @@
         <!-- ✅ 29.07.2026 (demande de Joe) : bouton "Rafraîchir" sans couleur de fond, texte
              noir, coins arrondis. -->
         <Style x:Key="RefreshButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="Black"/>
@@ -146,7 +146,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -164,7 +164,7 @@
         </Style>
     </UserControl.Resources>
 
-    <DockPanel>
+    <DockPanel Background="{StaticResource PageBackgroundBrush}">
 
         <!-- =========================
              EN-TÊTE + BOUTONS (VISIBLE SUR LA PAGE, FIXE EN HAUT)
@@ -248,7 +248,7 @@
             <Border x:Name="AccountingPrintArea"
                     BorderThickness="0"
                     Background="Transparent"
-                    Margin="0,10,0,0">
+                    Margin="16,10,16,16">
 
                 <StackPanel>
 
@@ -256,11 +256,12 @@
 
                     <!-- Filtres -->
                     <Border x:Name="FiltersCardBorder"
-                            BorderBrush="#DDDDDD"
+                            BorderBrush="#6B7280"
                             BorderThickness="1"
-                            CornerRadius="6"
+                            CornerRadius="18"
                             Padding="10"
-                            Background="#FAFAFA"
+                            Background="White"
+                            Effect="{StaticResource CardShadowEffect}"
                             Margin="0,0,0,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -321,9 +322,9 @@
                                 <!-- Totaux -->
                                 <Border x:Name="TotalsCardBorder"
                                         Grid.Row="0"
-                                        BorderBrush="Black"
+                                        BorderBrush="#6B7280"
                                         BorderThickness="1"
-                                        CornerRadius="10"
+                                        CornerRadius="18"
                                         Padding="12"
                                         Background="White"
                                         Effect="{StaticResource CardShadowEffect}">
@@ -336,8 +337,10 @@
                                             </Grid.ColumnDefinitions>
 
                                             <TextBlock Grid.Column="0"
-                                                       Text="Totaux par intervenants"
+                                                       Text="TOTAUX PAR INTERVENANTS"
+                                                       FontSize="12.5"
                                                        FontWeight="Bold"
+                                                       Foreground="Black"
                                                        VerticalAlignment="Center"/>
 
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -404,7 +407,7 @@
                                                             <Border x:Name="CompanyCell"
                                                                     Background="{Binding CompanyBrush}"
                                                                     Padding="6,0"
-                                                                    CornerRadius="2">
+                                                                    CornerRadius="4">
                                                                 <TextBlock x:Name="CompanyText"
                                                                            Text="{Binding Company}"
                                                                            VerticalAlignment="Center"
@@ -452,8 +455,14 @@
                                                     <DataGridTextColumn.ElementStyle>
                                                         <Style TargetType="TextBlock">
                                                             <Setter Property="TextAlignment" Value="Right"/>
-                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            <Setter Property="FontWeight" Value="Bold"/>
+                                                            <Setter Property="FontSize" Value="13"/>
                                                             <Setter Property="Padding" Value="0,0,2,0"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsTotal}" Value="True">
+                                                                    <Setter Property="FontSize" Value="14"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
                                                         </Style>
                                                     </DataGridTextColumn.ElementStyle>
                                                 </DataGridTextColumn>
@@ -467,9 +476,9 @@
                                 <!-- Détail -->
                                 <Border x:Name="DetailsCardBorder"
                                         Grid.Row="2"
-                                        BorderBrush="Black"
+                                        BorderBrush="#6B7280"
                                         BorderThickness="1"
-                                        CornerRadius="10"
+                                        CornerRadius="18"
                                         Padding="12"
                                         Background="White"
                                         Effect="{StaticResource CardShadowEffect}">
@@ -482,8 +491,10 @@
                                                 Padding="8,4"
                                                 Margin="0,0,0,10">
                                             <TextBlock x:Name="DetailsTitleTextBlock"
-                                                       Text="Détail — sélectionnez un intervenant"
-                                                       FontWeight="Bold"/>
+                                                       Text="DÉTAIL — sélectionnez un intervenant"
+                                                       FontSize="12.5"
+                                                       FontWeight="Bold"
+                                                       Foreground="Black"/>
                                         </Border>
 
                                         <DataGrid x:Name="DetailsGrid"
@@ -574,9 +585,9 @@
 
                             <Border x:Name="ChartCardBorder"
                                     Grid.Row="0"
-                                    BorderBrush="Black"
+                                    BorderBrush="#6B7280"
                                     BorderThickness="1"
-                                    CornerRadius="10"
+                                    CornerRadius="18"
                                     Padding="12"
                                     Background="White"
                                     Effect="{StaticResource CardShadowEffect}">
@@ -584,8 +595,10 @@
 
                                     <TextBlock x:Name="ChartTitleTextBlock"
                                                DockPanel.Dock="Top"
-                                               Text="Graphique-TTC par intervenants"
+                                               Text="GRAPHIQUE-TTC PAR INTERVENANTS"
+                                               FontSize="12.5"
                                                FontWeight="Bold"
+                                               Foreground="Black"
                                                Margin="0,0,0,6"/>
 
                                     <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
@@ -596,13 +609,14 @@
 
                                         <TextBlock Grid.Column="0"
                                                    Text="Total"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="Bold"
                                                    VerticalAlignment="Center"/>
 
                                         <TextBlock x:Name="ChartTotalTtcTextBlock"
                                                    Grid.Column="1"
                                                    Text="0.00"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="Bold"
+                                                   FontSize="14"
                                                    TextAlignment="Right"
                                                    VerticalAlignment="Center"/>
                                     </Grid>
@@ -639,11 +653,11 @@
 
                                                         <Border Grid.Column="2"
                                                                 Height="16"
-                                                                CornerRadius="3"
+                                                                CornerRadius="4"
                                                                 Background="#FFFFFF">
                                                             <Border Width="{Binding BarWidth}"
                                                                     Height="16"
-                                                                    CornerRadius="2"
+                                                                    CornerRadius="4"
                                                                     Background="{Binding BarBrush}"
                                                                     BorderBrush="#D1D5DB"
                                                                     BorderThickness="1"
@@ -674,17 +688,19 @@
                                  intégralité. -->
                             <Border x:Name="CategoryChartBorder"
                                     Grid.Row="2"
-                                    BorderBrush="Black"
+                                    BorderBrush="#6B7280"
                                     BorderThickness="1"
-                                    CornerRadius="10"
+                                    CornerRadius="18"
                                     Padding="12"
                                     Background="White"
                                     Effect="{StaticResource CardShadowEffect}">
                                 <DockPanel>
 
                                     <TextBlock DockPanel.Dock="Top"
-                                               Text="Tâches par catégorie"
+                                               Text="TÂCHES PAR CATÉGORIE"
+                                               FontSize="12.5"
                                                FontWeight="Bold"
+                                               Foreground="Black"
                                                Margin="0,0,0,6"/>
 
                                     <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
@@ -738,11 +754,11 @@
 
                                                         <Border Grid.Column="2"
                                                                 Height="16"
-                                                                CornerRadius="3"
+                                                                CornerRadius="4"
                                                                 Background="#FFFFFF">
                                                             <Border Width="{Binding BarWidth}"
                                                                     Height="16"
-                                                                    CornerRadius="2"
+                                                                    CornerRadius="4"
                                                                     Background="{Binding BarBrush}"
                                                                     BorderBrush="#D1D5DB"
                                                                     BorderThickness="1"

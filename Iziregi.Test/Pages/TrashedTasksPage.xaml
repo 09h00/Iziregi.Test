@@ -7,7 +7,7 @@
 			 mc:Ignorable="d"
 			 d:DesignHeight="820"
 			 d:DesignWidth="1280"
-			 Background="#F6F7FB">
+			 Background="{StaticResource PageBackgroundBrush}">
 
 	<!-- ✅ Fix (demande de Joe : "il manque la ligne Corbeille" dans le widget Tâches du Tableau
 		 de bord) : "Corbeille tâches", copie fonctionnelle d'ArchivesTasksPage.xaml (même
@@ -16,7 +16,7 @@
 	<UserControl.Resources>
 
 		<Style x:Key="SmallButtonStyle" TargetType="Button">
-			<Setter Property="Height" Value="28"/>
+			<Setter Property="Height" Value="30"/>
 			<Setter Property="Padding" Value="8,0"/>
 			<Setter Property="Background" Value="White"/>
 			<Setter Property="Foreground" Value="#111827"/>
@@ -165,7 +165,7 @@
 
 	</UserControl.Resources>
 
-	<Grid Margin="10">
+	<Grid Margin="16">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="*"/>
@@ -176,7 +176,7 @@
 				Background="White"
 				BorderBrush="#E5E7EB"
 				BorderThickness="1"
-				CornerRadius="12"
+				CornerRadius="18"
 				Padding="8"
 				Margin="0,0,0,8"
 				Effect="{StaticResource CardShadowEffect}">
@@ -193,7 +193,7 @@
 						Style="{StaticResource RestoreSmallButtonStyle}"
 						Click="RestoreSelected_Click"
 						IsEnabled="False"
-						Height="34"
+						Height="30"
 						Margin="0,0,6,0"/>
 
 				<Button x:Name="DeleteSelectionButton"
@@ -201,12 +201,12 @@
 						Style="{StaticResource DangerSmallButtonStyle}"
 						Click="DeleteSelected_Click"
 						IsEnabled="False"
-						Height="34"
+						Height="30"
 						Margin="0,0,6,0"/>
 
 				<Button Content="Rafraîchir"
 						Style="{StaticResource SmallButtonStyle}"
-						Height="34"
+						Height="30"
 						Margin="0,0,6,0"
 						Click="Refresh_Click"/>
 
@@ -217,7 +217,7 @@
 				<Button Content="Page planification"
 				        Style="{StaticResource SmallButtonStyle}"
 				        BorderBrush="Black"
-				        Height="34"
+				        Height="30"
 				        Margin="0,0,6,0"
 				        Click="BackToParent_Click"/>
 
@@ -229,7 +229,7 @@
 				        Style="{StaticResource SmallButtonStyle}"
 				        Background="#F3F4F6"
 				        BorderBrush="Black"
-				        Height="34"
+				        Height="30"
 				        Click="GoToArchives_Click"/>
 			</StackPanel>
 		</Border>
@@ -239,7 +239,7 @@
 				Background="White"
 				BorderBrush="#E5E7EB"
 				BorderThickness="1"
-				CornerRadius="12"
+				CornerRadius="18"
 				Padding="10"
 				Effect="{StaticResource CardShadowEffect}">
 

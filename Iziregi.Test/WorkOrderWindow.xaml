@@ -10,7 +10,7 @@ Width="1040"
 MinHeight="540"
 MinWidth="1000"
 WindowStartupLocation="CenterOwner"
-Background="#F6F7FB"
+Background="{StaticResource PageBackgroundBrush}"
 FontFamily="Arial">
 
     <Window.Resources>
@@ -18,7 +18,7 @@ FontFamily="Arial">
             <Setter Property="Background" Value="White"/>
             <Setter Property="BorderBrush" Value="#E5E7EB"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="CornerRadius" Value="18"/>
             <Setter Property="Padding" Value="16"/>
             <Setter Property="Margin" Value="0,0,0,14"/>
             <Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
@@ -34,6 +34,11 @@ FontFamily="Arial">
             <Setter Property="Background" Value="#EAF2FF"/>
             <Setter Property="BorderBrush" Value="#1D4ED8"/>
             <Setter Property="BorderThickness" Value="2"/>
+            <!-- ✅ Padding horizontal reduit 16->8 (demande de Joe, 14.08.2026 : "elargir le bloc
+                 de boutons et le bloc grille de 2mm de chaque cote") : elargit d'autant le bloc
+                 Ajouter/Supprimer ligne (QuoteLineButtonsPanel) et LinesGrid, qui occupent toute
+                 la largeur disponible de cette carte. -->
+            <Setter Property="Padding" Value="8,16"/>
         </Style>
 
         <Style x:Key="CardValidationStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
@@ -43,9 +48,9 @@ FontFamily="Arial">
         </Style>
 
         <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="Black"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
 
@@ -145,7 +150,7 @@ FontFamily="Arial">
         </Style>
 
         <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="36"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="16,0"/>
             <Setter Property="Background" Value="#2563EB"/>
             <Setter Property="Foreground" Value="White"/>
@@ -199,7 +204,7 @@ RecognizesAccessKey="True"/>
              primaire générique (#2563EB), pour que le bouton et le rectangle qu'il ouvre forment
              un seul bloc visuel cohérent. -->
         <Style x:Key="QuotePdfButtonActiveStyle" TargetType="Button">
-            <Setter Property="Height" Value="36"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="16,0"/>
             <Setter Property="Background" Value="#4C6D8E"/>
             <Setter Property="Foreground" Value="White"/>
@@ -248,7 +253,7 @@ RecognizesAccessKey="True"/>
         </Style>
 
         <Style x:Key="SecondaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="36"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111827"/>
@@ -300,7 +305,7 @@ CornerRadius="6">
 Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
-CornerRadius="8">
+CornerRadius="6">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
@@ -325,7 +330,7 @@ CornerRadius="8">
 Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
-CornerRadius="8">
+CornerRadius="6">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
@@ -351,11 +356,36 @@ CornerRadius="8">
 Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
-CornerRadius="8">
+CornerRadius="6">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <!-- ✅ 29.07.2026 (demande de Joe, écart agrandi car 2->3 passait
                              inaperçu) : bordure nettement plus épaisse au survol. -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderThickness" Value="4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ✅ "Reset Devis" : même principe que ValidationResetButtonStyle mais bordure bleue
+             (couleur Devis), fond blanc conservé. -->
+        <Style x:Key="DevisResetButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+Background="{TemplateBinding Background}"
+BorderBrush="{TemplateBinding BorderBrush}"
+BorderThickness="{TemplateBinding BorderThickness}"
+CornerRadius="6">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="BorderThickness" Value="4"/>
@@ -376,7 +406,7 @@ CornerRadius="8">
 Background="{TemplateBinding Background}"
 BorderBrush="{TemplateBinding BorderBrush}"
 BorderThickness="{TemplateBinding BorderThickness}"
-CornerRadius="8">
+CornerRadius="6">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <!-- ✅ 29.07.2026 (demande de Joe) : bordure plus épaisse au survol. -->
@@ -493,7 +523,7 @@ Padding="{TemplateBinding Padding}">
 Background="White"
 BorderBrush="#D1D5DB"
 BorderThickness="2"
-CornerRadius="14"
+CornerRadius="18"
 Padding="10"
 Margin="0,12,18,0">
             <Grid>
@@ -531,6 +561,15 @@ Margin="0,0,4,0"/>
 Content="+ texte"
 Style="{StaticResource ValidationLinkButtonStyle}"
 Click="SignatureLinkTextButton_Click"
+Margin="0,0,8,0"/>
+
+                        <!-- ✅ "Reset Devis" (17.08.2026, demande de Joe) : réservé à l'utilisateur
+                             (Architecte), pas à l'Entreprise, même visibilité que "Reset validation".
+                             Placé juste à gauche de "Reset validation". -->
+                        <Button x:Name="ResetQuoteBottomButton"
+Content="Reset Devis"
+Style="{StaticResource DevisResetButtonStyle}"
+Click="ResetQuoteBottomButton_Click"
 Margin="0,0,8,0"/>
 
                         <!-- ✅ "Reset validation" à côté de "Envoyer lien pour validation" (22.07.2026,
@@ -580,7 +619,7 @@ HorizontalScrollBarVisibility="Disabled">
             <Border Background="White"
                     BorderBrush="#D1D5DB"
                     BorderThickness="1"
-                    CornerRadius="6"
+                    CornerRadius="18"
                     Padding="14"
                     Margin="18"
                     Width="724"
@@ -791,9 +830,8 @@ Margin="0,0,0,0"/>
                     <!-- Demande + Descriptif -->
                     <Border Style="{StaticResource CardDemandeStyle}">
                         <StackPanel>
-                            <TextBlock Text="Demande"
-Style="{StaticResource SectionTitleStyle}"
-Foreground="#111827"/>
+                            <TextBlock Text="DEMANDE"
+Style="{StaticResource SectionTitleStyle}"/>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -972,13 +1010,13 @@ Orientation="Horizontal"
 HorizontalAlignment="Right"
 Margin="0,8,0,0">
                                     <Button x:Name="AddLineButton"
-Content="+ Ajouter ligne (0 / 15 max.)"
+Content="+ Ajouter ligne (0 / 12 max.)"
 Style="{StaticResource SmallActionButtonStyle}"
 Click="AddLineButton_Click"
 Margin="0,0,8,0"/>
 
                                     <Button x:Name="DeleteLineButton"
-Content="Supprimer ligne"
+Content="Supprimer ligne(s)"
 Style="{StaticResource SmallActionButtonStyle}"
 Click="DeleteLineButton_Click"/>
                                 </StackPanel>
@@ -1106,7 +1144,7 @@ MinHeight="50"
 MaxHeight="450"
 VerticalAlignment="Top"
 SelectionUnit="FullRow"
-SelectionMode="Single"
+SelectionMode="Extended"
 PreviewMouseLeftButtonDown="LinesGrid_PreviewMouseLeftButtonDown"
 PreviewMouseWheel="LinesGrid_PreviewMouseWheel"
 CurrentCellChanged="LinesGrid_CurrentCellChanged"
@@ -1451,7 +1489,14 @@ CornerRadius="0">
                                         <Grid.RowDefinitions>
                                             <RowDefinition x:Name="LaborRowDef" Height="26"/>
                                             <RowDefinition x:Name="TravelRowDef" Height="26"/>
+                                            <!-- ✅ "Sous-total 1"/"Sous-total 2" (18.08.2026, demande de Joe) :
+                                                 masquées par défaut (Height=0), affichées dès qu'un taux est
+                                                 saisi dans Rabais 1/Rabais 2 respectivement (voir
+                                                 RecomputeTotals). -->
+                                            <RowDefinition x:Name="Subtotal1RowDef" Height="0"/>
                                             <RowDefinition x:Name="DiscountRowDef" Height="26"/>
+                                            <RowDefinition x:Name="Subtotal2RowDef" Height="0"/>
+                                            <RowDefinition x:Name="DiscountRow2Def" Height="26"/>
                                             <RowDefinition Height="44"/>
                                             <RowDefinition Height="8"/>
                                             <RowDefinition Height="44"/>
@@ -1527,14 +1572,58 @@ FontSize="12"
 Foreground="#111827"/>
                                         </Border>
 
-                                        <Border Grid.Row="2" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" Padding="10,0">
-                                            <TextBlock Text="Rabais (%)" VerticalAlignment="Center" Foreground="#111827" FontSize="12"/>
+                                        <!-- ✅ "Sous-total 1" (18.08.2026, demande de Joe) : montant avant
+                                             Rabais 1 (Main d'œuvre+Déplacements+Matériel+Forfait), affiché
+                                             uniquement quand Rabais 1 a un taux saisi (voir Subtotal1RowDef
+                                             et RecomputeTotals). Même style que Total HT, non gras pour le
+                                             distinguer d'un vrai total. -->
+                                        <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="62"/>
+                                                    <ColumnDefinition Width="86"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Column="0" Text="Sous-total 1" FontSize="12" Foreground="#111827" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3"
+x:Name="Subtotal1AmountTextBlock"
+Text="0.00"
+FontSize="12"
+TextAlignment="Right"
+Foreground="#111827"
+Margin="0,0,6,0"
+VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+
+                                        <Border Grid.Row="3" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" Padding="10,0,4,0">
+                                            <!-- ✅ Champ "nom du rabais" (18.08.2026, demande de Joe) : entre le
+                                                 libellé "Rabais 1 (%)" et la colonne Qt, saisi librement par
+                                                 l'architecte pour nommer le type de rabais. -->
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Rabais 1 (%)" VerticalAlignment="Center" Foreground="#111827" FontSize="12" Margin="0,0,6,0"/>
+                                                <TextBox Grid.Column="1" x:Name="DiscountNameTextBox"
+BorderThickness="1"
+BorderBrush="#D1D5DB"
+Background="White"
+FontSize="12"
+Padding="4,1"
+Height="20"
+VerticalAlignment="Center"
+VerticalContentAlignment="Center"/>
+                                            </Grid>
                                         </Border>
                                         <!-- ✅ Montant du rabais deplace dans la colonne Qt (22.07.2026,
                                              demande de Joe, remplace le positionnement Prix/pc precedent) :
                                              sans couleur, comme le reste de la colonne Qt. La case Prix/pc
                                              devient la case decorative (fond bleu de la section Devis). -->
-                                        <Border Grid.Row="2" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
+                                        <Border Grid.Row="3" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
                                             <TextBox x:Name="DiscountRateTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
@@ -1545,9 +1634,76 @@ Background="White"
 TextAlignment="Center"
 VerticalContentAlignment="Center"/>
                                         </Border>
-                                        <Border Grid.Row="2" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" IsHitTestVisible="False"/>
-                                        <Border Grid.Row="2" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
+                                        <Border Grid.Row="3" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" IsHitTestVisible="False"/>
+                                        <Border Grid.Row="3" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
                                             <TextBlock x:Name="DiscountAmountTextBlock"
+Text="0.00"
+VerticalAlignment="Center"
+TextAlignment="Right"
+FontSize="12"
+Foreground="#111827"/>
+                                        </Border>
+
+                                        <!-- ✅ "Sous-total 2" (18.08.2026, demande de Joe) : montant après
+                                             Rabais 1, avant Rabais 2, affiché uniquement quand Rabais 2 a un
+                                             taux saisi. -->
+                                        <Border Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="4" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="62"/>
+                                                    <ColumnDefinition Width="86"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Column="0" Text="Sous-total 2" FontSize="12" Foreground="#111827" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3"
+x:Name="Subtotal2AmountTextBlock"
+Text="0.00"
+FontSize="12"
+TextAlignment="Right"
+Foreground="#111827"
+Margin="0,0,6,0"
+VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- ✅ "Rabais 2" (17.08.2026, demande de Joe) : 2e ligne de rabais,
+                                             meme structure que "Rabais 1" ci-dessus, applique
+                                             consecutivement sur le montant deja reduit par Rabais 1 (voir
+                                             RecomputeTotals). -->
+                                        <Border Grid.Row="5" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" Padding="10,0,4,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Rabais 2 (%)" VerticalAlignment="Center" Foreground="#111827" FontSize="12" Margin="0,0,6,0"/>
+                                                <TextBox Grid.Column="1" x:Name="DiscountName2TextBox"
+BorderThickness="1"
+BorderBrush="#D1D5DB"
+Background="White"
+FontSize="12"
+Padding="4,1"
+Height="20"
+VerticalAlignment="Center"
+VerticalContentAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <Border Grid.Row="5" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
+                                            <TextBox x:Name="DiscountRateTextBox2"
+Style="{StaticResource InlineMoneyInputStyle}"
+TextChanged="TotalsInput_TextChanged"
+PreviewLostKeyboardFocus="PercentInt_LostFocus"
+PreviewMouseLeftButtonDown="DiscountRateTextBox_PreviewMouseLeftButtonDown"
+BorderThickness="0"
+Background="White"
+TextAlignment="Center"
+VerticalContentAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Row="5" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" IsHitTestVisible="False"/>
+                                        <Border Grid.Row="5" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
+                                            <TextBlock x:Name="DiscountAmountTextBlock2"
 Text="0.00"
 VerticalAlignment="Center"
 TextAlignment="Right"
@@ -1558,7 +1714,7 @@ Foreground="#111827"/>
                                         <!-- ✅ Total HT : meme gris que Total Matériel (#F3F4F6), pas de
                                              separations de colonnes (comme Total Matériel), bordures
                                              haut/bas noir fin (23.07.2026, demande de Joe). -->
-                                        <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                        <Border Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="4" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
@@ -1580,17 +1736,17 @@ VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
 
-                                        <!-- ✅ Rangée 4 (8px = 2mm, demande de Joe) : espacement HT->TVA,
+                                        <!-- ✅ Rangée 7 (8px = 2mm, demande de Joe) : espacement HT->TVA,
                                              volontairement vide. -->
 
                                         <!-- ✅ TVA (04.08.2026, demande de Joe : "remonte TVA et TTC") :
                                              utilise directement les colonnes partagées de la Grid unifiée
                                              ci-dessus (avant : sous-Grid séparée avec ses propres colonnes
                                              identiques, fusionnée ici, "de l'ordre dans le code"). -->
-                                        <Border Grid.Row="5" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5" Padding="10,0">
+                                        <Border Grid.Row="8" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5" Padding="10,0">
                                             <TextBlock Text="TVA (%)" Foreground="#111827" FontSize="12" VerticalAlignment="Center"/>
                                         </Border>
-                                        <Border Grid.Row="5" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5">
+                                        <Border Grid.Row="8" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5">
                                             <TextBox x:Name="TvaRateTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
@@ -1600,8 +1756,8 @@ Background="White"
 TextAlignment="Center"
 VerticalContentAlignment="Center"/>
                                         </Border>
-                                        <Border Grid.Row="5" Grid.Column="2" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5"/>
-                                        <Border Grid.Row="5" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                        <Border Grid.Row="8" Grid.Column="2" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5"/>
+                                        <Border Grid.Row="8" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
                                             <TextBlock
 x:Name="TvaAmountTextBlock"
 Text="0.00"
@@ -1609,7 +1765,7 @@ Style="{StaticResource TotalsAmountStyle}"
 Margin="0,0,6,0"/>
                                         </Border>
 
-                                        <!-- ✅ Rangée 6 (8px = 2mm, demande de Joe) : espacement TVA->TTC,
+                                        <!-- ✅ Rangée 9 (8px = 2mm, demande de Joe) : espacement TVA->TTC,
                                              volontairement vide. -->
 
                                         <!-- ✅ Total TTC : fond bleu tres clair + le bleu de la marque
@@ -1618,7 +1774,7 @@ Margin="0,0,6,0"/>
                                              (au lieu de 90) : a 16px/gras avec un vrai gros montant (ex:
                                              2162346,14), le texte depassait la largeur prevue pour les
                                              autres lignes en 13px et se faisait tronquer. -->
-                                        <Border Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="4" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                        <Border Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="4" Background="#F3F4F6" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
@@ -1655,7 +1811,7 @@ VerticalAlignment="Center"/>
                     <!-- Validation -->
                     <Border Style="{StaticResource CardValidationStyle}">
                         <StackPanel>
-                            <TextBlock Text="Validation" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="VALIDATION" Style="{StaticResource SectionTitleStyle}"/>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>

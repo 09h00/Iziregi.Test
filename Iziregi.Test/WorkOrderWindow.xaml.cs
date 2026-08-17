@@ -95,7 +95,7 @@ public partial class WorkOrderWindow : Window
     private const int ReserveMaxLength = 20;
     private bool _reserveLimitHooked = false;
 
-    private const int QuoteMaxLines = 15;
+    private const int QuoteMaxLines = 12;
     private const int QuoteHardMaxItems = QuoteMaxLines;
 
     private bool _pdfAvailableForExternal = false;
@@ -650,6 +650,95 @@ public partial class WorkOrderWindow : Window
 
     private void ResetValidationBottomButton_Click(object sender, RoutedEventArgs e) => ResetValidationButton_Click(sender, e);
 
+    // ✅ "Reset Devis" (17.08.2026, demande de Joe) : vide entièrement la carte Devis (nom, date,
+    // lignes, main d'œuvre, déplacements, rabais, TVA, forfait, notes), même principe que
+    // ResetValidationButton_Click ci-dessus (reset immédiat + persistance en base).
+    private void ResetQuoteBottomButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (QuoteNameTextBox != null) QuoteNameTextBox.Text = "";
+            if (QuoteDatePicker != null) QuoteDatePicker.SelectedDate = DateTime.Today;
+
+            if (LaborHoursTextBox != null) LaborHoursTextBox.Text = "";
+            if (LaborRateTextBox != null) LaborRateTextBox.Text = "";
+            if (TravelQtyTextBox != null) TravelQtyTextBox.Text = "";
+            if (TravelRateTextBox != null) TravelRateTextBox.Text = "";
+            if (DiscountRateTextBox != null) DiscountRateTextBox.Text = "";
+            if (DiscountRateTextBox2 != null) DiscountRateTextBox2.Text = "";
+            if (DiscountNameTextBox != null) DiscountNameTextBox.Text = "";
+            if (DiscountName2TextBox != null) DiscountName2TextBox.Text = "";
+            if (TvaRateTextBox != null) TvaRateTextBox.Text = 8.1.ToString("0.00", CultureInfo.InvariantCulture);
+
+            if (ForfaitTtcTextBox != null) ForfaitTtcTextBox.Text = "";
+            if (ForfaitQuoteNumberTextBox != null) ForfaitQuoteNumberTextBox.Text = "";
+
+            if (QuoteNotesTextBox != null) QuoteNotesTextBox.Text = "";
+
+            foreach (var line in _lines)
+                if (line.Id > 0)
+                    _deletedLineIds.Add(line.Id);
+
+            _lines.Clear();
+            _lines.Add(new WorkOrderLine());
+
+            if (AddLineButton != null)
+                AddLineButton.Content = $"+ Ajouter ligne ({_lines.Count} / {QuoteMaxLines} max.)";
+
+            _quoteMode = QuoteMode.Standard;
+            ApplyQuoteModeUi();
+            QueueRecomputeTotals();
+
+            if (_workOrder == null || _workOrder.Id <= 0)
+            {
+                ApplyMode();
+                return;
+            }
+
+            _workOrder.QuoteName = "";
+            _workOrder.QuoteDate = DateTime.Today;
+            _workOrder.LaborHours = 0;
+            _workOrder.LaborRate = 0;
+            _workOrder.TravelQty = 0;
+            _workOrder.TravelRate = 0;
+            _workOrder.DiscountRate = 0;
+            _workOrder.DiscountRate2 = 0;
+            _workOrder.DiscountName = "";
+            _workOrder.DiscountName2 = "";
+            _workOrder.TvaRate = 8.1;
+            _workOrder.ForfaitTtc = 0;
+            _workOrder.ForfaitQuoteNumber = "";
+            _workOrder.ForfaitPdfFileBytes = null;
+            _workOrder.ForfaitPdfFileName = "";
+            _workOrder.QuoteNotes = "";
+
+            Db.UpdateWorkOrderQuote(_workOrder);
+            Db.ReplaceWorkOrderLines(_workOrder.Id, _lines.ToList());
+            _deletedLineIds.Clear();
+
+            var hasQuoteData = HasAnyQuoteData(_workOrder) || _lines.Any(l => !string.IsNullOrWhiteSpace(l?.Label));
+            if (hasQuoteData)
+                Db.SetStageQuoteReceived(_workOrder.Id);
+            else
+                Db.SetStageInCreation(_workOrder.Id);
+
+            _workOrder = Db.GetWorkOrderById(_workOrder.Id) ?? _workOrder;
+
+            ApplyMode();
+            UpdatePdfButtonVisibility();
+            UpdateCompanyPdfButtons();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Impossible de reset le devis.\n\n{ex.Message}",
+                "Devis",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     public WorkOrderWindow()
         : this(null, WorkOrderEditMode.Architecte, createMode: true)
     {
@@ -907,6 +996,7 @@ public partial class WorkOrderWindow : Window
         HookNoSelectAll(TravelRateTextBox);
         HookNoSelectAll(TvaRateTextBox);
         HookNoSelectAll(DiscountRateTextBox);
+        HookNoSelectAll(DiscountRateTextBox2);
         HookNoSelectAll(ForfaitTtcTextBox);
     }
 
@@ -1049,6 +1139,11 @@ public partial class WorkOrderWindow : Window
 
         if (ResetValidationBottomButton != null)
             ResetValidationBottomButton.Visibility = isArchitecte ? Visibility.Visible : Visibility.Collapsed;
+
+        // ✅ "Reset Devis" (17.08.2026, demande de Joe) : réservé à l'utilisateur (Architecte),
+        // pas à l'Entreprise, même visibilité que "Reset validation".
+        if (ResetQuoteBottomButton != null)
+            ResetQuoteBottomButton.Visibility = isArchitecte ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ✅ Toujours disponible (23.07.2026, demande de Joe) : le bouton se cachait auparavant selon
@@ -1103,6 +1198,9 @@ public partial class WorkOrderWindow : Window
         SetTextBoxEditable(TravelQtyTextBox, devisStandardEditable);
         SetTextBoxEditable(TravelRateTextBox, devisStandardEditable);
         SetTextBoxEditable(DiscountRateTextBox, devisStandardEditable);
+        SetTextBoxEditable(DiscountRateTextBox2, devisStandardEditable);
+        SetTextBoxEditable(DiscountNameTextBox, devisStandardEditable);
+        SetTextBoxEditable(DiscountName2TextBox, devisStandardEditable);
         SetTextBoxEditable(ForfaitTtcTextBox, forfaitTtcEditable);
         // ✅ N° du devis (04.08.2026, demande de Joe) : même condition d'édition que Forfait TTC,
         // les deux champs sont liés au même devis PDF.
@@ -1137,6 +1235,7 @@ public partial class WorkOrderWindow : Window
         if (ImportSignatureButton != null) ImportSignatureButton.IsEnabled = validationEditable;
         if (ClearSignatureButton != null) ClearSignatureButton.IsEnabled = validationEditable;
         if (ResetValidationBottomButton != null) ResetValidationBottomButton.IsEnabled = isArchitecte;
+        if (ResetQuoteBottomButton != null) ResetQuoteBottomButton.IsEnabled = isArchitecte;
 
         if (SaveButton != null) SaveButton.IsEnabled = !_formLocked;
         if (ModifyButton != null) ModifyButton.IsEnabled = _formLocked;
@@ -1208,6 +1307,7 @@ public partial class WorkOrderWindow : Window
             || Math.Abs(_workOrder.TravelQty) > 0.0000000001
             || Math.Abs(_workOrder.TravelRate) > 0.0000000001
             || Math.Abs(_workOrder.DiscountRate) > 0.0000000001
+            || Math.Abs(_workOrder.DiscountRate2) > 0.0000000001
             || Math.Abs(_workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice) > 0.0000000001;
 
         return hasStandardData ? QuoteMode.Standard : QuoteMode.None;
@@ -1248,6 +1348,7 @@ public partial class WorkOrderWindow : Window
         if (LaborRowDef != null) LaborRowDef.Height = standardRowHeight;
         if (TravelRowDef != null) TravelRowDef.Height = standardRowHeight;
         if (DiscountRowDef != null) DiscountRowDef.Height = standardRowHeight;
+        if (DiscountRow2Def != null) DiscountRow2Def.Height = standardRowHeight;
 
         if (QuotePdfSection != null) QuotePdfSection.Visibility = pdf ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1462,9 +1563,17 @@ public partial class WorkOrderWindow : Window
             var tvaRate = _workOrder.TvaRate <= 0 ? 8.1 : _workOrder.TvaRate;
             TvaRateTextBox.Text = tvaRate.ToString("0.00", CultureInfo.InvariantCulture);
 
+            // ✅ Vide par défaut (18.08.2026, demande de Joe : "enlever les 0 écrits par défaut
+            // dans la colonne Qt"), même principe que Labor/Travel Qt (FormatInputNumber).
             DiscountRateTextBox.Text = _workOrder.DiscountRate <= 0
                 ? ""
                 : ((int)Math.Round(_workOrder.DiscountRate, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+            DiscountRateTextBox2.Text = _workOrder.DiscountRate2 <= 0
+                ? ""
+                : ((int)Math.Round(_workOrder.DiscountRate2, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+
+            DiscountNameTextBox.Text = _workOrder.DiscountName ?? "";
+            DiscountName2TextBox.Text = _workOrder.DiscountName2 ?? "";
 
             QuoteNotesTextBox.Text = EnforceQuoteNotesRules(_workOrder.QuoteNotes ?? "");
 
@@ -1534,6 +1643,9 @@ public partial class WorkOrderWindow : Window
         Add(TravelQtyTextBox.Text);
         Add(TravelRateTextBox.Text);
         Add(DiscountRateTextBox.Text);
+        Add(DiscountRateTextBox2.Text);
+        Add(DiscountNameTextBox.Text);
+        Add(DiscountName2TextBox.Text);
         Add(ForfaitTtcTextBox.Text);
         Add(ForfaitQuoteNumberTextBox.Text);
         Add(TvaRateTextBox.Text);
@@ -1599,6 +1711,12 @@ public partial class WorkOrderWindow : Window
             TvaRate = 8.1,
             QuoteNotes = "",
             DiscountRate = 0,
+            DiscountRate2 = 0,
+            // ✅ Nom de rabais par défaut (18.08.2026, demande de Joe) : pré-rempli avec le dernier
+            // texte saisi par l'architecte (voir Db.SetDefaultDiscountName, appelé à
+            // l'enregistrement).
+            DiscountName = Db.GetDefaultDiscountName(),
+            DiscountName2 = Db.GetDefaultDiscountName2(),
 
             SignatureName = "",
             SignatureDate = null,
@@ -1613,6 +1731,12 @@ public partial class WorkOrderWindow : Window
         try
         {
             if (LinesGrid == null) return;
+
+            // ✅ Sélection multiple (17.08.2026, demande de Joe) : Ctrl/Shift enfoncé -> on laisse
+            // le comportement natif du DataGrid (SelectionMode="Extended") gérer la sélection au
+            // lieu de forcer une sélection simple + édition de cellule ci-dessous.
+            if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != ModifierKeys.None)
+                return;
 
             var dep = (DependencyObject)e.OriginalSource;
 
@@ -1706,15 +1830,23 @@ public partial class WorkOrderWindow : Window
         QueueRecomputeTotals();
     }
 
+    // ✅ Suppression multi-lignes (17.08.2026, demande de Joe) : sélection ctrl/souris possible
+    // depuis le passage de LinesGrid en SelectionMode="Extended" (voir aussi
+    // LinesGrid_PreviewMouseLeftButtonDown, qui laisse maintenant passer le comportement natif du
+    // DataGrid quand Ctrl/Shift est enfoncé).
     private void DeleteLineButton_Click(object sender, RoutedEventArgs e)
     {
-        if (LinesGrid.SelectedItem is not WorkOrderLine line)
+        var selected = LinesGrid.SelectedItems.Cast<WorkOrderLine>().ToList();
+        if (selected.Count == 0)
             return;
 
-        if (line.Id > 0)
-            _deletedLineIds.Add(line.Id);
+        foreach (var line in selected)
+        {
+            if (line.Id > 0)
+                _deletedLineIds.Add(line.Id);
 
-        _lines.Remove(line);
+            _lines.Remove(line);
+        }
 
         if (AddLineButton != null)
             AddLineButton.Content = $"+ Ajouter ligne ({_lines.Count} / {QuoteMaxLines} max.)";
@@ -1790,9 +1922,15 @@ public partial class WorkOrderWindow : Window
         var discountRate = ParseDouble(DiscountRateTextBox?.Text, 0);
         discountRate = Math.Max(0, discountRate);
 
+        // ✅ Rabais 2 (17.08.2026, demande de Joe) : appliqué consécutivement, sur le montant déjà
+        // réduit par Rabais 1 (pas additionné aux taux avant application).
+        var discountRate2 = ParseDouble(DiscountRateTextBox2?.Text, 0);
+        discountRate2 = Math.Max(0, discountRate2);
+
         var tvaRate = ParseDouble(TvaRateTextBox?.Text, 8.1);
 
-        double totalHtNet, discountAmount, tvaAmount, totalTtc;
+        double totalHtNet, discountAmount, discountAmount2, tvaAmount, totalTtc;
+        var afterDiscount1 = totalHtBrut * (1.0 - (discountRate / 100.0));
 
         // ✅ Forfait TTC (20.07.2026, demande de Joe) : montant TTC saisi directement -> HT et TVA
         // recalculés à rebours à partir de ce montant, au lieu du sens normal HT -> TVA -> TTC.
@@ -1802,11 +1940,15 @@ public partial class WorkOrderWindow : Window
             totalHtNet = totalTtc / (1.0 + (tvaRate / 100.0));
             tvaAmount = totalTtc - totalHtNet;
             discountAmount = 0;
+            discountAmount2 = 0;
         }
         else
         {
-            totalHtNet = totalHtBrut * (1.0 - (discountRate / 100.0));
-            discountAmount = totalHtNet - totalHtBrut;
+            discountAmount = afterDiscount1 - totalHtBrut;
+
+            totalHtNet = afterDiscount1 * (1.0 - (discountRate2 / 100.0));
+            discountAmount2 = totalHtNet - afterDiscount1;
+
             tvaAmount = totalHtNet * (tvaRate / 100.0);
             totalTtc = totalHtNet + tvaAmount;
         }
@@ -1820,10 +1962,24 @@ public partial class WorkOrderWindow : Window
         var discountDisplay = Math.Abs(discountAmount) < 0.0000000001 ? 0 : discountAmount;
         if (DiscountAmountTextBlock != null) DiscountAmountTextBlock.Text = discountDisplay.ToString("0.00", fr);
 
+        var discountDisplay2 = Math.Abs(discountAmount2) < 0.0000000001 ? 0 : discountAmount2;
+        if (DiscountAmountTextBlock2 != null) DiscountAmountTextBlock2.Text = discountDisplay2.ToString("0.00", fr);
+
         if (TotalHtTextBlock != null) TotalHtTextBlock.Text = totalHtNet.ToString("0.00", fr);
 
         if (TvaAmountTextBlock != null) TvaAmountTextBlock.Text = tvaAmount.ToString("0.00", fr);
         if (TotalTtcTextBlock != null) TotalTtcTextBlock.Text = totalTtc.ToString("0.00", fr);
+
+        // ✅ "Sous-total 1"/"Sous-total 2" (18.08.2026, demande de Joe) : masquées tant qu'aucun
+        // taux n'est saisi sur le rabais correspondant, visibles uniquement en position "Devis
+        // standard" (jamais en "Devis PDF", comme Labor/Travel/Discount rows).
+        var showSubtotal1 = _quoteMode == QuoteMode.Standard && discountRate > 0.0000000001;
+        if (Subtotal1RowDef != null) Subtotal1RowDef.Height = showSubtotal1 ? new GridLength(26) : new GridLength(0);
+        if (Subtotal1AmountTextBlock != null) Subtotal1AmountTextBlock.Text = totalHtBrut.ToString("0.00", fr);
+
+        var showSubtotal2 = _quoteMode == QuoteMode.Standard && discountRate2 > 0.0000000001;
+        if (Subtotal2RowDef != null) Subtotal2RowDef.Height = showSubtotal2 ? new GridLength(26) : new GridLength(0);
+        if (Subtotal2AmountTextBlock != null) Subtotal2AmountTextBlock.Text = afterDiscount1.ToString("0.00", fr);
     }
 
     // ✅ Forfait TTC : mutuelle exclusivité avec le devis détaillé (20.07.2026, demande de Joe).
@@ -2021,6 +2177,7 @@ public partial class WorkOrderWindow : Window
         if (Math.Abs(wo.TravelQty) > 0.0000000001) return true;
         if (Math.Abs(wo.TravelRate) > 0.0000000001) return true;
         if (Math.Abs(wo.DiscountRate) > 0.0000000001) return true;
+        if (Math.Abs(wo.DiscountRate2) > 0.0000000001) return true;
         if (Math.Abs(wo.ForfaitQty * wo.ForfaitUnitPrice) > 0.0000000001) return true;
         if (Math.Abs(wo.ForfaitTtc) > 0.0000000001) return true;
         return false;
@@ -2163,6 +2320,9 @@ public partial class WorkOrderWindow : Window
             _workOrder.TravelQty = 0;
             _workOrder.TravelRate = 0;
             _workOrder.DiscountRate = 0;
+            _workOrder.DiscountRate2 = 0;
+            _workOrder.DiscountName = "";
+            _workOrder.DiscountName2 = "";
             _workOrder.ForfaitQty = 0;
             _workOrder.ForfaitUnitPrice = 0;
 
@@ -2171,6 +2331,9 @@ public partial class WorkOrderWindow : Window
             if (TravelQtyTextBox != null) TravelQtyTextBox.Text = "";
             if (TravelRateTextBox != null) TravelRateTextBox.Text = "";
             if (DiscountRateTextBox != null) DiscountRateTextBox.Text = "";
+            if (DiscountRateTextBox2 != null) DiscountRateTextBox2.Text = "";
+            if (DiscountNameTextBox != null) DiscountNameTextBox.Text = "";
+            if (DiscountName2TextBox != null) DiscountName2TextBox.Text = "";
 
             _workOrder.ForfaitTtc = ParseDouble(ForfaitTtcTextBox.Text, 0);
             _workOrder.ForfaitQuoteNumber = (ForfaitQuoteNumberTextBox.Text ?? "").Trim();
@@ -2193,6 +2356,19 @@ public partial class WorkOrderWindow : Window
 
                 _workOrder.DiscountRate = ParseDouble(DiscountRateTextBox.Text, 0);
                 if (_workOrder.DiscountRate < 0) _workOrder.DiscountRate = 0;
+
+                _workOrder.DiscountRate2 = ParseDouble(DiscountRateTextBox2.Text, 0);
+                if (_workOrder.DiscountRate2 < 0) _workOrder.DiscountRate2 = 0;
+
+                _workOrder.DiscountName = (DiscountNameTextBox.Text ?? "").Trim();
+                _workOrder.DiscountName2 = (DiscountName2TextBox.Text ?? "").Trim();
+
+                // ✅ Mémorisé comme nouveau défaut pour le prochain nouveau bon (18.08.2026,
+                // demande de Joe : "l'utilisateur puisse y mettre les mots qu'il veut par
+                // défaut") : il suffit de taper le texte voulu et d'enregistrer, sans réglage
+                // séparé.
+                Db.SetDefaultDiscountName(_workOrder.DiscountName);
+                Db.SetDefaultDiscountName2(_workOrder.DiscountName2);
             }
             else
             {
@@ -2202,6 +2378,9 @@ public partial class WorkOrderWindow : Window
                 _workOrder.TravelQty = 0;
                 _workOrder.TravelRate = 0;
                 _workOrder.DiscountRate = 0;
+                _workOrder.DiscountRate2 = 0;
+                _workOrder.DiscountName = "";
+                _workOrder.DiscountName2 = "";
             }
         }
 

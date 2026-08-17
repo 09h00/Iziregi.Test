@@ -7,7 +7,7 @@
 			 mc:Ignorable="d"
 			 d:DesignHeight="820"
 			 d:DesignWidth="1280"
-			 Background="#F6F7FB">
+			 Background="{StaticResource PageBackgroundBrush}">
 
 	<!-- ✅ 30.07.2026 (demande de Joe) : "Archives tâches", fonctionne comme les Archives des
 		 bons (lecture seule, restaurer / supprimer définitivement), même entête de grille que
@@ -17,7 +17,7 @@
 	<UserControl.Resources>
 
 		<Style x:Key="SmallButtonStyle" TargetType="Button">
-			<Setter Property="Height" Value="28"/>
+			<Setter Property="Height" Value="30"/>
 			<Setter Property="Padding" Value="8,0"/>
 			<Setter Property="Background" Value="White"/>
 			<Setter Property="Foreground" Value="#111827"/>
@@ -288,7 +288,7 @@
 
 	</UserControl.Resources>
 
-	<Grid Margin="10">
+	<Grid Margin="16">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="*"/>
@@ -336,7 +336,7 @@
 				Background="White"
 				BorderBrush="#E5E7EB"
 				BorderThickness="1"
-				CornerRadius="12"
+				CornerRadius="18"
 				Padding="8"
 				Margin="0,0,0,8"
 				Effect="{StaticResource CardShadowEffect}">
@@ -353,7 +353,7 @@
 						Style="{StaticResource RestoreSmallButtonStyle}"
 						Click="RestoreSelected_Click"
 						IsEnabled="False"
-						Height="34"
+						Height="30"
 						Margin="0,0,6,0"/>
 
 				<!-- ✅ Renommé (demande de Joe, 04.08.2026) : "Supprimer définitivement" devient
@@ -364,7 +364,7 @@
 						Style="{StaticResource DangerSmallButtonStyle}"
 						Click="DeleteSelected_Click"
 						IsEnabled="False"
-						Height="34"
+						Height="30"
 						Margin="0,0,6,0"/>
 
 				<!-- ✅ "Supprimer définitivement" (demande de Joe, 10.08.2026) : retire la tâche
@@ -374,12 +374,12 @@
 						Style="{StaticResource DangerSmallButtonStyle}"
 						Click="PermanentlyDeleteSelected_Click"
 						IsEnabled="False"
-						Height="34"
+						Height="30"
 						Margin="0,0,6,0"/>
 
 				<Button Content="Rafraîchir"
 						Style="{StaticResource SmallButtonStyle}"
-						Height="34"
+						Height="30"
 						Margin="0,0,6,0"
 						Click="Refresh_Click"/>
 
@@ -390,7 +390,7 @@
 				<Button Content="Page planification"
 				        Style="{StaticResource SmallButtonStyle}"
 				        BorderBrush="Black"
-				        Height="34"
+				        Height="30"
 				        Margin="0,0,6,0"
 				        Click="BackToParent_Click"/>
 
@@ -403,7 +403,7 @@
 				        Background="#FEE2E2"
 				        Foreground="#B91C1C"
 				        BorderBrush="#B91C1C"
-				        Height="34"
+				        Height="30"
 				        Click="GoToTrash_Click"/>
 			</StackPanel>
 		</Border>
@@ -413,7 +413,7 @@
 				Background="White"
 				BorderBrush="#E5E7EB"
 				BorderThickness="1"
-				CornerRadius="12"
+				CornerRadius="18"
 				Padding="10"
 				Effect="{StaticResource CardShadowEffect}">
 

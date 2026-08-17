@@ -17,7 +17,7 @@
         MinHeight="380"
         MinWidth="480"
         WindowStartupLocation="CenterOwner"
-        Background="#F6F7FB">
+        Background="{StaticResource PageBackgroundBrush}">
 
     <Window.Resources>
         <Style x:Key="LabelStyle" TargetType="TextBlock">
@@ -36,7 +36,7 @@
 
         <!-- ✅ IMPORTANT : Template custom, sinon le thème Windows peut ignorer Background au survol -->
         <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Background" Value="#2563EB"/>
             <Setter Property="Foreground" Value="White"/>
@@ -52,7 +52,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -77,7 +77,7 @@
         </Style>
 
         <Style x:Key="SecondaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="12,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111827"/>
@@ -120,7 +120,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -150,7 +150,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -241,7 +241,7 @@
                 Margin="0,0,0,10"
                 Effect="{StaticResource CardShadowEffect}">
             <StackPanel Orientation="Horizontal">
-                <ToggleButton x:Name="BoldToggle" Width="36" Height="28" Margin="0,0,8,0"
+                <ToggleButton x:Name="BoldToggle" Width="36" Height="30" Margin="0,0,8,0"
                               Style="{StaticResource TextZoneToolToggleStyle}"
                               Background="White" Foreground="#111827"
                               Click="BoldToggle_Click"
@@ -249,7 +249,7 @@
                     <TextBlock Text="G" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </ToggleButton>
 
-                <ToggleButton x:Name="ItalicToggle" Width="36" Height="28" Margin="0,0,8,0"
+                <ToggleButton x:Name="ItalicToggle" Width="36" Height="30" Margin="0,0,8,0"
                               Style="{StaticResource TextZoneToolToggleStyle}"
                               Background="White" Foreground="#111827"
                               Click="ItalicToggle_Click"
@@ -257,7 +257,7 @@
                     <TextBlock Text="I" FontSize="13" FontStyle="Italic" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </ToggleButton>
 
-                <ToggleButton x:Name="UnderlineToggle" Width="36" Height="28" Margin="0,0,16,0"
+                <ToggleButton x:Name="UnderlineToggle" Width="36" Height="30" Margin="0,0,16,0"
                               Style="{StaticResource TextZoneToolToggleStyle}"
                               Background="White" Foreground="#111827"
                               Click="UnderlineToggle_Click"
@@ -267,7 +267,7 @@
 
                 <!-- ✅ Couleur de police / surlignage (28.07.2026, demande de Joe) : même
                      principe que dans les zones de texte du Planning. -->
-                <Button x:Name="FontColorButton" Width="56" Height="28" Margin="0,0,8,0"
+                <Button x:Name="FontColorButton" Width="56" Height="30" Margin="0,0,8,0"
                         Style="{StaticResource TextZoneToolButtonStyle}"
                         Background="White"
                         Click="FontColorButton_Click"
@@ -291,7 +291,7 @@
                     </StackPanel>
                 </Button>
 
-                <Button x:Name="FillColorButton" Width="56" Height="28" Margin="0,0,16,0"
+                <Button x:Name="FillColorButton" Width="56" Height="30" Margin="0,0,16,0"
                         Style="{StaticResource TextZoneToolButtonStyle}"
                         Background="White"
                         Click="FillColorButton_Click"
@@ -315,7 +315,7 @@
                     </StackPanel>
                 </Button>
 
-                <Button Content="🖼 Insérer image" Height="28"
+                <Button Content="🖼 Insérer image" Height="30"
                         Style="{StaticResource TextZoneToolButtonStyle}"
                         Padding="10,0"
                         Background="White" Foreground="#111827"

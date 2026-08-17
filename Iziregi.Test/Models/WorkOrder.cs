@@ -151,6 +151,15 @@ public class WorkOrder
     // (persisté en DB, utilisé pour recalculer HT/TVA/TTC)
     public double DiscountRate { get; set; }
 
+    // ✅ NOUVEAU (17.08.2026, demande de Joe) : 2e rabais (%), appliqué consécutivement après
+    // DiscountRate (sur le montant déjà réduit par le premier rabais).
+    public double DiscountRate2 { get; set; }
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : nom libre du type de rabais, saisi par
+    // l'architecte (ex: "Remise fournisseur"), affiché à côté du taux.
+    public string DiscountName { get; set; } = "";
+    public string DiscountName2 { get; set; } = "";
+
     // =========================
     // ✅ NOUVEAU : Forfait selon doc annexé (ligne forfait)
     // =========================

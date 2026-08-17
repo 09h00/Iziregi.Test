@@ -7,12 +7,12 @@
              mc:Ignorable="d"
              d:DesignHeight="820"
              d:DesignWidth="1280"
-             Background="#F6F7FB">
+             Background="{StaticResource PageBackgroundBrush}">
 
     <UserControl.Resources>
 
         <Style x:Key="SmallButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="28"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="8,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111827"/>
@@ -422,7 +422,7 @@
 
     </UserControl.Resources>
 
-    <Grid Margin="10">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -510,8 +510,8 @@
                 Background="White"
                 BorderBrush="#E5E7EB"
                 BorderThickness="1"
-                CornerRadius="12"
-                Padding="8"
+                CornerRadius="18"
+                Padding="0,8"
                 Margin="0,0,0,8"
                 Effect="{StaticResource CardShadowEffect}">
 
@@ -573,7 +573,7 @@
                                 Click="NewWorkOrder_Click"
                                 VerticalContentAlignment="Center"
                                 HorizontalContentAlignment="Center"
-                                Height="34"
+                                Height="30"
                                 Padding="10,0"
                                 Margin="0,0,6,0"/>
 
@@ -583,7 +583,7 @@
                                 Click="ArchiveSelection_Click"
                                 IsEnabled="False"
                                 FontWeight="SemiBold"
-                                Height="34"
+                                Height="30"
                                 Margin="0,0,6,0"/>
 
                         <!-- ✅ Épaisseur de bordure alignée sur les autres boutons de la barre
@@ -597,7 +597,7 @@
                                 Click="TrashSelection_Click"
                                 IsEnabled="False"
                                 FontWeight="SemiBold"
-                                Height="34"
+                                Height="30"
                                 Margin="0,0,6,0"/>
 
                         <!-- ✅ Décalé de 10mm/38px vers la droite (demande de Joe), avec les 2
@@ -608,7 +608,7 @@
                                 BorderBrush="Black"
                                 Click="Refresh_Click"
                                 FontWeight="SemiBold"
-                                Height="34"
+                                Height="30"
                                 Margin="38,0,6,0"/>
 
                         <!-- ✅ Archives/Corbeille (04.08.2026, demande de Joe : "je n'ai pas de
@@ -623,7 +623,7 @@
                                 BorderBrush="Black"
                                 Click="ArchivesTopButton_Click"
                                 FontWeight="SemiBold"
-                                Height="34"
+                                Height="30"
                                 Margin="0,0,6,0"/>
 
                         <!-- ✅ Fond rouge clair, police/bordure rouges (demande de Joe, 04.08.2026),
@@ -636,7 +636,7 @@
                                 Foreground="#B91C1C"
                                 BorderBrush="#B91C1C"
                                 FontWeight="SemiBold"
-                                Height="34"
+                                Height="30"
                                 Click="TrashTopButton_Click"/>
                     </StackPanel>
 
@@ -798,8 +798,8 @@
                 Background="White"
                 BorderBrush="#E5E7EB"
                 BorderThickness="1"
-                CornerRadius="12"
-                Padding="10"
+                CornerRadius="18"
+                Padding="2,10"
                 Effect="{StaticResource CardShadowEffect}">
 
             <Grid>

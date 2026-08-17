@@ -12,7 +12,8 @@
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         WindowStyle="SingleBorderWindow"
-        Topmost="True">
+        Topmost="True"
+        Background="{StaticResource PageBackgroundBrush}">
 
     <Grid Margin="24">
         <Grid.RowDefinitions>

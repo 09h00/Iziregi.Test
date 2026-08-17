@@ -12,6 +12,82 @@
 
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
+        <!-- ✅ Champ de titre des zones de texte, legerement arrondi (demande de Joe,
+             14.08.2026) : template repris de RoundedComboBoxStyle (AccountingPage.xaml),
+             deja fiable (Popup.StaysOpen="False" inclus). -->
+        <Style x:Key="RoundedComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Background" Value="#F3F4F6"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="6"
+                                                SnapsToDevicePixels="True">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="20"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Path Grid.Column="1"
+                                                      Data="M 0 0 L 4 4 L 8 0 Z"
+                                                      Fill="#6B7280"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter x:Name="ContentSite"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"/>
+
+                            <Popup x:Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   StaysOpen="False"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="White"
+                                        BorderBrush="#D1D5DB"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="300"
+                                        SnapsToDevicePixels="True">
+                                    <ScrollViewer SnapsToDevicePixels="True">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Converters couleur entreprise -->
         <local:CompanyNameToBrushConverter x:Key="CompanyBgConverter"/>
         <local:CompanyNameToTextBrushConverter x:Key="CompanyFgConverter"/>
@@ -64,7 +140,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -94,7 +170,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
@@ -669,7 +745,7 @@
 
     </UserControl.Resources>
 
-    <Grid Background="White" ClipToBounds="True">
+    <Grid Background="{StaticResource PageBackgroundBrush}" ClipToBounds="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -734,11 +810,10 @@
                            Foreground="#374151"
                            VerticalAlignment="Center"
                            Margin="30,0,4,0"/>
-                <DatePicker x:Name="EndDatePicker"
-                            Width="100"
-                            Height="24"
-                            Style="{StaticResource PlanningDatePickerStyle}"
-                            SelectedDateChanged="EndDatePicker_SelectedDateChanged"/>
+                <TextBlock x:Name="EndDateTextBlock"
+                           Foreground="#111827"
+                           VerticalAlignment="Center"
+                           Margin="0,0,4,0"/>
 
             </StackPanel>
 
@@ -808,11 +883,11 @@
         <Border x:Name="TasksHeaderFixedBlock"
                 Grid.Row="2"
                 BorderBrush="#6B7280"
-                BorderThickness="1"
-                CornerRadius="12"
+                BorderThickness="1,1,1,0"
+                CornerRadius="18"
                 Padding="10,10,10,2"
                 Effect="{StaticResource CardShadowEffect}"
-                Margin="0,0,0,0">
+                Margin="17,0,33,0">
             <StackPanel>
                 <Popup x:Name="TaskColumnFilterPopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom">
                     <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8" MinWidth="220" MaxHeight="380" Effect="{StaticResource CardShadowEffect}">
@@ -864,10 +939,10 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0"
-                               Text="Tâches"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Foreground="#111827"
+                               Text="TÂCHES"
+                               FontSize="12.5"
+                               FontWeight="Bold"
+                               Foreground="Black"
                                VerticalAlignment="Center"/>
 
                     <!-- ✅ "Ajouter" décalé de 3mm (11.34px) vers la droite au total (demande de
@@ -879,7 +954,7 @@
                         <Button x:Name="AddTaskRowButton"
                                 Content="Ajouter"
                                 Style="{StaticResource SmallBlueButtonStyle}"
-                                Height="34"
+                                Height="30"
                                 Margin="11.34,0,0,0"
                                 Click="AddTaskRowButton_Click"/>
 
@@ -892,7 +967,7 @@
                         <Button x:Name="ArchiveTaskRowButton"
                                 Content="Archiver sélection"
                                 Style="{StaticResource ArchiveOutlineButtonStyle}"
-                                Height="34"
+                                Height="30"
                                 Margin="4.22,0,0,0"
                                 IsEnabled="False"
                                 Click="ArchiveTaskRowButton_Click"/>
@@ -909,7 +984,7 @@
                                 Content="Déplacer dans la corbeille"
                                 Style="{StaticResource SmallBlackButtonStyle}"
                                 IsEnabled="False"
-                                Height="34"
+                                Height="30"
                                 Margin="4.22,0,0,0"
                                 Click="RemoveTaskRowButton_Click"/>
 
@@ -925,7 +1000,7 @@
                                 Foreground="#B91C1C"
                                 BorderBrush="#B91C1C"
                                 IsEnabled="False"
-                                Height="34"
+                                Height="30"
                                 Margin="4.22,0,0,0"
                                 Click="PermanentlyDeleteTaskRowButton_Click"/>
                     </StackPanel>
@@ -967,7 +1042,7 @@
                             Grid.Column="3"
                             Content="Colonnes ▾"
                             Style="{StaticResource OutlineBlueButtonStyle}"
-                            Height="34"
+                            Height="30"
                             Click="TaskColumnsButton_Click"/>
                 </Grid>
 
@@ -1016,13 +1091,22 @@
                     <Border Width="70" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <TextBlock Text="N°" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskBuildingColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
+                    <!-- ✅ Fix désync titres/colonnes (18.08.2026, demande de Joe) : Visibility liée en plus
+                         de Width, car ActualWidth d'une DataGridColumn ne retombe pas forcément à 0 quand
+                         elle passe Visibility="Collapsed" (elle garde parfois sa dernière largeur mesurée) —
+                         sans ce Binding la case de titre restait affichée à sa taille précédente et
+                         décalait tous les titres suivants par rapport aux colonnes réellement visibles. -->
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskBuildingColumn}}"
+                            Visibility="{Binding Visibility, Source={x:Reference TaskBuildingColumn}}"
+                            BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.BuildingLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Building" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskFloorColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskFloorColumn}}"
+                            Visibility="{Binding Visibility, Source={x:Reference TaskFloorColumn}}"
+                            BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.FloorLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Floor" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
@@ -1032,19 +1116,25 @@
                         <TextBlock Text="Descriptif" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                     </Border>
                     <Border Width="56" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1"/>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCategoryColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCategoryColumn}}"
+                            Visibility="{Binding Visibility, Source={x:Reference TaskCategoryColumn}}"
+                            BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.TaskCategoryLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Category" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCompanyColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskCompanyColumn}}"
+                            Visibility="{Binding Visibility, Source={x:Reference TaskCompanyColumn}}"
+                            BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.CompanyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Company" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskUrgentColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskUrgentColumn}}"
+                            Visibility="{Binding Visibility, Source={x:Reference TaskUrgentColumn}}"
+                            BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.TaskUrgencyLabel, RelativeSource={RelativeSource AncestorType=UserControl}}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Urgent" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
@@ -1067,13 +1157,13 @@
              que TasksHeaderFixedBlock, jamais visible en même temps que lui. -->
         <Border x:Name="TasksHeaderCollapsedSeparator"
                 Grid.Row="2"
-                Height="2"
-                Background="#E2E8F0"
-                Margin="0,0,0,0"
+                Height="1"
+                Background="#6B7280"
+                Margin="16,0,33,0"
                 Visibility="Collapsed"/>
 
         <ScrollViewer x:Name="MainScrollViewer" Grid.Row="3" VerticalScrollBarVisibility="Auto" ScrollChanged="MainScrollViewer_ScrollChanged">
-            <Grid>
+            <Grid Margin="16,0,16,16">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -1090,7 +1180,7 @@
                         Grid.Row="0"
 				        BorderBrush="#6B7280"
 				        BorderThickness="1"
-				        CornerRadius="12"
+				        CornerRadius="18"
 				        Padding="10,0,10,10"
 		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
@@ -1098,6 +1188,7 @@
                          bloc détaché placé en dur au-dessus du ScrollViewer (demande de Joe,
                          voir plus haut), avec ses propres Popups TaskColumnFilterPopup et
                          TaskColumnsPopup désormais définis là-bas. -->
+                        <Border BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="10" ClipToBounds="True" VerticalAlignment="Center" Margin="0,8,0,0">
                         <DataGrid x:Name="TasksDataGrid"
 					          Style="{StaticResource PlanningGridStyle}"
 					          HeadersVisibility="None"
@@ -1106,8 +1197,6 @@
 						          RowHeaderWidth="0"
 						          SelectionUnit="FullRow"
 						          Background="White"
-						          BorderBrush="#D1D5DB"
-						          BorderThickness="1"
 						          IsReadOnly="False"
 						          CellEditEnding="TasksDataGrid_CellEditEnding"
 						          SelectionChanged="TasksDataGrid_SelectionChanged">
@@ -1430,6 +1519,7 @@
                                 </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
+                        </Border>
                 </Border>
 
                 <!-- 2) Planning hebdo -->
@@ -1437,7 +1527,7 @@
                         Grid.Row="1"
 				        BorderBrush="#6B7280"
 				        BorderThickness="1"
-				        CornerRadius="12"
+				        CornerRadius="18"
 				        Padding="10"
 		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
@@ -1465,23 +1555,23 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0"
-                                       Text="Planification hebdomadaire"
-							           FontSize="14"
-							           FontWeight="SemiBold"
-							           Foreground="#111827"
+                                       Text="PLANNING HEBDOMADAIRE"
+							           FontSize="12.5"
+							           FontWeight="Bold"
+							           Foreground="Black"
 							           VerticalAlignment="Center"/>
 
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button x:Name="AddPlanningRowButton"
 								        Content="Ajouter"
 								        Style="{StaticResource SmallBlueButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Click="AddPlanningRowButton_Click"/>
 
                                 <Button x:Name="RemovePlanningRowButton"
 								        Content="Supprimer"
 								        Style="{StaticResource SmallBlackButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Margin="8,0,0,0"
 								        Click="RemovePlanningRowButton_Click"/>
                             </StackPanel>
@@ -1498,7 +1588,7 @@
                                 <Button x:Name="AutoAddToggleButton"
 								        Content="Intervenant automatique"
 								        Style="{StaticResource SmallBlueButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        ToolTip="Ajout automatique des intervenants au planning (choisis dans les tâches). Cliquer pour passer en manuel pour cette semaine."
 								        Click="AutoAddToggleButton_Click"/>
 
@@ -1512,7 +1602,7 @@
                                 <Button x:Name="WeekStructureButton"
 								        Content="Structurer la semaine ▾"
 								        Style="{StaticResource OutlineBlueButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Margin="8,0,0,0"
 								        Click="WeekStructureButton_Click"/>
                             </StackPanel>
@@ -1584,15 +1674,13 @@
                             </Border>
                         </Popup>
 
+                        <Border Grid.Row="1" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
                         <DataGrid x:Name="PlanningDataGrid"
-						          Grid.Row="1"
 						          Style="{StaticResource PlanningGridStyle}"
 						          AutoGenerateColumns="False"
 						          CanUserAddRows="False"
 						          RowHeaderWidth="0"
 						          Background="White"
-						          BorderBrush="#D1D5DB"
-						          BorderThickness="1"
 						          IsReadOnly="False">
                             <DataGrid.Columns>
 
@@ -1926,6 +2014,7 @@
 
                             </DataGrid.Columns>
                         </DataGrid>
+                        </Border>
                     </Grid>
                 </Border>
 
@@ -1934,7 +2023,7 @@
                         Grid.Row="2"
 				        BorderBrush="#6B7280"
 				        BorderThickness="1"
-				        CornerRadius="12"
+				        CornerRadius="18"
 				        Padding="10"
 		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
@@ -1965,23 +2054,23 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0"
-                                       Text="Image"
-							           FontSize="14"
-							           FontWeight="SemiBold"
-							           Foreground="#111827"
+                                       Text="IMAGE"
+							           FontSize="12.5"
+							           FontWeight="Bold"
+							           Foreground="Black"
 							           VerticalAlignment="Center"/>
 
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button x:Name="PlanAddButton"
                                         Content="Ajouter image"
 								        Style="{StaticResource SmallBlueButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Click="PlanAdd_Click"/>
 
                                 <Button x:Name="PlanRemoveButton"
                                         Content="Retirer image"
 								        Style="{StaticResource SmallBlackButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Margin="8,0,0,0"
 								        Click="PlanRemove_Click"/>
                             </StackPanel>
@@ -1990,20 +2079,20 @@
                                 <Button x:Name="AddImageToFavoritesButton"
                                         Content="☆ Ajouter Image aux favoris"
 								        Style="{StaticResource SmallBlueButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Click="AddSelectedImageToFavorites_Click"/>
 
                                 <Button x:Name="ImageFavoritesButton"
                                         Content="Favoris ▾"
 								        Style="{StaticResource OutlineBlueButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Margin="8,0,0,0"
 								        Click="ImageFavoritesButton_Click"/>
 
                                 <Button x:Name="ResetStickersButton"
                                         Content="Reset stickers"
 								        Style="{StaticResource SmallBlackButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Margin="8,0,0,0"
 								        Click="ResetPlacedStickers_Click"/>
                             </StackPanel>
@@ -2294,7 +2383,7 @@
                         Grid.Row="3"
 				        BorderBrush="#6B7280"
 				        BorderThickness="1"
-				        CornerRadius="12"
+				        CornerRadius="18"
 				        Padding="10"
 		        Effect="{StaticResource CardShadowEffect}"
 				        Margin="0,0,0,12">
@@ -2318,10 +2407,10 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0"
-                                       Text="Zones de texte"
-							           FontSize="14"
-							           FontWeight="SemiBold"
-							           Foreground="#111827"
+                                       Text="ZONES DE TEXTE"
+							           FontSize="12.5"
+							           FontWeight="Bold"
+							           Foreground="Black"
 							           VerticalAlignment="Center"/>
 
                             <!-- ✅ Sélectionner tout / Copier / Coller déplacés sur la ligne "Police"
@@ -2335,12 +2424,12 @@
                                      gauche, juste après le titre de section. -->
                                 <Button Content="Ajouter zone de texte"
 								        Style="{StaticResource SmallBlueButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Click="TextZoneAdd_Click"/>
 
                                 <Button Content="Retirer zone de texte"
 								        Style="{StaticResource SmallBlackButtonStyle}"
-								        Height="34"
+								        Height="30"
 								        Margin="8,0,0,0"
 								        Click="TextZoneRemove_Click"/>
                             </StackPanel>
@@ -2382,7 +2471,7 @@
                                 <ComboBox Grid.Column="3" x:Name="FontSizeCombo" Width="64" Height="26" Margin="8,0,16,0"
 								          SelectionChanged="FontSizeCombo_SelectionChanged"/>
 
-                                <ToggleButton Grid.Column="4" x:Name="BoldToggle" Width="40" Height="34" Margin="0,0,8,0"
+                                <ToggleButton Grid.Column="4" x:Name="BoldToggle" Width="40" Height="30" Margin="0,0,8,0"
 								              Style="{StaticResource TextZoneToolToggleStyle}"
 								              Background="White" Foreground="#111827"
 								              Click="BoldToggle_Click"
@@ -2391,7 +2480,7 @@
 									           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </ToggleButton>
 
-                                <ToggleButton Grid.Column="5" x:Name="ItalicToggle" Width="40" Height="34" Margin="0,0,8,0"
+                                <ToggleButton Grid.Column="5" x:Name="ItalicToggle" Width="40" Height="30" Margin="0,0,8,0"
 								              Style="{StaticResource TextZoneToolToggleStyle}"
 								              Background="White" Foreground="#111827"
 								              Click="ItalicToggle_Click"
@@ -2400,7 +2489,7 @@
 									           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </ToggleButton>
 
-                                <ToggleButton Grid.Column="6" x:Name="UnderlineToggle" Width="40" Height="34" Margin="0,0,16,0"
+                                <ToggleButton Grid.Column="6" x:Name="UnderlineToggle" Width="40" Height="30" Margin="0,0,16,0"
 								              Style="{StaticResource TextZoneToolToggleStyle}"
 								              Background="White" Foreground="#111827"
 								              Click="UnderlineToggle_Click"
@@ -2409,7 +2498,7 @@
 									           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </ToggleButton>
 
-                                <Button Grid.Column="7" x:Name="FontColorButton" Width="56" Height="34" Margin="0,0,8,0"
+                                <Button Grid.Column="7" x:Name="FontColorButton" Width="56" Height="30" Margin="0,0,8,0"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Background="White"
@@ -2434,7 +2523,7 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Grid.Column="8" x:Name="FillColorButton" Width="56" Height="34"
+                                <Button Grid.Column="8" x:Name="FillColorButton" Width="56" Height="30"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Background="White"
@@ -2462,7 +2551,7 @@
                                 <!-- ✅ Sélectionner tout / Copier / Coller, déplacés sur la ligne
                                      "Police" (19.07.2026, 2e demande de Joe), même look que les autres
                                      boutons de cette barre (fond blanc, bordure grise, hauteur 28). -->
-                                <Button Grid.Column="9" Content="Sélectionner tout" Height="34"
+                                <Button Grid.Column="9" Content="Sélectionner tout" Height="30"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="16,0,8,0" Padding="10,0"
@@ -2470,7 +2559,7 @@
 								        Click="TextZoneSelectAll_Click"
 								        ToolTip="Sélectionner tout le texte de la zone active"/>
 
-                                <Button Grid.Column="10" Content="Copier" Height="34"
+                                <Button Grid.Column="10" Content="Copier" Height="30"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="0,0,8,0" Padding="10,0"
@@ -2478,7 +2567,7 @@
 								        Click="TextZoneCopy_Click"
 								        ToolTip="Copier le texte sélectionné"/>
 
-                                <Button Grid.Column="11" Content="Coller" Height="34"
+                                <Button Grid.Column="11" Content="Coller" Height="30"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Padding="10,0"
@@ -2486,7 +2575,7 @@
 								        Click="TextZonePaste_Click"
 								        ToolTip="Coller dans la zone active"/>
 
-                                <Button Grid.Column="12" Content="🖼 Insérer image" Height="34"
+                                <Button Grid.Column="12" Content="🖼 Insérer image" Height="30"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="16,0,0,0" Padding="10,0"
@@ -2497,7 +2586,7 @@
                                 <!-- ✅ 30.07.2026 (demande de Joe) : "Supprimer" (vide juste le texte
                                      de la zone active, sans la masquer) déplacé à côté de "Insérer
                                      image", police et bordure rouges (au lieu de noir plein). -->
-                                <Button Grid.Column="13" Content="Supprimer" Height="34"
+                                <Button Grid.Column="13" Content="Supprimer" Height="30"
 								        Style="{StaticResource TextZoneToolButtonStyle}"
 								        HorizontalAlignment="Left"
 								        Margin="16,0,0,0" Padding="10,0"
@@ -2550,6 +2639,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
+										          Style="{StaticResource RoundedComboBoxStyle}"
 										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"
@@ -2574,6 +2664,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
+										          Style="{StaticResource RoundedComboBoxStyle}"
 										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"
@@ -2600,6 +2691,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
+										          Style="{StaticResource RoundedComboBoxStyle}"
 										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"
@@ -2624,6 +2716,7 @@
                                         </Grid.RowDefinitions>
 
                                         <ComboBox Grid.Row="0" Height="26"
+										          Style="{StaticResource RoundedComboBoxStyle}"
 										          ItemsSource="{Binding DataContext.PlanningTextZonesWithBlank, RelativeSource={RelativeSource AncestorType=UserControl}}"
 										          SelectedItem="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 										          IsEditable="False"

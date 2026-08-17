@@ -44,7 +44,7 @@
         </Style>
 
         <Style x:Key="SmallButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="28"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="10,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="Black"/>
@@ -158,10 +158,10 @@
         <Style x:Key="EditableRowTextBoxStyle" TargetType="TextBox">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Padding" Value="4,0"/>
-            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Margin" Value="0,1"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Background" Value="#F9FAFB"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -225,7 +225,7 @@
 
     </UserControl.Resources>
 
-    <Grid Margin="0">
+    <Grid Margin="0" Background="{StaticResource PageBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="8"/>
@@ -235,7 +235,7 @@
         <Border Grid.Row="0"
 			BorderBrush="#E5E7EB"
 			BorderThickness="1"
-			CornerRadius="10"
+			CornerRadius="6"
 			Padding="8"
 			Background="#FFFFFF"
 			Effect="{StaticResource CardShadowEffect}">
@@ -264,7 +264,7 @@
         </Border>
 
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel>
+        <StackPanel Margin="16">
         <Grid Height="478">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>

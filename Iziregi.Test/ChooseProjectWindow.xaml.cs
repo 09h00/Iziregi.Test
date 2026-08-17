@@ -63,6 +63,10 @@ public partial class ChooseProjectWindow : Window
             return;
         }
 
+        // ✅ Dossier verrouillé (18.08.2026, demande de Joe) : le mot de passe est vérifié de
+        // façon centralisée par MainWindow.SetSelectedProject/TryUnlockProject, point de
+        // passage unique pour TOUT changement de dossier actif (pas seulement celui-ci) --
+        // ce picker se contente de renvoyer le dossier choisi.
         SelectedProject = p;
         DialogResult = true;
         Close();

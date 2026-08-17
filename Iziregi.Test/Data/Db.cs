@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Iziregi.Test.Models;
@@ -88,6 +89,9 @@ public static class Db
         TryAddColumn(con, "Projects", "ZipCity", "TEXT NOT NULL DEFAULT ''");
         TryAddColumn(con, "Projects", "ManagerName", "TEXT NOT NULL DEFAULT ''");
         TryAddColumn(con, "Projects", "ManagerContact", "TEXT NOT NULL DEFAULT ''");
+
+        // ✅ NOUVEAU (18.08.2026, demande de Joe) : dossier verrouillable par mot de passe.
+        TryAddColumn(con, "Projects", "PasswordHash", "TEXT NOT NULL DEFAULT ''");
 
         con.Execute("""
             CREATE TABLE IF NOT EXISTS WorkOrderLines (
@@ -246,6 +250,13 @@ public static class Db
 
         // ✅ NOUVEAU : rabais (%) persistant
         TryAddColumn(con, "WorkOrders", "DiscountRate", "REAL NOT NULL DEFAULT 0");
+
+        // ✅ NOUVEAU (17.08.2026) : 2e rabais (%), appliqué consécutivement après DiscountRate.
+        TryAddColumn(con, "WorkOrders", "DiscountRate2", "REAL NOT NULL DEFAULT 0");
+
+        // ✅ NOUVEAU (18.08.2026) : nom libre du type de rabais, saisi par l'architecte.
+        TryAddColumn(con, "WorkOrders", "DiscountName", "TEXT NOT NULL DEFAULT ''");
+        TryAddColumn(con, "WorkOrders", "DiscountName2", "TEXT NOT NULL DEFAULT ''");
 
         // =========================
         // ✅ NOUVEAU : Forfait selon doc annexé (ligne forfait) + PDF devis forfaitaire
@@ -1016,6 +1027,20 @@ public static class Db
     public static string GetTasksVisibleColumns() => GetSetting("TasksVisibleColumns") ?? "Company,Building,Floor,Category";
     public static void SetTasksVisibleColumns(string value) => SetSetting("TasksVisibleColumns", (value ?? "").Trim());
 
+    // ✅ Mémorise le dernier choix Afficher/Masquer du graphique catégories (Comptabilité,
+    // demande de Joe, 14.08.2026) : pas de sélection par défaut forcée à chaque ouverture.
+    public static bool GetAccountingCategoryChartVisible() => GetSetting("AccountingCategoryChartVisible") != "0";
+    public static void SetAccountingCategoryChartVisible(bool value) => SetSetting("AccountingCategoryChartVisible", value ? "1" : "0");
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : nom de rabais par défaut, pré-rempli sur un nouveau
+    // bon et mis à jour à chaque enregistrement avec le dernier texte saisi par l'architecte (voir
+    // WorkOrderWindow.CreateDefaultWorkOrder/SaveWorkOrder).
+    public static string GetDefaultDiscountName() => GetSetting("DefaultDiscountName") ?? "";
+    public static void SetDefaultDiscountName(string value) => SetSetting("DefaultDiscountName", value ?? "");
+
+    public static string GetDefaultDiscountName2() => GetSetting("DefaultDiscountName2") ?? "";
+    public static void SetDefaultDiscountName2(string value) => SetSetting("DefaultDiscountName2", value ?? "");
+
     // =========================
     // ✅ Libellés UI (noms affichés) — par projet
     // =========================
@@ -1713,7 +1738,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1743,7 +1768,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1774,7 +1799,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1803,7 +1828,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1833,7 +1858,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1863,7 +1888,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1909,7 +1934,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1939,7 +1964,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -1970,7 +1995,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -2005,7 +2030,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -2039,7 +2064,7 @@ public static class Db
                 DeadlineDate,
                 DistributedAt, PerformedAt, CompanyLinkSentAt, SignerLinkSentAt,
                 LaborHours, LaborRate, TravelQty, TravelRate, TvaRate,
-                DiscountRate,
+                DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, SignatureName, SignatureDate, SignaturePng,
                 Reserve
@@ -2096,6 +2121,9 @@ public static class Db
                 TravelRate=@TravelRate,
                 TvaRate=@TvaRate,
                 DiscountRate=@DiscountRate,
+                DiscountRate2=@DiscountRate2,
+                DiscountName=@DiscountName,
+                DiscountName2=@DiscountName2,
                 ForfaitQty=@ForfaitQty,
                 ForfaitUnitPrice=@ForfaitUnitPrice,
                 ForfaitPdfFileName=@ForfaitPdfFileName,
@@ -2139,6 +2167,9 @@ public static class Db
             imported.TvaRate,
 
             DiscountRate = imported.DiscountRate,
+            DiscountRate2 = imported.DiscountRate2,
+            DiscountName = (imported.DiscountName ?? "").Trim(),
+            DiscountName2 = (imported.DiscountName2 ?? "").Trim(),
 
             ForfaitQty = imported.ForfaitQty,
             ForfaitUnitPrice = imported.ForfaitUnitPrice,
@@ -2213,7 +2244,7 @@ public static class Db
                 Description, Reserve,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate,
+                LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes,
                 SignatureName, SignatureDate, SignaturePng,
@@ -2230,7 +2261,7 @@ public static class Db
                 @Description, @Reserve,
                 @QuoteName, @QuoteDate,
                 @DeadlineDate,
-                @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate,
+                @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate, @DiscountRate2, @DiscountName, @DiscountName2,
                 @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc, @ForfaitQuoteNumber,
                 @QuoteNotes,
                 @SignatureName, @SignatureDate, @SignaturePng,
@@ -2268,6 +2299,9 @@ public static class Db
             imported.TvaRate,
 
             DiscountRate = imported.DiscountRate,
+            DiscountRate2 = imported.DiscountRate2,
+            DiscountName = (imported.DiscountName ?? "").Trim(),
+            DiscountName2 = (imported.DiscountName2 ?? "").Trim(),
 
             ForfaitQty = imported.ForfaitQty,
             ForfaitUnitPrice = imported.ForfaitUnitPrice,
@@ -2423,6 +2457,9 @@ public static class Db
             TvaRate = AsDouble(row.TvaRate, 8.1),
 
             DiscountRate = AsDouble(row.DiscountRate, 0),
+            DiscountRate2 = AsDouble(row.DiscountRate2, 0),
+            DiscountName = AsString(row.DiscountName, ""),
+            DiscountName2 = AsString(row.DiscountName2, ""),
 
             ForfaitQty = AsDouble(row.ForfaitQty, 0),
             ForfaitUnitPrice = AsDouble(row.ForfaitUnitPrice, 0),
@@ -2489,7 +2526,7 @@ public static class Db
                 IsArchived, ArchivedAt,
                 QuoteName, QuoteDate,
                 DeadlineDate,
-                LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate,
+                LaborHours, LaborRate, TravelQty, TravelRate, TvaRate, DiscountRate, DiscountRate2, DiscountName, DiscountName2,
                 ForfaitQty, ForfaitUnitPrice, ForfaitPdfFileName, ForfaitPdfFileBytes, ForfaitTtc, ForfaitQuoteNumber,
                 QuoteNotes, ProjectId,
                 SignatureName, SignatureDate, SignaturePng,
@@ -2505,7 +2542,7 @@ public static class Db
                 @IsArchived, @ArchivedAt,
                 @QuoteName, @QuoteDate,
                 @DeadlineDate,
-                @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate,
+                @LaborHours, @LaborRate, @TravelQty, @TravelRate, @TvaRate, @DiscountRate, @DiscountRate2, @DiscountName, @DiscountName2,
                 @ForfaitQty, @ForfaitUnitPrice, @ForfaitPdfFileName, @ForfaitPdfFileBytes, @ForfaitTtc, @ForfaitQuoteNumber,
                 @QuoteNotes, @ProjectId,
                 @SignatureName, @SignatureDate, @SignaturePng,
@@ -2551,6 +2588,9 @@ public static class Db
             wo.TvaRate,
 
             DiscountRate = wo.DiscountRate,
+            DiscountRate2 = wo.DiscountRate2,
+            DiscountName = (wo.DiscountName ?? "").Trim(),
+            DiscountName2 = (wo.DiscountName2 ?? "").Trim(),
 
             ForfaitQty = wo.ForfaitQty,
             ForfaitUnitPrice = wo.ForfaitUnitPrice,
@@ -2632,6 +2672,9 @@ public static class Db
                 TravelRate=@TravelRate,
                 TvaRate=@TvaRate,
                 DiscountRate=@DiscountRate,
+                DiscountRate2=@DiscountRate2,
+                DiscountName=@DiscountName,
+                DiscountName2=@DiscountName2,
                 ForfaitQty=@ForfaitQty,
                 ForfaitUnitPrice=@ForfaitUnitPrice,
                 ForfaitPdfFileName=@ForfaitPdfFileName,
@@ -2651,6 +2694,9 @@ public static class Db
             wo.TravelRate,
             wo.TvaRate,
             DiscountRate = wo.DiscountRate,
+            DiscountRate2 = wo.DiscountRate2,
+            DiscountName = (wo.DiscountName ?? "").Trim(),
+            DiscountName2 = (wo.DiscountName2 ?? "").Trim(),
 
             ForfaitQty = wo.ForfaitQty,
             ForfaitUnitPrice = wo.ForfaitUnitPrice,
@@ -3602,5 +3648,107 @@ public static class Db
 
         con.Execute("UPDATE Projects SET ManagerName=@ManagerName, ManagerContact=@ManagerContact WHERE Id=@Id;",
             new { Id = projectId, ManagerName = (managerName ?? "").Trim(), ManagerContact = (managerContact ?? "").Trim() });
+    }
+
+    // =========================
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : dossiers verrouillables par mot de passe, plus un
+    // mot de passe "Directeur" global qui déverrouille tous les dossiers. Jamais stocké en clair
+    // (PBKDF2-HMACSHA256, sel aléatoire par mot de passe, format "iter.saltB64.hashB64").
+    // =========================
+    private static string HashPassword(string plainPassword)
+    {
+        const int iterations = 100_000;
+        var salt = RandomNumberGenerator.GetBytes(16);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(plainPassword, salt, iterations, HashAlgorithmName.SHA256, 32);
+        return $"{iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
+    }
+
+    private static bool VerifyPassword(string plainPassword, string stored)
+    {
+        if (string.IsNullOrWhiteSpace(stored)) return false;
+
+        var parts = stored.Split('.');
+        if (parts.Length != 3) return false;
+        if (!int.TryParse(parts[0], out var iterations)) return false;
+
+        try
+        {
+            var salt = Convert.FromBase64String(parts[1]);
+            var expected = Convert.FromBase64String(parts[2]);
+            var actual = Rfc2898DeriveBytes.Pbkdf2(plainPassword, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
+            return CryptographicOperations.FixedTimeEquals(actual, expected);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool ProjectHasPassword(long projectId)
+    {
+        using var con = Open();
+        con.Open();
+
+        var hash = con.ExecuteScalar<string?>("SELECT PasswordHash FROM Projects WHERE Id=@Id;", new { Id = projectId });
+        return !string.IsNullOrWhiteSpace(hash);
+    }
+
+    // ✅ plainPassword null/vide -> retire le mot de passe du dossier.
+    public static void SetProjectPassword(long projectId, string? plainPassword)
+    {
+        if (projectId <= 0) return;
+
+        var hash = string.IsNullOrEmpty(plainPassword) ? "" : HashPassword(plainPassword);
+
+        using var con = Open();
+        con.Open();
+
+        con.Execute("UPDATE Projects SET PasswordHash=@Hash WHERE Id=@Id;", new { Id = projectId, Hash = hash });
+    }
+
+    public static bool VerifyProjectPassword(long projectId, string plainPassword)
+    {
+        using var con = Open();
+        con.Open();
+
+        var hash = con.ExecuteScalar<string?>("SELECT PasswordHash FROM Projects WHERE Id=@Id;", new { Id = projectId });
+        return VerifyPassword(plainPassword, hash ?? "");
+    }
+
+    public static bool HasDirectorPassword() => !string.IsNullOrWhiteSpace(GetSetting("DirectorPasswordHash"));
+
+    // ✅ plainPassword null/vide -> retire le mot de passe Directeur.
+    public static void SetDirectorPassword(string? plainPassword)
+    {
+        var hash = string.IsNullOrEmpty(plainPassword) ? "" : HashPassword(plainPassword);
+        SetSetting("DirectorPasswordHash", hash);
+    }
+
+    public static bool VerifyDirectorPassword(string plainPassword)
+    {
+        var hash = GetSetting("DirectorPasswordHash") ?? "";
+        return VerifyPassword(plainPassword, hash);
+    }
+
+    // =========================
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : mot de passe "Admin", distinct du mot de passe
+    // Directeur ci-dessus. Le mot de passe Directeur déverrouille les dossiers (délégable à un
+    // remplaçant pendant les vacances du directeur, par ex.) ; le mot de passe Admin protège
+    // l'accès à la page Admin de Paramètres (Identité société, gestion du mot de passe
+    // Directeur lui-même, Vos données, Connexion) -- réservé au directeur/acheteur de l'app,
+    // jamais délégué.
+    // =========================
+    public static bool HasAdminPassword() => !string.IsNullOrWhiteSpace(GetSetting("AdminPasswordHash"));
+
+    public static void SetAdminPassword(string? plainPassword)
+    {
+        var hash = string.IsNullOrEmpty(plainPassword) ? "" : HashPassword(plainPassword);
+        SetSetting("AdminPasswordHash", hash);
+    }
+
+    public static bool VerifyAdminPassword(string plainPassword)
+    {
+        var hash = GetSetting("AdminPasswordHash") ?? "";
+        return VerifyPassword(plainPassword, hash);
     }
 }

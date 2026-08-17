@@ -7,14 +7,14 @@
              mc:Ignorable="d"
              d:DesignHeight="720"
              d:DesignWidth="1100"
-             Background="#F6F7FB">
+             Background="{StaticResource PageBackgroundBrush}">
 
     <UserControl.Resources>
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="White"/>
             <Setter Property="BorderBrush" Value="#E5E7EB"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="CornerRadius" Value="14"/>
             <Setter Property="Padding" Value="10"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="Effect" Value="{StaticResource CardShadowEffect}"/>
@@ -36,7 +36,7 @@
         </Style>
 
         <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Background" Value="#2563EB"/>
             <Setter Property="Foreground" Value="White"/>
@@ -51,7 +51,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
+                                CornerRadius="6">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -65,7 +65,7 @@
         </Style>
 
         <Style x:Key="SecondaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="12,0"/>
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111827"/>
@@ -79,7 +79,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
+                                CornerRadius="6">
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -139,10 +139,10 @@
             <!-- Infos -->
             <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0">
                 <StackPanel>
-                    <TextBlock Text="Informations"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Foreground="#111827"
+                    <TextBlock Text="INFORMATIONS"
+                               FontSize="12.5"
+                               FontWeight="Bold"
+                               Foreground="Black"
                                Margin="0,0,0,8"/>
 
                     <TextBlock Text="Société" Style="{StaticResource LabelStyle}"/>
@@ -185,10 +185,10 @@
             <!-- Logo -->
             <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0">
                 <StackPanel>
-                    <TextBlock Text="Logo"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Foreground="#111827"
+                    <TextBlock Text="LOGO"
+                               FontSize="12.5"
+                               FontWeight="Bold"
+                               Foreground="Black"
                                Margin="0,0,0,8"/>
 
                     <Border BorderBrush="#D1D5DB"

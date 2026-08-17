@@ -15,7 +15,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
-                            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0" Padding="4">
+                            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="10" BorderThickness="0" Padding="4">
                                 <Grid>
                                     <TextBlock x:Name="ContentSite"
 											   VerticalAlignment="Center"
@@ -72,7 +72,7 @@
              cliquables, avec l'onglet actif mis en évidence (voir SetActiveNavButton dans
              MainWindow.xaml.cs). -->
         <Style x:Key="NavPillButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="32"/>
+            <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="14,0"/>
             <Setter Property="Margin" Value="0,0,4,0"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -85,7 +85,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -109,7 +109,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -154,7 +154,7 @@
     <DockPanel>
 
         <!-- ✅ Bandeau haut : navigation par pilules + pastille projet -->
-        <Border DockPanel.Dock="Top" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Padding="8,6">
+        <Border DockPanel.Dock="Top" Background="{StaticResource PageBackgroundBrush}" BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Padding="8,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -274,7 +274,7 @@
         </Border>
 
         <!-- CONTENU (PAGE) -->
-        <Border Background="White" Padding="12">
+        <Border Background="{StaticResource PageBackgroundBrush}" Padding="12">
             <Grid>
                 <ContentControl x:Name="MainContent" Margin="0,0,0,0"/>
             </Grid>
