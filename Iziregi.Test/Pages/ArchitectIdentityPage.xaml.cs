@@ -24,6 +24,12 @@ public partial class ArchitectIdentityPage : System.Windows.Controls.UserControl
     private readonly string _serverBaseUrl;
     private readonly string _serverApiKey;
 
+    // ✅ Redevenue une fenêtre séparée (18.08.2026, demande de Joe, voir IdentityWindow) :
+    // remplace le renvoi vers _host.ShowDashboard() (qui datait de l'intégration en page
+    // embarquée) par un vrai événement de fermeture, même principe que
+    // ProjectsBankPage.CloseRequested.
+    public event EventHandler? CloseRequested;
+
     public ArchitectIdentityPage(MainWindow host, string serverBaseUrl = "", string serverApiKey = "")
     {
         InitializeComponent();
@@ -137,9 +143,9 @@ public partial class ArchitectIdentityPage : System.Windows.Controls.UserControl
             else
                 StatusTextBlock.Text = "Identité Société enregistrée (serveur non configuré).";
 
-            // ✅ Retour direct au Dashboard après enregistrement (comportement identique à
-            // l'ancienne fenêtre modale, qui se fermait automatiquement après Save_Click).
-            _host.ShowDashboard();
+            // ✅ Fermeture automatique après enregistrement (18.08.2026, comportement d'origine
+            // restauré, voir CloseRequested ci-dessus).
+            CloseRequested?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
@@ -201,6 +207,6 @@ public partial class ArchitectIdentityPage : System.Windows.Controls.UserControl
 
     private void Close_Click(object sender, RoutedEventArgs e)
     {
-        _host.ShowDashboard();
+        CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 }

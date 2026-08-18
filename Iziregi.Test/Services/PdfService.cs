@@ -949,9 +949,13 @@ public static class PdfService
                         // ✅ Ratio Note élargi 1/1.7 -> 1.3/1.7 (demande de Joe, 11.08.2026, "ne
                         // supporte pas la capacité des 40 caractères") : la case Note était trop
                         // étroite pour la nouvelle limite de 40 caractères/ligne.
+                        // ✅ 1.3/1.7 -> 0.975/2.025 (demande de Joe, 18.08.2026) : limite ramenée à 30
+                        // caractères/ligne, colonne réduite en proportion (× 0.75) au profit du tableau
+                        // de totaux -- même échelle appliquée à WorkOrderWindow.xaml (Grid Note/Totaux)
+                        // et à Bdr.razor (.devis-bottom).
                         section.Item().PaddingTop(8).Row(row =>
                         {
-                            row.RelativeItem(1.3f).Column(left =>
+                            row.RelativeItem(0.975f).Column(left =>
                             {
                                 left.Item().Text("Note").SemiBold().FontSize(9).FontColor(Colors.Grey.Darken4);
 
@@ -979,7 +983,7 @@ public static class PdfService
 
                             row.ConstantItem(6);
 
-                            row.RelativeItem(1.7f).Table(t =>
+                            row.RelativeItem(2.025f).Table(t =>
                             {
                                 t.ColumnsDefinition(c =>
                                 {
@@ -1002,60 +1006,69 @@ public static class PdfService
                                         qtyText: FormatQty(wo.LaborHours),
                                         unitPriceText: FmtOptInv(wo.LaborRate),
                                         totalText: FmtInv(laborTotal),
-                                        isStrong: true, blueBackground: true);
+                                        isStrong: false, blueBackground: true, labelAlignLeft: true);
 
                                     AddTotalsRow4Cols(t, "Déplacements",
                                         qtyText: FormatQty(wo.TravelQty),
                                         unitPriceText: FmtOptInv(wo.TravelRate),
                                         totalText: FmtInv(travelTotal),
-                                        isStrong: true, blueBackground: true);
+                                        isStrong: false, blueBackground: true, labelAlignLeft: true);
 
                                     // ✅ "Sous-total 1" (18.08.2026, demande de Joe) : affiché uniquement
                                     // quand Rabais 1 a un taux saisi, même principe que WorkOrderWindow.
                                     if (discountRate > 0.0000000001)
                                     {
                                         var htBrutDisplay = Math.Round(materialTotal + laborTotal + travelTotal + forfaitTotal, 2);
-                                        AddTotalsRow4Cols(t, "Sous-total 1", "", "", FmtInv(htBrutDisplay), isStrong: false, greyBackground: true, noInnerDividers: true);
+                                        AddTotalsRow4Cols(t, "Sous-total 1", "", "", FmtInv(htBrutDisplay), isStrong: true, greyBackground: true, noInnerDividers: true);
                                     }
 
                                     // ✅ Réplique serveur : le taux va dans la colonne Qt, le libellé reste statique,
                                     // et le total est toujours préfixé d'un "-" littéral (même à 0 : "-0.00").
-                                    var discount1Label = string.IsNullOrWhiteSpace(wo.DiscountName) ? "Rabais 1 (%)" : $"Rabais 1 (%) — {wo.DiscountName.Trim()}";
-                                    AddTotalsRow4Cols(t, discount1Label, FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
+                                    // ✅ Nom du rabais en labelValue (18.08.2026), pas concaténé dans le libellé --
+                                    // voir AddTotalsRow4Cols pour l'alignement partagé avec Rabais 2/TVA.
+                                    var discount1Name = string.IsNullOrWhiteSpace(wo.DiscountName) ? null : wo.DiscountName.Trim();
+                                    AddTotalsRow4Cols(t, "Rabais 1 (%)", FormatQty(discountRate), "", $"-{FmtInv(discountAmount)}", isStrong: false, blueBackground: true, bluePrixDecorative: true, labelAlignLeft: true, noPrixRightBorder: true, labelValue: discount1Name);
 
                                     // ✅ "Sous-total 2" : affiché uniquement quand Rabais 2 a un taux saisi.
                                     if (discountRate2 > 0.0000000001)
                                     {
                                         var afterDiscount1Display = Math.Round((materialTotal + laborTotal + travelTotal + forfaitTotal) * (1.0 - (discountRate / 100.0)), 2);
-                                        AddTotalsRow4Cols(t, "Sous-total 2", "", "", FmtInv(afterDiscount1Display), isStrong: false, greyBackground: true, noInnerDividers: true);
+                                        AddTotalsRow4Cols(t, "Sous-total 2", "", "", FmtInv(afterDiscount1Display), isStrong: true, greyBackground: true, noInnerDividers: true);
                                     }
 
                                     // ✅ Rabais 2 (17.08.2026, demande de Joe) : même structure que Rabais 1.
-                                    var discount2Label = string.IsNullOrWhiteSpace(wo.DiscountName2) ? "Rabais 2 (%)" : $"Rabais 2 (%) — {wo.DiscountName2.Trim()}";
-                                    AddTotalsRow4Cols(t, discount2Label, FormatQty(discountRate2), "", $"-{FmtInv(discountAmount2)}", isStrong: false, blueBackground: true, bluePrixDecorative: true);
+                                    var discount2Name = string.IsNullOrWhiteSpace(wo.DiscountName2) ? null : wo.DiscountName2.Trim();
+                                    AddTotalsRow4Cols(t, "Rabais 2 (%)", FormatQty(discountRate2), "", $"-{FmtInv(discountAmount2)}", isStrong: false, blueBackground: true, bluePrixDecorative: true, labelAlignLeft: true, noPrixRightBorder: true, labelValue: discount2Name);
 
-                                    // ✅ Bordure haute ajoutée (demande de Joe, 11.08.2026) : Total HT
-                                    // n'avait que la bordure basse ici, contrairement à la position
-                                    // "Devis PDF" ci-dessous qui en a déjà une (voir commentaire).
-                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.9f, matchGrandTotalHeight: true);
+                                    // ✅ Pas de bordure haute ici (demande de Joe, 18.08.2026, bordures
+                                    // uniformes de Total Matériel à Total TTC) : la bordure basse de Rabais 2
+                                    // juste au-dessus suffit déjà, une bordure haute ici la doublerait.
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, bottomBorderThickness: 0.75f, matchGrandTotalHeight: true);
                                 }
                                 else
                                 {
                                     // ✅ Total HT devient la première ligne du tableau en position
                                     // "Devis PDF" (05.08.2026) : bordure haute explicite (comme "Total
                                     // Matériel" en position standard) puisque plus rien ne la précède.
-                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.9f, matchGrandTotalHeight: true);
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, matchGrandTotalHeight: true);
                                 }
 
-                                // ✅ bottomBorderThickness: 0 (demande de Joe, 11.08.2026, "la bordure de
-                                // HT doit être aussi épaisse que celle de TTC") : sans ça, la bordure basse
-                                // par défaut de TVA (0.75) s'ajoutait à la bordure haute de TTC (0.9,
-                                // toujours dessinée pour isGrandTotal), doublant visuellement cette jonction
-                                // par rapport à la jonction HT/TVA (une seule bordure, 0.9). Retirée ici :
-                                // seule la bordure haute de TTC marque désormais cette ligne, un seul trait
-                                // net de 0.9 partout, comme HT.
-                                AddTotalsRow4Cols(t, "TVA (%)", FormatQty(tvaRate), "", FmtInv(tvaAmount), isStrong: false, blueBackground: true, bluePrixDecorative: true, matchGrandTotalHeight: true, bottomBorderThickness: 0f);
-                                AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true, bottomBorderThickness: 0.9f, noInnerDividers: true);
+                                // ✅ Bordures uniformes de Total Matériel à Total TTC (demande de Joe,
+                                // 18.08.2026) : même épaisseur (0.75) partout, plus de bordure à 0.9 réservée
+                                // à HT/TTC ni de bordure à 0 sur TVA pour éviter un doublon -- Total TTC n'a
+                                // plus de bordure haute forcée (voir AddTotalsRow4Cols), s'appuie sur la
+                                // bordure basse de TVA comme les autres jonctions du bloc.
+                                // ✅ Taux affiché dans le libellé, colonne Qt laissée vide (demande de Joe,
+                                // 18.08.2026) : réplique le déplacement du champ taux fait côté WPF
+                                // (WorkOrderWindow.xaml, sorti de la colonne Qt vers le libellé).
+                                // ✅ Valeur en labelValue, largeur de préfixe partagée avec Rabais 1/2 (demande
+                                // de Joe, 18.08.2026, "8,10 aligné à Prorata") + fullBlueBackground (plus de
+                                // case Qt/Prix blanche, ce libellé n'a plus de contenu séparé dans ces
+                                // colonnes) + noInnerDividers (plus de séparations internes, cohérent avec
+                                // l'absence de contenu Qt/Prix).
+                                var tvaValue = tvaRate.ToString("0.00", CultureInfo.InvariantCulture);
+                                AddTotalsRow4Cols(t, "TVA (%)", "", "", FmtInv(tvaAmount), isStrong: false, fullBlueBackground: true, bottomBorderThickness: 0.75f, labelAlignLeft: true, noInnerDividers: true, labelValue: tvaValue);
+                                AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true, bottomBorderThickness: 0.75f, noInnerDividers: true);
                             });
                         });
 
@@ -1284,7 +1297,9 @@ public static class PdfService
             .Background("#EAF2FF")
             .BorderTop(0.75f).BorderColor("#000000")
             .PaddingVertical(3.2f).PaddingHorizontal(7)
-            .DefaultTextStyle(x => x.FontSize(9));
+            // ✅ 9 -> 10 (demande de Joe, 18.08.2026) : même taille que les lignes de totaux
+            // (Main d'œuvre, Déplacements, etc., voir AddTotalsRow4Cols).
+            .DefaultTextStyle(x => x.FontSize(10));
     }
 
     private static IContainer CellBodyWhite(IContainer c)
@@ -1293,7 +1308,8 @@ public static class PdfService
             .Background(Colors.White)
             .BorderTop(0.75f).BorderRight(0.75f).BorderColor("#000000")
             .PaddingVertical(3.2f).PaddingHorizontal(7)
-            .DefaultTextStyle(x => x.FontSize(9));
+            // ✅ 9 -> 10 (demande de Joe, 18.08.2026) : même taille que les lignes de totaux.
+            .DefaultTextStyle(x => x.FontSize(10));
     }
 
     // ✅ Réplique exacte de Fmt/FmtOpt/FmtQty côté serveur (Bdr.razor) : culture invariante
@@ -1335,7 +1351,11 @@ public static class PdfService
         float topBorderThickness = 0f,
         bool blueBackground = false,
         bool bluePrixDecorative = false,
-        bool matchGrandTotalHeight = false)
+        bool matchGrandTotalHeight = false,
+        bool labelAlignLeft = false,
+        bool noPrixRightBorder = false,
+        bool fullBlueBackground = false,
+        string? labelValue = null)
     {
         var fontSize = isGrandTotal ? 12 : 10;
 
@@ -1367,6 +1387,11 @@ public static class PdfService
             // Main d'œuvre/Déplacements (.tot-row.semi, gras mais sans fond).
             if (isGrandTotal || greyBackground)
                 c = c.Background("#F3F4F6");
+            else if (fullBlueBackground)
+                // ✅ Bleu sur les 4 colonnes (demande de Joe, 18.08.2026, "pas de champ blanc pour
+                // TVA") : évite les cases Qt/Prix blanches quand la ligne n'a plus de contenu séparé
+                // dans ces colonnes (taux affiché dans le libellé).
+                c = c.Background("#EAF2FF");
             else if (blueBackground && (col == 0 || col == 3))
                 c = c.Background("#EAF2FF");
             else if (bluePrixDecorative && col == 2)
@@ -1382,16 +1407,17 @@ public static class PdfService
             // latérales plus grosses ici que dans le tableau Libellé) : même technique que
             // CellBodyWhite/CellBody (BorderRight, colonne 0 à 2 seulement) pour une
             // cohérence structurelle totale entre les deux tableaux.
-            if (col != 3 && !noInnerDividers)
+            // ✅ Bordure droite de Prix/Pc retirée pour Rabais 1/2 et TVA (demande de Joe,
+            // 18.08.2026, noPrixRightBorder), même principe que côté WPF (BorderThickness sans le
+            // "0.5" à droite de la colonne 2 pour ces lignes).
+            if (col != 3 && !noInnerDividers && !(col == 2 && noPrixRightBorder))
                 c = c.BorderRight(0.75f).BorderColor("#000000");
 
-            // ✅ Bordure haute de Total TTC (0.6pt, un peu plus marquee que les 0.35pt de
-            // base) et de Total Matériel (0.35pt, via topBorderThickness) (23.07.2026,
-            // demande de Joe : bordures beaucoup plus fines partout + haut/bas sur Total
-            // Matériel).
-            if (isGrandTotal)
-                c = c.BorderTop(0.9f).BorderColor("#000000");
-            else if (topBorderThickness > 0)
+            // ✅ Bordures haute/basse uniformes de Total Matériel à Total TTC (demande de Joe,
+            // 18.08.2026) : Total TTC n'a plus de bordure haute forcée à 0.9 -- utilise le même
+            // topBorderThickness que toutes les autres lignes du bloc, passé explicitement par
+            // l'appelant comme les autres.
+            if (topBorderThickness > 0)
                 c = c.BorderTop(topBorderThickness).BorderColor("#000000");
 
             if (bottomBorderThickness > 0)
@@ -1408,7 +1434,28 @@ public static class PdfService
         }
 
         // ✅ Réplique serveur : colonne Qt centrée (.tot-n), Prix/pc alignée à droite (.tot-n + .tot-n).
-        Cell(0).Text(label).Style(labelStyle);
+        // ✅ Libellé aligné à droite de sa colonne (demande de Joe, 18.08.2026, "Total Matériel...")
+        // sauf Main d'œuvre/Déplacements/Rabais/TVA, restés à gauche comme sur l'écran WPF
+        // (WorkOrderWindow.xaml) -- voir labelAlignLeft sur chaque appel concerné.
+        var labelCell = Cell(0);
+        if (!labelAlignLeft) labelCell = labelCell.AlignRight();
+        // ✅ labelValue rendu dans une zone de largeur fixe après "label" (demande de Joe,
+        // 18.08.2026, "8,10 doit être aligné verticalement à Prorata") : Rabais 1/2 et TVA
+        // partagent la même largeur de préfixe (85pt) pour que leur valeur (nom du rabais / taux
+        // TVA) démarre toujours à la même position horizontale, quelle que soit la longueur du
+        // texte "Rabais 1 (%)"/"Rabais 2 (%)"/"TVA (%)" qui précède.
+        if (labelValue != null)
+        {
+            labelCell.Row(row =>
+            {
+                row.ConstantItem(85).Text(label).Style(labelStyle);
+                row.RelativeItem().Text(labelValue).Style(labelStyle);
+            });
+        }
+        else
+        {
+            labelCell.Text(label).Style(labelStyle);
+        }
         Cell(1).AlignCenter().Text(qtyText ?? "");
         Cell(2).AlignRight().Text(unitPriceText ?? "");
         Cell(3).AlignRight().Text(totalText ?? "").Style(valueStyle);

@@ -298,7 +298,7 @@ public partial class WorkOrderWindow : Window
         return string.Join("\n", outLines);
     }
 
-    private const int QuoteNotesMaxCharsPerLine = 40;
+    private const int QuoteNotesMaxCharsPerLine = 30;
     // ✅ 5 -> 7 (04.08.2026, demande de Joe).
     private const int QuoteNotesMaxLines = 7;
 
@@ -1028,6 +1028,21 @@ public partial class WorkOrderWindow : Window
         };
     }
 
+    // ✅ Noms Rabais 1/2 figés jusqu'au prochain changement (demande de Joe, 18.08.2026) : une
+    // fois saisi et le focus perdu, le champ passe en lecture seule pour éviter une modification
+    // accidentelle -- un clic dessus le déverrouille pour le "prochain changement".
+    private void DiscountNameTextBox_LostKeyboardFocus_Freeze(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is WpfTextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
+            tb.IsReadOnly = true;
+    }
+
+    private void DiscountNameTextBox_PreviewMouseLeftButtonDown_Unfreeze(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is WpfTextBox tb && tb.IsReadOnly)
+            tb.IsReadOnly = false;
+    }
+
     private void DiscountRateTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not WpfTextBox tb) return;
@@ -1201,6 +1216,17 @@ public partial class WorkOrderWindow : Window
         SetTextBoxEditable(DiscountRateTextBox2, devisStandardEditable);
         SetTextBoxEditable(DiscountNameTextBox, devisStandardEditable);
         SetTextBoxEditable(DiscountName2TextBox, devisStandardEditable);
+        // ✅ Re-fige les noms Rabais 1/2 déjà remplis (demande de Joe, 18.08.2026) : la ligne
+        // ci-dessus vient de repasser IsReadOnly=false, on le reverrouille immédiatement si un nom
+        // est déjà présent -- seul un clic explicite (DiscountNameTextBox_PreviewMouseLeftButtonDown_Unfreeze)
+        // le déverrouille.
+        if (devisStandardEditable)
+        {
+            if (DiscountNameTextBox != null && !string.IsNullOrWhiteSpace(DiscountNameTextBox.Text))
+                DiscountNameTextBox.IsReadOnly = true;
+            if (DiscountName2TextBox != null && !string.IsNullOrWhiteSpace(DiscountName2TextBox.Text))
+                DiscountName2TextBox.IsReadOnly = true;
+        }
         SetTextBoxEditable(ForfaitTtcTextBox, forfaitTtcEditable);
         // ✅ N° du devis (04.08.2026, demande de Joe) : même condition d'édition que Forfait TTC,
         // les deux champs sont liés au même devis PDF.
@@ -1310,7 +1336,10 @@ public partial class WorkOrderWindow : Window
             || Math.Abs(_workOrder.DiscountRate2) > 0.0000000001
             || Math.Abs(_workOrder.ForfaitQty * _workOrder.ForfaitUnitPrice) > 0.0000000001;
 
-        return hasStandardData ? QuoteMode.Standard : QuoteMode.None;
+        // ✅ Standard par défaut (demande de Joe, 18.08.2026) : un bon neuf, sans PDF ni données
+        // standard, s'ouvre directement en position Standard au lieu de la zone neutre
+        // QuoteMode.None (choisie à dessein le 05.08.2026, revenue sur ce point ici).
+        return QuoteMode.Standard;
     }
 
     private void QuoteModeStandardButton_Click(object sender, RoutedEventArgs e) => TrySwitchQuoteMode(QuoteMode.Standard);
@@ -2226,7 +2255,7 @@ public partial class WorkOrderWindow : Window
         _workOrder = Db.GetWorkOrderById(workOrderId) ?? _workOrder;
     }
 
-    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -2245,6 +2274,15 @@ public partial class WorkOrderWindow : Window
 
             if (_workOrder == null || _workOrder.Id <= 0)
                 throw new InvalidOperationException("Bon invalide (Id manquant après enregistrement).");
+
+            // ✅ Publication serveur à chaque enregistrement (18.08.2026, demande de Joe) : au
+            // mieux, ne bloque jamais l'enregistrement local si le serveur est injoignable (app
+            // utilisable hors-ligne, voir CLAUDE.md).
+            try
+            {
+                await PublishWorkOrderToServerAsync(_workOrder);
+            }
+            catch { }
 
             var desired = ComputeDesiredStageAfterSave();
             ApplyStageIfAdvancing(_workOrder.Id, desired);
@@ -2628,7 +2666,22 @@ public partial class WorkOrderWindow : Window
             deadlineDate     = wo.DeadlineDate.ToString("yyyy-MM-dd"),
             description      = wo.Description ?? "",
             // ✅ Champ "Concerne" (Reserve) : doit être publié pour apparaître côté entreprise/serveur
-            reserve          = wo.Reserve ?? ""
+            reserve          = wo.Reserve ?? "",
+            // ✅ Devis standard (18.08.2026, demande de Joe, "Escompte/Prorata doivent se
+            // transmettre côté serveur") : publié à chaque enregistrement (voir SaveButton_Click),
+            // pas seulement à la création d'un lien -- permet au serveur de refléter le devis saisi
+            // par l'architecte, y compris un renommage ultérieur des rabais.
+            quoteName        = wo.QuoteName ?? "",
+            quoteDate        = wo.QuoteDate.ToString("yyyy-MM-dd"),
+            laborHours       = wo.LaborHours,
+            laborRate        = wo.LaborRate,
+            travelQty        = wo.TravelQty,
+            travelRate       = wo.TravelRate,
+            discountRate     = wo.DiscountRate,
+            discountRate2    = wo.DiscountRate2,
+            discountName     = wo.DiscountName ?? "",
+            discountName2    = wo.DiscountName2 ?? "",
+            tvaRate          = wo.TvaRate
         };
 
         var json    = JsonSerializer.Serialize(payload);

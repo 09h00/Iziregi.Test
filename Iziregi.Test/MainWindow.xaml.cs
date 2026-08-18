@@ -1886,7 +1886,10 @@ public partial class MainWindow : Window
     // pour gater "Modifier" par le même mot de passe que l'activation d'un dossier.
     internal bool TryUnlockProject(Project p)
     {
-        if (!p.HasPassword || _unlockedProjectIds.Contains(p.Id))
+        // ✅ Interrupteur général (18.08.2026, demande de Joe : "Activer/Désactiver
+        // verrouillage dossiers") : désactivé, les dossiers s'ouvrent sans invite de mot de
+        // passe, même s'ils en ont un défini individuellement.
+        if (!Db.GetDossierLockEnabled() || !p.HasPassword || _unlockedProjectIds.Contains(p.Id))
             return true;
 
         var prompt = new PasswordPromptWindow(p.Name ?? "", pwd =>

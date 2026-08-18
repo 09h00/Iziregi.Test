@@ -20,8 +20,78 @@ namespace Iziregi.Test.Pages;
 public partial class SettingsPage : System.Windows.Controls.UserControl, IReloadablePage
 {
     private readonly MainWindow _host;
-    private ArchitectIdentityPage? _identityPage;
     private ProjectsBankPage? _projectsBankPage;
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe : "je ne dois pas être obligé de cliquer sur
+    // Fermer pour changer de sous-page. En cliquant sur une autre sous-page, la fenêtre peut
+    // changer tout de suite") : les 5 fenêtres du sous-menu Admin ne sont plus modales (Show,
+    // pas ShowDialog) et une seule reste ouverte à la fois -- en ouvrir une nouvelle referme
+    // automatiquement la précédente, voir OpenAdminSubWindow.
+    private System.Windows.Window? _openAdminSubWindow;
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe : "on peut élargir la colonne des titres de
+    // sous-pages à gauche, ainsi on décale les fenêtres à droite pour laisser plus de place à
+    // la colonne de gauche") : demi-largeur de la colonne élargie (voir NavAdminButton_Click),
+    // pour que les 5 fenêtres du sous-menu Admin ne recouvrent plus la colonne de gauche une
+    // fois centrées sur la fenêtre principale.
+    private const double AdminSubWindowRightShiftPx = 30 - (50.0 * 96.0 / 25.4) - (5.0 * 96.0 / 25.4);
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe : "10mm plus bas") : décalage vertical additionnel
+    // par rapport au centrage vertical CenterOwner naturel (non touché jusque-là).
+    private const double AdminSubWindowDownShiftPx = 10.0 * 96.0 / 25.4;
+
+    // ✅ Largeur de référence = celle des 4 fenêtres "standard" (Mot de passe Admin/général des
+    // dossiers, Vos données, Connexion) -- demande de Joe : "Identité société" (720, plus large
+    // que les autres) doit avoir le même bord GAUCHE que les autres, pas être centrée sur sa
+    // propre largeur (ce qui la décalait trop à gauche par rapport aux 4 autres).
+    private const double AdminSubWindowStandardWidth = 528;
+
+    private void OpenAdminSubWindow(System.Windows.Controls.Button trigger, System.Windows.Window window)
+    {
+        _openAdminSubWindow?.Close();
+
+        var owner = System.Windows.Window.GetWindow(this);
+        window.Owner = owner;
+        // ✅ Fix (18.08.2026) : avec SizeToContent="Height", WPF recalcule le centrage
+        // CenterOwner APRÈS l'événement Loaded (une fois la taille réelle du contenu connue),
+        // ce qui écrasait le Left qu'on fixait ici -- "elle est toujours au même endroit"
+        // (demande de Joe). ContentRendered se déclenche après cette repasse, une fois la
+        // fenêtre définitivement positionnée/dimensionnée.
+        window.ContentRendered += (_, __) =>
+        {
+            if (owner != null)
+                window.Left = owner.Left + (owner.ActualWidth - AdminSubWindowStandardWidth) / 2 + AdminSubWindowRightShiftPx;
+            window.Top += AdminSubWindowDownShiftPx;
+        };
+        window.Closed += (_, __) =>
+        {
+            if (ReferenceEquals(_openAdminSubWindow, window))
+            {
+                _openAdminSubWindow = null;
+                // ✅ Plus de fenêtre ouverte -> plus de sous-page en surbrillance (voir aussi
+                // l'appel juste en dessous, qui remet le NOUVEAU bouton en surbrillance quand
+                // on bascule d'une sous-page à l'autre sans passer par "Fermer").
+                SetActiveAdminSubMenuButton(null);
+            }
+        };
+
+        _openAdminSubWindow = window;
+        SetActiveAdminSubMenuButton(trigger);
+        window.Show();
+    }
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : "lorsque je sélectionne une sous-page (ex. Mot
+    // de passe Admin) le fond du titre du sous-menu à gauche doit être également en bleu" --
+    // même style actif que la nav principale (SubNavButtonActiveStyle), appliqué au bouton du
+    // sous-menu Admin correspondant à la fenêtre actuellement ouverte.
+    private void SetActiveAdminSubMenuButton(System.Windows.Controls.Button? active)
+    {
+        foreach (var child in AdminSubMenu.Children)
+        {
+            if (child is System.Windows.Controls.Button b)
+                b.Style = (Style)FindResource(b == active ? "SubNavButtonActiveStyle" : "SubNavButtonStyle");
+        }
+    }
 
     // ✅ Les 7 premières pages de la barre de nav principale, dans leur ordre gauche à
     // droite (demande de Joe, 10.08.2026). Archives/Corbeille retirées : ce ne sont plus
@@ -54,7 +124,6 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
     {
         // ✅ Landing par défaut = "Démarrage" (18.08.2026, demande de Joe).
         ShowSection("Startup");
-        PopulateConnectionFields();
         PopulateStartupSection();
     }
 
@@ -70,19 +139,34 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
         // internal) plutôt que de dupliquer la logique d'ouverture de navigateur.
         if (tag == "Cgu")
         {
+            // ✅ Une seule fenêtre/section à la fois (18.08.2026, demande de Joe) : un clic sur
+            // un autre item du sous-menu doit replier AdminSubMenu s'il était ouvert.
+            CollapseAdminSubMenu();
             _host.NavCgvEssai_Click(sender, e);
             return;
         }
 
-        // ✅ Page "Admin" (18.08.2026, demande de Joe) : protégée par le mot de passe Admin,
-        // distinct du mot de passe Directeur (voir Db.VerifyAdminPassword). Si aucun mot de
-        // passe Admin n'est encore défini, accès libre (même bootstrap que le mot de passe
-        // Directeur -- le premier réglage se fait sans verrou).
-        if (tag == "Admin" && Db.HasAdminPassword() && !_adminUnlockedThisSession)
+        ShowSection(tag);
+    }
+
+    // ✅ "Admin" n'est plus une section de page (18.08.2026, demande de Joe) : un clic déplie/
+    // replie AdminSubMenu juste en dessous, protégé par le mot de passe Admin (voir
+    // Db.VerifyAdminPassword). Si aucun mot de passe Admin n'est encore défini, accès libre
+    // (même bootstrap que le mot de passe général des dossiers -- le premier réglage se fait
+    // sans verrou).
+    private void NavAdminButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (AdminSubMenuBorder.Visibility == Visibility.Visible)
+        {
+            CollapseAdminSubMenu();
+            return;
+        }
+
+        if (Db.HasAdminPassword() && !_adminUnlockedThisSession)
         {
             var prompt = new PasswordPromptWindow(
                 "Accès Admin",
-                "Cette page est protégée par le mot de passe Admin.",
+                "Ce menu est protégé par le mot de passe Admin.",
                 Db.VerifyAdminPassword)
             {
                 Owner = System.Windows.Window.GetWindow(this)
@@ -94,12 +178,49 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
             _adminUnlockedThisSession = true;
         }
 
-        ShowSection(tag);
+        AdminSubMenuBorder.Visibility = Visibility.Visible;
+
+        // ✅ Fix (18.08.2026, demande de Joe : "Démarrage doit disparaitre si je clique sur
+        // Admin") : la section principale affichée (Démarrage/Banque de dossiers/Éthique) ne
+        // disparaissait pas quand on dépliait Admin, donnant l'impression que 2 sous-pages se
+        // superposaient. Aucune section n'a de sens à rester affichée pendant que le sous-menu
+        // Admin est ouvert.
+        ProjectsHost.Visibility = Visibility.Collapsed;
+        StartupPanel.Visibility = Visibility.Collapsed;
+        EthicsPanel.Visibility = Visibility.Collapsed;
+        // ✅ Élargie à 300 (18.08.2026, demande de Joe) : assez large pour que le titre le plus
+        // long ("Connexion au serveur Iziregi") tienne sur une seule ligne -- voir aussi
+        // AdminSubWindowRightShiftPx, qui décale les fenêtres du sous-menu Admin d'autant vers
+        // la droite pour ne pas recouvrir cette colonne élargie.
+        SubNavColumn.Width = new GridLength(300);
+        foreach (var b in new[] { NavProjectsButton, NavStartupButton, NavEthicsButton })
+            b.Style = (Style)FindResource("SubNavButtonStyle");
+
+        // ✅ Bouton "Admin" mis en surbrillance tant que son sous-menu est déplié (lien visuel
+        // Admin ↔ sous-pages, demande de Joe).
+        NavAdminButton.Style = (Style)FindResource("SubNavButtonActiveStyle");
+    }
+
+    // ✅ Un seul sous-menu/section visible à la fois (18.08.2026, demande de Joe : "je ne dois
+    // voir apparaitre qu'une seule fenêtre à la fois, à savoir, la dernière sélectionnée").
+    private void CollapseAdminSubMenu()
+    {
+        AdminSubMenuBorder.Visibility = Visibility.Collapsed;
+        NavAdminButton.Style = (Style)FindResource("SubNavButtonStyle");
+        _openAdminSubWindow?.Close();
+    }
+
+    private void OpenIdentityWindow_Click(object sender, RoutedEventArgs e)
+    {
+        OpenAdminSubWindow((System.Windows.Controls.Button)sender, new IdentityWindow(_host, MainWindow.ServerBaseUrl, MainWindow.ServerApiKey));
     }
 
     private void ShowSection(string tag)
     {
-        AdminPanel.Visibility = tag == "Admin" ? Visibility.Visible : Visibility.Collapsed;
+        // ✅ Une seule section/fenêtre à la fois (18.08.2026, demande de Joe) : sélectionner
+        // Démarrage/Banque de dossiers/Éthique replie AdminSubMenu s'il était ouvert.
+        CollapseAdminSubMenu();
+
         ProjectsHost.Visibility = tag == "Projects" ? Visibility.Visible : Visibility.Collapsed;
         StartupPanel.Visibility = tag == "Startup" ? Visibility.Visible : Visibility.Collapsed;
         EthicsPanel.Visibility = tag == "Ethics" ? Visibility.Visible : Visibility.Collapsed;
@@ -113,28 +234,14 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
 
         var active = tag switch
         {
-            "Admin" => NavAdminButton,
             "Projects" => NavProjectsButton,
             "Startup" => NavStartupButton,
             "Ethics" => NavEthicsButton,
             _ => NavProjectsButton
         };
 
-        foreach (var b in new[] { NavAdminButton, NavProjectsButton, NavStartupButton, NavEthicsButton })
+        foreach (var b in new[] { NavProjectsButton, NavStartupButton, NavEthicsButton })
             b.Style = (Style)FindResource(b == active ? "SubNavButtonActiveStyle" : "SubNavButtonStyle");
-
-        if (tag == "Admin")
-        {
-            _identityPage ??= new ArchitectIdentityPage(_host, MainWindow.ServerBaseUrl, MainWindow.ServerApiKey);
-            IdentityHost.Content = _identityPage;
-            _identityPage.Reload();
-
-            DirectorPasswordBox.Password = "";
-            PopulateDirectorPasswordStatus();
-
-            AdminPasswordBox.Password = "";
-            PopulateAdminPasswordStatus();
-        }
 
         // ✅ Page embarquée (18.08.2026, demande de Joe) : la fenêtre séparée "Banque de
         // dossiers" est obsolète, remplacée par ProjectsBankPage affichée directement dans cet
@@ -154,302 +261,27 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
         }
     }
 
-    // ✅ Mot de passe "Admin" (18.08.2026, demande de Joe) : distinct du mot de passe
-    // Directeur -- protège cette page, jamais délégué.
-    private void PopulateAdminPasswordStatus()
+    // ✅ Restructuré (18.08.2026, demande de Joe) : "Mot de passe Admin"/"Mot de passe général
+    // des dossiers"/"Vos données"/"Connexion" sont maintenant des fenêtres séparées, ouvertes
+    // depuis un menu sur la page Admin, plutôt que des sections empilées sur cette page.
+    private void OpenAdminPasswordWindow_Click(object sender, RoutedEventArgs e)
     {
-        AdminPasswordStatusTextBlock.Text = Db.HasAdminPassword()
-            ? "Un mot de passe Admin est actuellement défini."
-            : "Aucun mot de passe Admin défini -- cette page reste accessible à tous tant que tu n'en définis pas un.";
+        OpenAdminSubWindow((System.Windows.Controls.Button)sender, new AdminPasswordWindow());
     }
 
-    private void SaveAdminPassword_Click(object sender, RoutedEventArgs e)
+    private void OpenDirectorPasswordWindow_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(AdminPasswordBox.Password))
-        {
-            System.Windows.MessageBox.Show(
-                "Saisis un mot de passe, ou utilise \"Retirer\" pour l'enlever.",
-                "Mot de passe Admin",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        Db.SetAdminPassword(AdminPasswordBox.Password);
-        AdminPasswordBox.Password = "";
-        PopulateAdminPasswordStatus();
+        OpenAdminSubWindow((System.Windows.Controls.Button)sender, new DirectorPasswordWindow());
     }
 
-    private void RemoveAdminPassword_Click(object sender, RoutedEventArgs e)
+    private void OpenDataExportWindow_Click(object sender, RoutedEventArgs e)
     {
-        if (!Db.HasAdminPassword())
-        {
-            System.Windows.MessageBox.Show(
-                "Aucun mot de passe Admin n'est défini.",
-                "Mot de passe Admin",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var ok = System.Windows.MessageBox.Show(
-            "Retirer le mot de passe Admin ? Cette page redeviendra accessible à tous.",
-            "Mot de passe Admin",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (ok != MessageBoxResult.Yes)
-            return;
-
-        Db.SetAdminPassword(null);
-        AdminPasswordBox.Password = "";
-        PopulateAdminPasswordStatus();
+        OpenAdminSubWindow((System.Windows.Controls.Button)sender, new DataExportWindow());
     }
 
-    // ✅ Mot de passe "Directeur" (18.08.2026, demande de Joe).
-    private void PopulateDirectorPasswordStatus()
+    private void OpenConnectionWindow_Click(object sender, RoutedEventArgs e)
     {
-        DirectorPasswordStatusTextBlock.Text = Db.HasDirectorPassword()
-            ? "Un mot de passe Directeur est actuellement défini."
-            : "Aucun mot de passe Directeur défini.";
-    }
-
-    private void SaveDirectorPassword_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(DirectorPasswordBox.Password))
-        {
-            System.Windows.MessageBox.Show(
-                "Saisis un mot de passe, ou utilise \"Retirer\" pour l'enlever.",
-                "Mot de passe Directeur",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        Db.SetDirectorPassword(DirectorPasswordBox.Password);
-        DirectorPasswordBox.Password = "";
-        PopulateDirectorPasswordStatus();
-    }
-
-    private void RemoveDirectorPassword_Click(object sender, RoutedEventArgs e)
-    {
-        if (!Db.HasDirectorPassword())
-        {
-            System.Windows.MessageBox.Show(
-                "Aucun mot de passe Directeur n'est défini.",
-                "Mot de passe Directeur",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var ok = System.Windows.MessageBox.Show(
-            "Retirer le mot de passe Directeur ?",
-            "Mot de passe Directeur",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (ok != MessageBoxResult.Yes)
-            return;
-
-        Db.SetDirectorPassword(null);
-        DirectorPasswordBox.Password = "";
-        PopulateDirectorPasswordStatus();
-    }
-
-    // =========================
-    // ✅ Reset par email du mot de passe Directeur (18.08.2026, demande de Joe) : le mot de
-    // passe reste local (Db.SetDirectorPassword), le serveur prouve seulement l'identité du
-    // tenant via un code à usage unique envoyé à son email de contact (voir Iziregi.Server,
-    // /internal/password-reset/request et /verify).
-    // =========================
-    private static readonly HttpClient ResetHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-
-    private static string NormalizeServerBaseUrl(string? baseUrl)
-    {
-        var v = (baseUrl ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(v)) v = "https://iziregi.com";
-        return v.TrimEnd('/');
-    }
-
-    private static async Task<HttpResponseMessage> PostWithApiKeyAsync(string url, HttpContent? content)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
-        if (!string.IsNullOrWhiteSpace(MainWindow.ServerApiKey))
-            req.Headers.Add("X-Api-Key", MainWindow.ServerApiKey);
-        return await ResetHttp.SendAsync(req);
-    }
-
-    private async void ForgotDirectorPassword_Click(object sender, RoutedEventArgs e)
-    {
-        var confirm = System.Windows.MessageBox.Show(
-            "Un code à usage unique va être envoyé par email à l'adresse de contact enregistrée pour ton bureau. Continuer ?",
-            "Mot de passe Directeur oublié",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (confirm != MessageBoxResult.Yes)
-            return;
-
-        var baseUrl = NormalizeServerBaseUrl(MainWindow.ServerBaseUrl);
-
-        try
-        {
-            using var resp = await PostWithApiKeyAsync($"{baseUrl}/internal/password-reset/request", null);
-            var body = await resp.Content.ReadAsStringAsync();
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                var error = TryReadJsonError(body);
-                var message = error switch
-                {
-                    "no_contact_email" => "Aucun email de contact n'est enregistré pour ton bureau. Contacte le support Iziregi pour le configurer.",
-                    "rate_limited" => "Une demande a déjà été envoyée récemment. Attends 2 minutes avant de réessayer.",
-                    "email_send_failed" => "L'email n'a pas pu être envoyé. Réessaie plus tard ou contacte le support.",
-                    _ => $"Le serveur a refusé la demande (HTTP {(int)resp.StatusCode})."
-                };
-
-                System.Windows.MessageBox.Show(message, "Mot de passe Directeur oublié", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(
-                $"Impossible de joindre le serveur.\n\n{ex.Message}",
-                "Mot de passe Directeur oublié",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            return;
-        }
-
-        var resetWin = new PasswordResetWindow
-        {
-            Owner = System.Windows.Window.GetWindow(this)
-        };
-
-        if (resetWin.ShowDialog() != true)
-            return;
-
-        try
-        {
-            var json = JsonSerializer.Serialize(new { code = resetWin.Code });
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var resp = await PostWithApiKeyAsync($"{baseUrl}/internal/password-reset/verify", content);
-            var body = await resp.Content.ReadAsStringAsync();
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                var error = TryReadJsonError(body);
-                var message = error switch
-                {
-                    "invalid_code" => "Code incorrect.",
-                    "too_many_attempts" => "Trop de tentatives incorrectes. Refais une demande de code.",
-                    "no_pending_code" => "Ce code a expiré ou n'existe plus. Refais une demande.",
-                    _ => $"Le serveur a refusé le code (HTTP {(int)resp.StatusCode})."
-                };
-
-                System.Windows.MessageBox.Show(message, "Mot de passe Directeur oublié", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            Db.SetDirectorPassword(resetWin.NewPassword);
-            PopulateDirectorPasswordStatus();
-
-            System.Windows.MessageBox.Show(
-                "Le mot de passe Directeur a été réinitialisé avec succès.",
-                "Mot de passe Directeur oublié",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(
-                $"Impossible de joindre le serveur.\n\n{ex.Message}",
-                "Mot de passe Directeur oublié",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
-
-    private static string TryReadJsonError(string jsonBody)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(jsonBody);
-            return doc.RootElement.TryGetProperty("error", out var errProp) ? (errProp.GetString() ?? "") : "";
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
-    // =========================
-    // Connexion
-    // =========================
-    private void PopulateConnectionFields()
-    {
-        var existingUrl = IziregiConfigService.Current.ServerBaseUrl;
-        ServerUrlTextBox.Text = string.IsNullOrWhiteSpace(existingUrl) ? "https://iziregi.com" : existingUrl;
-        ServerKeyTextBox.Text = IziregiConfigService.Current.ServerApiKey;
-        ConnectionStatusText.Visibility = Visibility.Collapsed;
-    }
-
-    private void ShowConnectionStatus(string text, bool isError)
-    {
-        ConnectionStatusText.Text = text;
-        ConnectionStatusText.Foreground = new SolidColorBrush(isError ? System.Windows.Media.Color.FromRgb(0xB9, 0x1C, 0x1C) : System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D));
-        ConnectionStatusText.Visibility = Visibility.Visible;
-    }
-
-    private async void TestConnection_Click(object sender, RoutedEventArgs e)
-    {
-        var url = ServerUrlTextBox.Text.Trim().TrimEnd('/');
-        var key = ServerKeyTextBox.Text.Trim();
-
-        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(key))
-        {
-            ShowConnectionStatus("Veuillez renseigner l'URL et la clé avant de tester.", true);
-            return;
-        }
-
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            http.DefaultRequestHeaders.Add("X-Api-Key", key);
-            var resp = await http.GetAsync($"{url}/internal/ping");
-
-            if (resp.IsSuccessStatusCode)
-                ShowConnectionStatus("Connexion réussie ! Le serveur répond correctement.", false);
-            else if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                ShowConnectionStatus("Clé d'accès refusée par le serveur (401). Vérifiez la clé API.", true);
-            else
-                ShowConnectionStatus($"Le serveur a répondu avec le code {(int)resp.StatusCode}.", true);
-        }
-        catch (HttpRequestException ex)
-        {
-            ShowConnectionStatus($"Impossible de joindre le serveur : {ex.Message}", true);
-        }
-        catch (TaskCanceledException)
-        {
-            ShowConnectionStatus("Le serveur ne répond pas (délai dépassé).", true);
-        }
-    }
-
-    private void SaveConnection_Click(object sender, RoutedEventArgs e)
-    {
-        var url = ServerUrlTextBox.Text.Trim().TrimEnd('/');
-        var key = ServerKeyTextBox.Text.Trim();
-
-        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(key))
-        {
-            ShowConnectionStatus("Veuillez renseigner l'URL du serveur et la clé d'accès.", true);
-            return;
-        }
-
-        IziregiConfigService.Save(new IziregiConfig { ServerBaseUrl = url, ServerApiKey = key });
-        ShowConnectionStatus("Enregistré.", false);
+        OpenAdminSubWindow((System.Windows.Controls.Button)sender, new ConnectionWindow());
     }
 
     // =========================
@@ -497,38 +329,4 @@ public partial class SettingsPage : System.Windows.Controls.UserControl, IReload
             Db.SetDefaultStartupPage(projectId.Value, (string)item.Tag);
     }
 
-    // =========================
-    // Vos données
-    // =========================
-    private void ExportAllData_Click(object sender, RoutedEventArgs e)
-    {
-        var sfd = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "Exporter toutes les données",
-            Filter = "Archive ZIP (*.zip)|*.zip",
-            FileName = $"iziregi-export-complet-{DateTime.Now:yyyyMMdd-HHmm}.zip",
-            DefaultExt = ".zip"
-        };
-
-        if (sfd.ShowDialog(System.Windows.Window.GetWindow(this)) != true)
-            return;
-
-        try
-        {
-            ExportService.ExportAllData(sfd.FileName);
-            System.Windows.MessageBox.Show(
-                "Export terminé. Toutes vos données ont été enregistrées dans le fichier zip choisi.",
-                "Export",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(
-                $"L'export a échoué : {ex.Message}",
-                "Export",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
 }

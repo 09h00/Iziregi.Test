@@ -1,0 +1,18 @@
+<!-- File: IdentityWindow.xaml -->
+<!-- ✅ NOUVEAU (18.08.2026, demande de Joe) : "Identité société" redevient une fenêtre séparée
+     (rejoint le sous-menu "Admin" de Paramètres, voir SettingsPage.xaml). Centrée sur la
+     fenêtre principale (18.08.2026, demande de Joe), comme les 4 autres fenêtres du sous-menu
+     (Mot de passe Admin/général des dossiers, Vos données, Connexion). -->
+<Window x:Class="Iziregi.Test.IdentityWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Identité société"
+        Width="720"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        FontFamily="Arial"
+        Background="{StaticResource PageBackgroundBrush}">
+
+    <ContentControl x:Name="Host" Margin="16"/>
+</Window>

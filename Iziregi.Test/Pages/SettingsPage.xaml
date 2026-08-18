@@ -187,15 +187,33 @@
 			<Setter Property="FontSize" Value="15"/>
 			<Setter Property="BorderThickness" Value="0"/>
 			<Setter Property="Cursor" Value="Hand"/>
+			<!-- ✅ Titres toujours visibles en entier (18.08.2026, demande de Joe) : par défaut,
+				 le contenu texte d'un Button ne passe pas à la ligne, un titre long ("Connexion
+				 au serveur Iziregi") pouvait déborder hors du bouton. Modèle de contenu qui
+				 passe à la ligne au lieu de déborder. -->
+			<Setter Property="ContentTemplate">
+				<Setter.Value>
+					<DataTemplate>
+						<TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+					</DataTemplate>
+				</Setter.Value>
+			</Setter>
 			<Setter Property="Template">
 				<Setter.Value>
 					<ControlTemplate TargetType="Button">
-						<Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6">
+						<Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6">
 							<ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
 						</Border>
 						<ControlTemplate.Triggers>
+							<!-- ✅ Survol accentué (18.08.2026, demande de Joe : "accentuer la
+								 sélection au survol de la souris" puis "la bordure bleue de survol
+								 doit être du même bleu que les boutons Enregistrer et 1pt plus
+								 épaisse") : même bleu que PrimaryButtonStyle (#2563EB), épaisseur 2
+								 (base 1) au lieu d'un simple changement de couleur discret. -->
 							<Trigger Property="IsMouseOver" Value="True">
 								<Setter TargetName="Bd" Property="Background" Value="#DBEAFE"/>
+								<Setter TargetName="Bd" Property="BorderBrush" Value="#2563EB"/>
+								<Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
 							</Trigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
@@ -262,115 +280,47 @@
 				<ColumnDefinition Width="*"/>
 			</Grid.ColumnDefinitions>
 
-			<!-- ✅ Sous-menu restructuré (18.08.2026, demande de Joe) : "Identité société"/"Vos
-				 données"/"Connexion" fusionnées dans une page "Admin" unique, protégée par un
-				 mot de passe Admin distinct du mot de passe Directeur (celui-ci reste délégable
-				 aux employés sans donner accès à Admin, voir ShowSection/EnterAdminSection).
-				 "Banque de dossiers"/"Démarrage"/"Éthique" restent accessibles à tous. Ordre
-				 (18.08.2026, demande de Joe) : Démarrage, Banque de dossiers, Admin, Éthique, CGU. -->
+			<!-- ✅ Sous-menu restructuré (18.08.2026, demande de Joe) : "Admin" déplacé en dernier
+				 (après CGU), ce n'est plus une page, un clic déplie/replie une liste de
+				 sous-boutons juste en dessous (AdminSubMenu), chacun ouvrant sa propre fenêtre
+				 (Identité société / Mot de passe Admin / Mot de passe général des dossiers / Vos
+				 données / Connexion), protégée par le mot de passe Admin (voir SubNav_Click).
+				 "Banque de dossiers"/"Démarrage"/"Éthique"/"CGU" restent accessibles à tous. -->
 			<StackPanel Grid.Column="0">
 				<Button x:Name="NavStartupButton" Content="Démarrage" Tag="Startup" Click="SubNav_Click" Style="{StaticResource SubNavButtonStyle}"/>
 				<Button x:Name="NavProjectsButton" Content="Banque de dossiers" Tag="Projects" Click="SubNav_Click" Style="{StaticResource SubNavButtonActiveStyle}"/>
-				<Button x:Name="NavAdminButton" Content="Admin" Tag="Admin" Click="SubNav_Click" Style="{StaticResource SubNavButtonStyle}"/>
 				<Button x:Name="NavEthicsButton" Content="Éthique et confidentialité" Tag="Ethics" Click="SubNav_Click" Style="{StaticResource SubNavButtonStyle}"/>
 				<Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Margin="4,8,4,8"/>
 				<!-- ✅ Lien externe (ouvre le navigateur), même principe qu'Aide/Contact ailleurs
 					 dans l'app, ne change pas la section affichée. -->
 				<Button x:Name="NavCguLinkButton" Content="CGU" Tag="Cgu" Click="SubNav_Click" Style="{StaticResource SubNavButtonStyle}"/>
+
+				<Button x:Name="NavAdminButton" Content="Admin" Click="NavAdminButton_Click" Style="{StaticResource SubNavButtonStyle}"/>
+				<!-- ✅ Lien visuel Admin ↔ sous-pages (18.08.2026, demande de Joe : "fais quelque
+					 chose de particulier pour montrer que Admin et ses sous-pages sont liées") :
+					 filet bleu vertical qui prolonge visuellement le bouton "Admin" le long de ses
+					 5 sous-boutons, en plus du bouton "Admin" qui reste en surbrillance (voir
+					 NavAdminButton_Click) tant que ce sous-menu est déplié. -->
+				<Border x:Name="AdminSubMenuBorder" Visibility="Collapsed" BorderBrush="#2563EB" BorderThickness="2,0,0,0" Margin="10,2,0,0" Padding="10,4,0,0">
+					<StackPanel x:Name="AdminSubMenu">
+						<Button Content="Identité société" Click="OpenIdentityWindow_Click" Style="{StaticResource SubNavButtonStyle}"/>
+						<Button Content="Mot de passe Admin" Click="OpenAdminPasswordWindow_Click" Style="{StaticResource SubNavButtonStyle}"/>
+						<Button Content="Mot de passe général des dossiers" Click="OpenDirectorPasswordWindow_Click" Style="{StaticResource SubNavButtonStyle}"/>
+						<Button Content="Vos données" Click="OpenDataExportWindow_Click" Style="{StaticResource SubNavButtonStyle}"/>
+						<Button Content="Connexion au serveur Iziregi" Click="OpenConnectionWindow_Click" Style="{StaticResource SubNavButtonStyle}"/>
+					</StackPanel>
+				</Border>
 			</StackPanel>
 
 			<!-- Contenu -->
 			<Grid Grid.Column="2">
-				<!-- ✅ Page "Admin" (18.08.2026, demande de Joe) : regroupe Identité société / Mot
-					 de passe Directeur / Mot de passe Admin / Vos données / Connexion, protégée
-					 par le mot de passe Admin (voir EnterAdminSection). -->
-				<StackPanel x:Name="AdminPanel" Visibility="Collapsed" VerticalAlignment="Top">
-					<ContentControl x:Name="IdentityHost" VerticalAlignment="Top"/>
-
-					<Border Style="{StaticResource CardStyle}" Margin="0,18,0,0" VerticalAlignment="Top">
-						<StackPanel MaxWidth="420" HorizontalAlignment="Left">
-							<!-- ✅ Mot de passe "Directeur" (18.08.2026, demande de Joe) : déverrouille
-								 n'importe quel dossier protégé par mot de passe, en plus du mot de
-								 passe propre à chaque dossier (voir ProjectsWindow). Délégable (ex: à
-								 un remplaçant pendant les vacances du directeur) SANS donner accès à
-								 cette page Admin, voir mot de passe Admin plus bas, volontairement
-								 distinct. -->
-							<TextBlock Text="Mot de passe Directeur (accès aux dossiers)" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,4"/>
-							<TextBlock Text="Déverrouille n'importe quel dossier verrouillé, quel que soit son propre mot de passe. Peut être transmis à un remplaçant sans lui donner accès à cette page Admin. Laisser vide à l'enregistrement = ne rien changer." Style="{StaticResource DescStyle}"/>
-
-							<TextBlock Text="Nouveau mot de passe" Style="{StaticResource LabelStyle}"/>
-							<PasswordBox x:Name="DirectorPasswordBox" Height="32" Padding="8,4" BorderBrush="#D1D5DB" BorderThickness="1" Background="White" VerticalContentAlignment="Center" Margin="0,0,0,12"/>
-
-							<StackPanel Orientation="Horizontal">
-								<Button Content="Enregistrer" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0" Click="SaveDirectorPassword_Click"/>
-								<Button Content="Retirer" Style="{StaticResource SecondaryButtonStyle}" Click="RemoveDirectorPassword_Click"/>
-							</StackPanel>
-
-							<TextBlock x:Name="DirectorPasswordStatusTextBlock" Text="" FontSize="11" Foreground="#9CA3AF" Margin="0,8,0,0"/>
-
-							<!-- ✅ Reset par email (18.08.2026, demande de Joe) : envoie un code à usage
-								 unique à l'email de contact du bureau (enregistré côté admin serveur),
-								 permet de redéfinir le mot de passe Directeur sans intervention manuelle. -->
-							<Button Content="Mot de passe Directeur oublié ?"
-							        Style="{StaticResource SecondaryButtonStyle}"
-							        HorizontalAlignment="Left"
-							        Margin="0,10,0,0"
-							        Click="ForgotDirectorPassword_Click"/>
-
-							<Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Margin="0,18,0,16"/>
-
-							<!-- ✅ Mot de passe "Admin" (18.08.2026, demande de Joe) : protège l'accès à
-								 CETTE page (Identité société/Mot de passe Directeur/Vos données/
-								 Connexion), réservé au directeur/acheteur de l'app, volontairement
-								 distinct du mot de passe Directeur ci-dessus, jamais délégué. -->
-							<TextBlock Text="Mot de passe Admin (accès à cette page)" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,4"/>
-							<TextBlock Text="Protège l'accès à cette page Admin. Réservé au directeur -- ne pas transmettre, contrairement au mot de passe Directeur ci-dessus. Laisser vide à l'enregistrement = ne rien changer." Style="{StaticResource DescStyle}"/>
-
-							<TextBlock Text="Nouveau mot de passe" Style="{StaticResource LabelStyle}"/>
-							<PasswordBox x:Name="AdminPasswordBox" Height="32" Padding="8,4" BorderBrush="#D1D5DB" BorderThickness="1" Background="White" VerticalContentAlignment="Center" Margin="0,0,0,12"/>
-
-							<StackPanel Orientation="Horizontal">
-								<Button Content="Enregistrer" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0" Click="SaveAdminPassword_Click"/>
-								<Button Content="Retirer" Style="{StaticResource SecondaryButtonStyle}" Click="RemoveAdminPassword_Click"/>
-							</StackPanel>
-
-							<TextBlock x:Name="AdminPasswordStatusTextBlock" Text="" FontSize="11" Foreground="#9CA3AF" Margin="0,8,0,0"/>
-
-							<Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Margin="0,18,0,16"/>
-
-							<TextBlock Text="Vos données" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,4"/>
-							<TextBlock Text="Exportez l'intégralité de vos données (projets, bons, listes, comptabilité) dans des fichiers CSV, lisibles avec Excel ou tout tableur, même sans Iziregi." Style="{StaticResource DescStyle}"/>
-							<Button Content="Exporter toutes mes données…" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Click="ExportAllData_Click"/>
-
-							<Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Margin="0,18,0,16"/>
-
-							<TextBlock Text="Connexion au serveur Iziregi" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,4"/>
-
-							<TextBlock Text="URL du serveur" Style="{StaticResource LabelStyle}"/>
-							<TextBox x:Name="ServerUrlTextBox" Style="{StaticResource InputStyle}"/>
-
-							<TextBlock Text="Clé d'accès" Style="{StaticResource LabelStyle}"/>
-							<TextBox x:Name="ServerKeyTextBox" Style="{StaticResource InputStyle}"/>
-
-							<TextBlock Text="La clé d'accès vous est fournie par votre administrateur Iziregi." Style="{StaticResource DescStyle}"/>
-
-							<StackPanel Orientation="Horizontal">
-								<Button Content="Tester" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0" Click="TestConnection_Click"/>
-								<Button Content="Enregistrer" Style="{StaticResource PrimaryButtonStyle}" Click="SaveConnection_Click"/>
-							</StackPanel>
-
-							<TextBlock x:Name="ConnectionStatusText" Margin="0,10,0,0" FontSize="15" TextWrapping="Wrap" Visibility="Collapsed"/>
-						</StackPanel>
-					</Border>
-				</StackPanel>
-
 				<!-- ✅ Page embarquée directement (18.08.2026, demande de Joe) : la fenêtre séparée
 					 "Banque de dossiers" (ProjectsWindow) est obsolète, remplacée par
-					 ProjectsBankPage affichée ici, même principe que "Admin"/IdentityHost. -->
+					 ProjectsBankPage affichée ici. -->
 				<ContentControl x:Name="ProjectsHost" Visibility="Collapsed" VerticalAlignment="Top"/>
 
-				<Border x:Name="StartupPanel" Style="{StaticResource CardStyle}" Visibility="Collapsed" VerticalAlignment="Top">
-					<StackPanel MaxWidth="420" HorizontalAlignment="Left">
+				<Border x:Name="StartupPanel" Style="{StaticResource CardStyle}" Visibility="Collapsed" VerticalAlignment="Top" HorizontalAlignment="Left" MaxWidth="492" Margin="151,0,0,0">
+					<StackPanel HorizontalAlignment="Left">
 						<TextBlock Text="Page d'ouverture au démarrage" Style="{StaticResource SectionTitleStyle}"/>
 						<TextBlock x:Name="StartupDescText" Style="{StaticResource DescStyle}"/>
 						<TextBlock Text="Ouvrir automatiquement :" Style="{StaticResource LabelStyle}"/>
@@ -378,8 +328,8 @@
 					</StackPanel>
 				</Border>
 
-				<Border x:Name="EthicsPanel" Style="{StaticResource CardStyle}" Visibility="Collapsed" VerticalAlignment="Top">
-					<StackPanel MaxWidth="520" HorizontalAlignment="Left">
+				<Border x:Name="EthicsPanel" Style="{StaticResource CardStyle}" Visibility="Collapsed" VerticalAlignment="Top" HorizontalAlignment="Left" MaxWidth="609" Margin="151,0,0,0">
+					<StackPanel HorizontalAlignment="Left">
 						<TextBlock Text="Vos données, en toute confiance" Style="{StaticResource SectionTitleStyle}"/>
 						<TextBlock Style="{StaticResource DescStyle}" FontSize="15" TextWrapping="Wrap" Foreground="#0F172A">
 							Iziregi est hébergé exclusivement en Suisse, chez Infomaniak — hébergeur suisse indépendant (fondé à Genève en 1994), certifié ISO 27001 (sécurité de l'information) et labellisé Swiss Hosting / Swiss Made Software. Vos données ne quittent jamais le territoire suisse.

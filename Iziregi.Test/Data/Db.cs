@@ -3730,6 +3730,18 @@ public static class Db
         return VerifyPassword(plainPassword, hash);
     }
 
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : interrupteur général, décidé par le directeur,
+    // pour activer/désactiver l'application des mots de passe de dossiers (voir
+    // MainWindow.EnsureProjectUnlockedAsync ou équivalent). Désactivé = les dossiers s'ouvrent
+    // sans invite de mot de passe même s'ils en ont un défini individuellement ; réactiver
+    // remet en application les mots de passe déjà enregistrés, sans avoir à les ressaisir un
+    // par un. Par défaut activé (comportement historique, avant l'existence de cet interrupteur).
+    public static bool GetDossierLockEnabled() =>
+        GetSetting("DossierLockEnabled") != "0";
+
+    public static void SetDossierLockEnabled(bool enabled) =>
+        SetSetting("DossierLockEnabled", enabled ? "1" : "0");
+
     // =========================
     // ✅ NOUVEAU (18.08.2026, demande de Joe) : mot de passe "Admin", distinct du mot de passe
     // Directeur ci-dessus. Le mot de passe Directeur déverrouille les dossiers (délégable à un

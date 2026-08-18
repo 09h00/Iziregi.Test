@@ -92,6 +92,16 @@
             </Setter>
         </Style>
 
+        <!-- ✅ Bordure noire au survol (demande de Joe, 18.08.2026, valable pour tous les
+             boutons "Fermer" de l'app). -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="Black"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
             <Setter Property="Foreground" Value="#B91C1C"/>
             <Setter Property="BorderBrush" Value="#FCA5A5"/>
@@ -121,7 +131,7 @@
                            FontWeight="Bold"
                            Foreground="#111827"/>
 
-                <TextBlock Text="Modifier le nom, l’adresse et le logo affichés sur les bons d'intervention."
+                <TextBlock Text="Modifier le nom, l’adresse et le logo affichés sur les documents."
                            FontSize="13"
                            Foreground="#6B7280"
                            Margin="0,2,0,0"/>
@@ -130,14 +140,16 @@
 
         <!-- Contenu -->
         <Grid Grid.Row="1">
+            <!-- ✅ Logo à gauche (18.08.2026, demande de Joe) : colonnes inversées, Logo occupe
+                 maintenant la colonne 0 (0.8*) et Infos la colonne 2 (1.2*). -->
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.2*"/>
-                <ColumnDefinition Width="14"/>
                 <ColumnDefinition Width="0.8*"/>
+                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="1.2*"/>
             </Grid.ColumnDefinitions>
 
             <!-- Infos -->
-            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0">
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0">
                 <StackPanel>
                     <TextBlock Text="INFORMATIONS"
                                FontSize="12.5"
@@ -183,7 +195,7 @@
             </Border>
 
             <!-- Logo -->
-            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0">
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0">
                 <StackPanel>
                     <TextBlock Text="LOGO"
                                FontSize="12.5"
@@ -247,7 +259,7 @@
         <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,8,0,0">
             <DockPanel LastChildFill="False">
                 <Button Content="Fermer"
-                        Style="{StaticResource SecondaryButtonStyle}"
+                        Style="{StaticResource CloseButtonStyle}"
                         Click="Close_Click"
                         DockPanel.Dock="Right"
                         Margin="8,0,0,0"/>

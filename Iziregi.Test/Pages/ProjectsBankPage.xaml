@@ -138,6 +138,16 @@
             </Setter>
         </Style>
 
+        <!-- ✅ Bordure noire au survol (demande de Joe, 18.08.2026, valable pour tous les
+             boutons "Fermer" de l'app). -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="Black"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
             <Setter Property="Foreground" Value="#B91C1C"/>
             <Setter Property="BorderBrush" Value="#FCA5A5"/>
@@ -172,15 +182,18 @@
         <!-- Titre -->
         <Border Grid.Row="0" Style="{StaticResource CardStyle}">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Left">
+                <!-- ✅ Sous-titre sur la même ligne que le titre (18.08.2026, demande de Joe :
+                     "gagner de la place en hauteur"), au lieu d'être empilé en dessous. -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Bottom">
                     <TextBlock Text="Banque de dossiers"
                                FontSize="22"
                                FontWeight="Bold"
                                Foreground="#111827"/>
-                    <TextBlock Text="Créer et gérer les informations des dossiers utilisés dans les bons d'intervention."
+                    <TextBlock Text="Créer et gérer les informations de dossier affichées dans les documents"
                                FontSize="13"
                                Foreground="#6B7280"
-                               Margin="0,4,0,0"/>
+                               VerticalAlignment="Bottom"
+                               Margin="10,0,0,3"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -188,9 +201,13 @@
         <!-- Contenu principal -->
         <Grid Grid.Row="1" MinHeight="560">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="2.5*"/>
                 <ColumnDefinition Width="14"/>
-                <ColumnDefinition Width="0.85*" MinWidth="580"/>
+                <!-- ✅ MinWidth réduit (18.08.2026, demande de Joe : "élargir la liste des
+                     dossiers de 25%, on ne voit pas l'entier de l'adresse") : ce plancher fixe
+                     bloquait toute la largeur restante pour la colonne 2 (formulaire), rendant le
+                     ratio d'étoiles de la colonne 0 (liste) sans effet réel. -->
+                <ColumnDefinition Width="0.85*" MinWidth="460"/>
             </Grid.ColumnDefinitions>
 
             <!-- Liste projets -->
@@ -266,8 +283,12 @@
                 </Grid>
             </Border>
 
-            <!-- Formulaire -->
-            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0">
+            <!-- ✅ VerticalAlignment="Top" (18.08.2026, demande de Joe : "la fenêtre Dossier peut
+                 s'arrêter en bas juste après les boutons d'actions") : ne s'étire plus pour
+                 remplir toute la hauteur de la ligne, s'arrête à la hauteur de son contenu.
+                 "Liste des dossiers" (colonne 0, restée en Stretch par défaut) devient la
+                 "fenêtre à rallonge" qui occupe le reste de la hauteur disponible. -->
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="0" VerticalAlignment="Top">
                 <StackPanel>
 
                     <!-- Champs -->
@@ -391,89 +412,81 @@
                         <!-- ✅ Mot de passe du dossier (18.08.2026, demande de Joe) : verrouille
                              l'accès au dossier, sauf mot de passe "Directeur" (voir Paramètres).
                              Laisser vide à l'enregistrement = ne change rien au mot de passe
-                             existant. -->
-                        <TextBlock Text="Mot de passe du dossier" Style="{StaticResource LabelStyle}"/>
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="10"/>
-                                <ColumnDefinition Width="120"/>
-                            </Grid.ColumnDefinitions>
+                             existant. Masqué si le verrouillage des dossiers est désactivé (voir
+                             Db.GetDossierLockEnabled, DirectorPasswordWindow), demande de Joe :
+                             "la ligne du mot de passe ne doit pas s'afficher si la fonction
+                             verrouillage est désactivée". -->
+                        <StackPanel x:Name="ProjectPasswordSection">
+                            <TextBlock Text="Mot de passe du dossier" Style="{StaticResource LabelStyle}"/>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="120"/>
+                                </Grid.ColumnDefinitions>
 
-                            <PasswordBox x:Name="ProjectPasswordBox"
-                                         Grid.Column="0"
-                                         Height="32"
-                                         Padding="8,4"
-                                         BorderBrush="#D1D5DB"
-                                         BorderThickness="1"
-                                         Background="White"
-                                         VerticalContentAlignment="Center"/>
+                                <PasswordBox x:Name="ProjectPasswordBox"
+                                             Grid.Column="0"
+                                             Height="32"
+                                             Padding="8,4"
+                                             BorderBrush="#D1D5DB"
+                                             BorderThickness="1"
+                                             Background="White"
+                                             VerticalContentAlignment="Center"/>
 
-                            <Button Grid.Column="2"
-                                    Content="Retirer"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Click="RemoveProjectPassword_Click"/>
-                        </Grid>
-                        <TextBlock x:Name="ProjectPasswordStatusTextBlock"
-                                   Text=""
-                                   FontSize="11"
-                                   Foreground="#9CA3AF"
-                                   Margin="0,0,0,2"/>
+                                <Button Grid.Column="2"
+                                        Content="Changer"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="RemoveProjectPassword_Click"/>
+                            </Grid>
+                            <TextBlock x:Name="ProjectPasswordStatusTextBlock"
+                                       Text=""
+                                       FontSize="11"
+                                       Foreground="#9CA3AF"
+                                       Margin="0,0,0,2"/>
+                        </StackPanel>
                     </StackPanel>
 
-                    <!-- ACTIONS -->
-                    <Border Background="#F9FAFB"
-                            BorderBrush="#6B7280"
-                            BorderThickness="1"
-                            CornerRadius="18"
-                            Padding="10"
-                            Margin="0,2,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Actions"
-                                       FontSize="13"
-                                       FontWeight="SemiBold"
-                                       Foreground="#111827"
-                                       Margin="0,0,0,10"/>
+                    <!-- ✅ Boutons "Actions" sortis de leur encadré gris (18.08.2026, demande de
+                         Joe : "ne pas mettre les boutons Actions dans un champ Actions") + remontés
+                         de 20mm ("ils doivent être plus haut de 20mm"). -->
+                    <WrapPanel HorizontalAlignment="Center" Margin="0,0,0,0">
+                        <Button Content="Désactiver"
+                                Style="{StaticResource DangerButtonStyle}"
+                                Click="DisableProject_Click"
+                                Margin="0,0,8,8"/>
 
-                            <WrapPanel HorizontalAlignment="Center">
-                                <Button Content="Désactiver"
-                                        Style="{StaticResource DangerButtonStyle}"
-                                        Click="DisableProject_Click"
-                                        Margin="0,0,8,8"/>
+                        <Button Content="Réactiver"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="EnableProject_Click"
+                                BorderBrush="#16A34A"
+                                Foreground="#16A34A"
+                                Margin="0,0,8,8"/>
 
-                                <Button Content="Réactiver"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Click="EnableProject_Click"
-                                        BorderBrush="#16A34A"
-                                        Foreground="#16A34A"
-                                        Margin="0,0,8,8"/>
+                        <Button Content="Supprimer"
+                                Style="{StaticResource DangerButtonStyle}"
+                                Click="DeleteProject_Click"
+                                Background="#DC2626"
+                                Foreground="White"
+                                BorderBrush="#DC2626"
+                                Margin="0,0,8,8"/>
 
-                                <Button Content="Supprimer"
-                                        Style="{StaticResource DangerButtonStyle}"
-                                        Click="DeleteProject_Click"
-                                        Background="#DC2626"
-                                        Foreground="White"
-                                        BorderBrush="#DC2626"
-                                        Margin="0,0,8,8"/>
+                        <!-- ✅ "Modifier" retiré d'ici (18.08.2026, demande de Joe) : remplacé par
+                             la colonne "Modifier" de la grille (voir ProjectsGrid). -->
+                        <Button Content="Enregistrer"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Click="SaveProject_Click"
+                                Margin="0,0,8,8"/>
 
-                                <!-- ✅ "Modifier" retiré d'ici (18.08.2026, demande de Joe) : remplacé par
-                                     la colonne "Modifier" de la grille (voir ProjectsGrid). -->
-                                <Button Content="Enregistrer"
-                                        Style="{StaticResource PrimaryButtonStyle}"
-                                        Click="SaveProject_Click"
-                                        Margin="0,0,8,8"/>
-
-                                <!-- ✅ "Fermer" (18.08.2026, demande de Joe) : ramène sur "Démarrage"
-                                     avec le sous-menu Paramètres réaffiché (voir CloseRequested),
-                                     seul le bouton "Fermer" du haut du formulaire était obsolète. -->
-                                <Button Content="Fermer"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Click="Close_Click"
-                                        BorderThickness="2"
-                                        Margin="0,0,8,8"/>
-                            </WrapPanel>
-                        </StackPanel>
-                    </Border>
+                        <!-- ✅ "Fermer" (18.08.2026, demande de Joe) : ramène sur "Démarrage"
+                             avec le sous-menu Paramètres réaffiché (voir CloseRequested),
+                             seul le bouton "Fermer" du haut du formulaire était obsolète. -->
+                        <Button Content="Fermer"
+                                Style="{StaticResource CloseButtonStyle}"
+                                Click="Close_Click"
+                                BorderThickness="2"
+                                Margin="0,0,8,8"/>
+                    </WrapPanel>
                 </StackPanel>
             </Border>
         </Grid>

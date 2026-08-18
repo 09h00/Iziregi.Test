@@ -59,6 +59,10 @@ public partial class ProjectsBankPage : System.Windows.Controls.UserControl, IRe
 
     public void Reload()
     {
+        // ✅ Masqué si le verrouillage des dossiers est désactivé (18.08.2026, demande de Joe),
+        // voir Db.GetDossierLockEnabled / DirectorPasswordWindow.
+        ProjectPasswordSection.Visibility = Db.GetDossierLockEnabled() ? Visibility.Visible : Visibility.Collapsed;
+
         LoadProjects();
     }
 

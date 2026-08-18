@@ -1327,7 +1327,11 @@ HeaderStyle="{StaticResource LinesGridLastHeaderStyle}"/>
                                  demande de Joe) : Margin haut = 0. Memes proportions de colonnes
                                  (1*, 7, 1.7*) que le split juste en dessous -> le champ tombe
                                  exactement a l'aplomb de "Main d'oeuvre", sans avoir a deviner une
-                                 largeur fixe. -->
+                                 largeur fixe.
+                                 ✅ Revenu aux proportions d'origine (demande de Joe, 18.08.2026) : la
+                                 limite du champ Note à 30 caractères/ligne se gère maintenant par la
+                                 taille de police, pas par la largeur, car élargir la colonne Totaux au
+                                 détriment de Note faisait aussi grossir le champ nom des Rabais. -->
                             <Grid Margin="0,0,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1*"/>
@@ -1395,7 +1399,8 @@ Text="Total Matériel"
 FontWeight="SemiBold"
 FontSize="12"
 Foreground="#111827"
-Margin="10,0,0,0"
+Margin="0,0,10,0"
+TextAlignment="Right"
 VerticalAlignment="Center"/>
 
                                             <TextBlock Grid.Column="3"
@@ -1414,6 +1419,8 @@ Style="{StaticResource TotalsAmountStyle}"/>
                                  boite TVA/Total TTC a été fusionnée dans la boite Main d'oeuvre/Total HT
                                  (toutes deux Row 0 Colonne 2), plus rien n'utilise Row 1, les
                                  RowDefinitions dédiées n'avaient donc plus lieu d'être. -->
+                            <!-- ✅ Revenu aux proportions d'origine (demande de Joe, 18.08.2026), voir
+                                 la grille "Total Matériel" juste au-dessus pour le détail. -->
                             <Grid Margin="0,0,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1*"/>
@@ -1446,7 +1453,7 @@ Padding="10,6,10,6">
                                          qui donnait l'impression qu'on ne pouvait pas taper jusqu'à 40. -->
                                     <TextBox
 x:Name="QuoteNotesTextBox"
-FontSize="11"
+FontSize="13"
 AcceptsReturn="True"
 TextWrapping="Wrap"
 VerticalScrollBarVisibility="Disabled"
@@ -1483,8 +1490,10 @@ CornerRadius="0">
                                          ApplyQuoteModeUi), seul "Total HT" reste toujours visible. Rangées
                                          4 et 6 (8px = 2mm, demande de Joe) : espacement fixe HT->TVA et
                                          TVA->TTC.
-                                         ✅ Total HT (28->44) et TVA (26->44) alignées sur la hauteur de
-                                         Total TTC (demande de Joe, 11.08.2026). -->
+                                         ✅ Total HT (28->44) aligné sur la hauteur de Total TTC (demande de
+                                         Joe, 11.08.2026). TVA revenue à 26px, même hauteur que Main
+                                         d'œuvre/Déplacements (demande de Joe, 18.08.2026, retour sur le point
+                                         ci-dessus pour cette ligne). -->
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition x:Name="LaborRowDef" Height="26"/>
@@ -1499,7 +1508,7 @@ CornerRadius="0">
                                             <RowDefinition x:Name="DiscountRow2Def" Height="26"/>
                                             <RowDefinition Height="44"/>
                                             <RowDefinition Height="8"/>
-                                            <RowDefinition Height="44"/>
+                                            <RowDefinition x:Name="TvaRowDef" Height="26"/>
                                             <RowDefinition Height="8"/>
                                             <RowDefinition Height="44"/>
                                         </Grid.RowDefinitions>
@@ -1586,10 +1595,11 @@ Foreground="#111827"/>
                                                     <ColumnDefinition Width="90"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <TextBlock Grid.Column="0" Text="Sous-total 1" FontSize="12" Foreground="#111827" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="0" Text="Sous-total 1" FontWeight="SemiBold" FontSize="12" Foreground="#111827" Margin="0,0,10,0" TextAlignment="Right" VerticalAlignment="Center"/>
                                                 <TextBlock Grid.Column="3"
 x:Name="Subtotal1AmountTextBlock"
 Text="0.00"
+FontWeight="SemiBold"
 FontSize="12"
 TextAlignment="Right"
 Foreground="#111827"
@@ -1604,7 +1614,7 @@ VerticalAlignment="Center"/>
                                                  l'architecte pour nommer le type de rabais. -->
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="82"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="Rabais 1 (%)" VerticalAlignment="Center" Foreground="#111827" FontSize="12" Margin="0,0,6,0"/>
@@ -1616,7 +1626,9 @@ FontSize="12"
 Padding="4,1"
 Height="20"
 VerticalAlignment="Center"
-VerticalContentAlignment="Center"/>
+VerticalContentAlignment="Center"
+LostKeyboardFocus="DiscountNameTextBox_LostKeyboardFocus_Freeze"
+PreviewMouseLeftButtonDown="DiscountNameTextBox_PreviewMouseLeftButtonDown_Unfreeze"/>
                                             </Grid>
                                         </Border>
                                         <!-- ✅ Montant du rabais deplace dans la colonne Qt (22.07.2026,
@@ -1634,7 +1646,7 @@ Background="White"
 TextAlignment="Center"
 VerticalContentAlignment="Center"/>
                                         </Border>
-                                        <Border Grid.Row="3" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" IsHitTestVisible="False"/>
+                                        <Border Grid.Row="3" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" IsHitTestVisible="False"/>
                                         <Border Grid.Row="3" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
                                             <TextBlock x:Name="DiscountAmountTextBlock"
 Text="0.00"
@@ -1656,10 +1668,11 @@ Foreground="#111827"/>
                                                     <ColumnDefinition Width="90"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <TextBlock Grid.Column="0" Text="Sous-total 2" FontSize="12" Foreground="#111827" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="0" Text="Sous-total 2" FontWeight="SemiBold" FontSize="12" Foreground="#111827" Margin="0,0,10,0" TextAlignment="Right" VerticalAlignment="Center"/>
                                                 <TextBlock Grid.Column="3"
 x:Name="Subtotal2AmountTextBlock"
 Text="0.00"
+FontWeight="SemiBold"
 FontSize="12"
 TextAlignment="Right"
 Foreground="#111827"
@@ -1675,7 +1688,7 @@ VerticalAlignment="Center"/>
                                         <Border Grid.Row="5" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" Padding="10,0,4,0">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="82"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="Rabais 2 (%)" VerticalAlignment="Center" Foreground="#111827" FontSize="12" Margin="0,0,6,0"/>
@@ -1687,7 +1700,9 @@ FontSize="12"
 Padding="4,1"
 Height="20"
 VerticalAlignment="Center"
-VerticalContentAlignment="Center"/>
+VerticalContentAlignment="Center"
+LostKeyboardFocus="DiscountNameTextBox_LostKeyboardFocus_Freeze"
+PreviewMouseLeftButtonDown="DiscountNameTextBox_PreviewMouseLeftButtonDown_Unfreeze"/>
                                             </Grid>
                                         </Border>
                                         <Border Grid.Row="5" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0">
@@ -1701,7 +1716,7 @@ Background="White"
 TextAlignment="Center"
 VerticalContentAlignment="Center"/>
                                         </Border>
-                                        <Border Grid.Row="5" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0" IsHitTestVisible="False"/>
+                                        <Border Grid.Row="5" Grid.Column="2" Background="#EAF2FF" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" IsHitTestVisible="False"/>
                                         <Border Grid.Row="5" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0" Padding="0,0,6,0">
                                             <TextBlock x:Name="DiscountAmountTextBlock2"
 Text="0.00"
@@ -1723,7 +1738,7 @@ Foreground="#111827"/>
                                                     <ColumnDefinition Width="90"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <TextBlock Grid.Column="0" Text="Total HT" FontWeight="SemiBold" FontSize="12" Foreground="#111827" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="0" Text="Total HT" FontWeight="SemiBold" FontSize="12" Foreground="#111827" Margin="0,0,10,0" TextAlignment="Right" VerticalAlignment="Center"/>
                                                 <TextBlock Grid.Column="3"
 x:Name="TotalHtTextBlock"
 Text="0.00"
@@ -1739,30 +1754,51 @@ VerticalAlignment="Center"/>
                                         <!-- ✅ Rangée 7 (8px = 2mm, demande de Joe) : espacement HT->TVA,
                                              volontairement vide. -->
 
-                                        <!-- ✅ TVA (04.08.2026, demande de Joe : "remonte TVA et TTC") :
-                                             utilise directement les colonnes partagées de la Grid unifiée
-                                             ci-dessus (avant : sous-Grid séparée avec ses propres colonnes
-                                             identiques, fusionnée ici, "de l'ordre dans le code"). -->
-                                        <Border Grid.Row="8" Grid.Column="0" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5" Padding="10,0">
-                                            <TextBlock Text="TVA (%)" Foreground="#111827" FontSize="12" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <Border Grid.Row="8" Grid.Column="1" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5">
-                                            <TextBox x:Name="TvaRateTextBox"
+                                        <!-- ✅ TVA (18.08.2026, demande de Joe) : restructurée comme une ligne
+                                             de sous-total (une seule Border ColumnSpan=4, pas de séparations
+                                             verticales), le champ taux est décalé à gauche, juste après le
+                                             libellé, au lieu de rester dans la colonne Qt. Sa fonction ne
+                                             change pas (mêmes handlers). -->
+                                        <Border Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="4" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="62"/>
+                                                    <ColumnDefinition Width="86"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- ✅ Colonne 0 en largeur fixe 92 (demande de Joe, 18.08.2026) :
+                                                     92 et non 82 car les lignes Rabais ont un retrait de 10
+                                                     (Padding de leur Border) que cette ligne n'a pas -> il faut
+                                                     l'absorber dans la largeur de colonne pour que le bord
+                                                     gauche du champ taux tombe à l'aplomb du bord gauche des
+                                                     champs Rabais. -->
+                                                <Grid Grid.Column="0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="92"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="TVA (%)" Foreground="#111827" FontSize="12" Margin="10,0,6,0" VerticalAlignment="Center"/>
+                                                    <TextBox Grid.Column="1" x:Name="TvaRateTextBox"
 Style="{StaticResource InlineMoneyInputStyle}"
 TextChanged="TotalsInput_TextChanged"
 PreviewLostKeyboardFocus="Money2Decimals_LostFocus"
-BorderThickness="0"
+BorderThickness="1"
+BorderBrush="#D1D5DB"
 Background="White"
+Margin="0,0,6,0"
 TextAlignment="Center"
+VerticalAlignment="Center"
 VerticalContentAlignment="Center"/>
-                                        </Border>
-                                        <Border Grid.Row="8" Grid.Column="2" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0.5,0.5"/>
-                                        <Border Grid.Row="8" Grid.Column="3" BorderBrush="Black" SnapsToDevicePixels="True" BorderThickness="0,0.5,0,0.5">
-                                            <TextBlock
+                                                </Grid>
+
+                                                <TextBlock Grid.Column="3"
 x:Name="TvaAmountTextBlock"
 Text="0.00"
 Style="{StaticResource TotalsAmountStyle}"
 Margin="0,0,6,0"/>
+                                            </Grid>
                                         </Border>
 
                                         <!-- ✅ Rangée 9 (8px = 2mm, demande de Joe) : espacement TVA->TTC,
@@ -1785,15 +1821,16 @@ Margin="0,0,6,0"/>
 
                                                 <TextBlock Grid.Column="0"
 Text="Total TTC"
-FontWeight="Bold"
+FontWeight="SemiBold"
 FontSize="16"
 Foreground="#111827"
-Margin="10,0,0,0"
+Margin="0,0,0,0"
+TextAlignment="Right"
 VerticalAlignment="Center"/>
                                                 <TextBlock Grid.Column="3"
 x:Name="TotalTtcTextBlock"
 Text="0.00"
-FontWeight="Bold"
+FontWeight="SemiBold"
 FontSize="16"
 Foreground="#111827"
 TextAlignment="Right"
