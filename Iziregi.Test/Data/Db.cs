@@ -219,6 +219,11 @@ public static class Db
         // ✅ Ajouté (04.08.2026, demande de Joe) : "Titre" (fonction/civilité), en 1ère position
         // dans la fiche contact, affiché aussi dans "Associé à :" de la fiche groupe.
         TryAddColumn(con, "Contacts", "Title", "TEXT NOT NULL DEFAULT ''");
+        // ✅ Ajouté (18.08.2026, demande de Joe) : "Prénom", après "Nom" dans la fiche (voir
+        // AddressBookPage.BuildContactDetail) -- pour trier/rechercher par ordre alphabétique
+        // en tapant le Nom en premier, et pour importer "Nom Prénom" dans la liste des
+        // participants de Planification (voir PlanningPage.ImportPvGroup).
+        TryAddColumn(con, "Contacts", "FirstName", "TEXT NOT NULL DEFAULT ''");
 
         con.Execute("""
             CREATE TABLE IF NOT EXISTS ContactGroups (
@@ -814,6 +819,7 @@ public static class Db
         public long Id { get; set; }
         public string Title { get; set; } = "";
         public string Name { get; set; } = "";
+        public string FirstName { get; set; } = "";
         public string Intervenant { get; set; } = "";
         public string Company { get; set; } = "";
         public string Address { get; set; } = "";
@@ -833,7 +839,7 @@ public static class Db
         con.Open();
 
         return con.Query<Contact>(
-            "SELECT Id, Title, Name, Intervenant, Company, Address, Phone, Phone2, Website, Email, FreeText FROM Contacts WHERE ProjectId=@ProjectId ORDER BY Id;",
+            "SELECT Id, Title, Name, FirstName, Intervenant, Company, Address, Phone, Phone2, Website, Email, FreeText FROM Contacts WHERE ProjectId=@ProjectId ORDER BY Id;",
             new { ProjectId = projectId }
         ).ToList();
     }
@@ -847,8 +853,8 @@ public static class Db
         con.Open();
 
         return con.ExecuteScalar<long>("""
-            INSERT INTO Contacts (ProjectId, Title, Name, Intervenant, Company, Address, Phone, Phone2, Website, Email, FreeText)
-            VALUES (@ProjectId, '', '', '', '', '', '', '', '', '', '');
+            INSERT INTO Contacts (ProjectId, Title, Name, FirstName, Intervenant, Company, Address, Phone, Phone2, Website, Email, FreeText)
+            VALUES (@ProjectId, '', '', '', '', '', '', '', '', '', '', '');
             SELECT last_insert_rowid();
         """, new { ProjectId = projectId });
     }
@@ -864,6 +870,7 @@ public static class Db
         {
             "Title" => "Title",
             "Name" => "Name",
+            "FirstName" => "FirstName",
             "Intervenant" => "Intervenant",
             "Company" => "Company",
             "Address" => "Address",

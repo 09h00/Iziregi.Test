@@ -206,7 +206,16 @@ public static class PdfService
     // =========================
     // ✅ PDF Planning (CAPTURE) — sections entières + titres
     // =========================
-    public static void GeneratePlanningPdfFromSections(string filePath, List<byte[]> sectionPngs)
+    // ✅ "participantsPng" (18.08.2026) : capture "Participants à la séance" (Mode PV),
+    // insérée EN PREMIER dans la même colonne que "sectionPngs" -- le vrai bug ("liste
+    // tronquée/coupée entre pages") était dans la CAPTURE WPF elle-même (PvPanel.ActualHeight
+    // comprimée par le Grid racine ClipToBounds, voir PlanningPage.CaptureElementToPngBytes),
+    // pas dans la mise en page QuestPDF. Une fois la capture corrigée, le comportement
+    // d'origine (empiler les sections avec ShowEntire, QuestPDF les répartit sur autant de
+    // pages que nécessaire, sans jamais couper une section en deux) redonne exactement ce que
+    // Joe demande : "un maximum de sections doivent apparaître sur la page 1 sans qu'une
+    // seule soit coupée".
+    public static void GeneratePlanningPdfFromSections(string filePath, List<byte[]> sectionPngs, byte[]? participantsPng = null)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Chemin PDF invalide.", nameof(filePath));
@@ -214,7 +223,7 @@ public static class PdfService
         sectionPngs ??= new List<byte[]>();
         sectionPngs = sectionPngs.Where(x => x != null && x.Length > 0).ToList();
 
-        if (sectionPngs.Count == 0)
+        if (sectionPngs.Count == 0 && (participantsPng == null || participantsPng.Length == 0))
             throw new ArgumentException("Aucune section à exporter (PNG vide).", nameof(sectionPngs));
 
         const float margin = 26f;
@@ -249,7 +258,14 @@ public static class PdfService
         var lineLight = Colors.Grey.Lighten2;
         var separatorBlack = Colors.Grey.Darken4;
 
-        var planningSectionTitles = new[] { "", "Planning hebdomadaire", "Plan" };
+        // ✅ Participants en premier, puis les sections "normales", toutes empilées dans la
+        // même colonne (voir plus bas) : QuestPDF les répartit sur autant de pages que
+        // nécessaire, en ne coupant jamais une section en deux (ShowEntire), ce qui pousse le
+        // maximum de sections complètes sur la page 1 avant de continuer sur la page 2.
+        var allSections = new List<byte[]>();
+        if (participantsPng != null && participantsPng.Length > 0)
+            allSections.Add(participantsPng);
+        allSections.AddRange(sectionPngs);
 
         Document.Create(container =>
         {
@@ -321,10 +337,20 @@ public static class PdfService
                                 });
                             });
 
-                            // Centre : date uniquement
+                            // Centre : titre + date (18.08.2026, demande de Joe : "le titre du
+                            // Pdf, placé en dessus de la date au milieu, sera 'PV de la séance
+                            // du:'").
                             row.RelativeItem(0.9f).AlignCenter().Column(center =>
                             {
                                 center.Item()
+                                    .AlignCenter()
+                                    .Text("PV de la séance du:")
+                                    .SemiBold()
+                                    .FontSize(10)
+                                    .FontColor(textMain);
+
+                                center.Item()
+                                    .PaddingTop(2)
                                     .Text(DateTime.Now.ToString("dd.MM.yyyy"))
                                     .FontSize(9)
                                     .FontColor(textMuted);
@@ -399,34 +425,16 @@ public static class PdfService
                     });
                 });
 
+                // ✅ Sections empilées, chacune ShowEntire (jamais coupée en deux) : le titre
+                // est déjà inclus dans chaque capture elle-même (ex: "1) Tâches", "Participants
+                // à la séance"), pas besoin de le redessiner ici. QuestPDF pousse le maximum de
+                // sections complètes sur la page 1, puis continue sur la page 2, etc.
                 page.Content().PaddingTop(10).Column(col =>
                 {
                     col.Spacing(10);
 
-                    for (int i = 0; i < sectionPngs.Count; i++)
-                    {
-                        var png = sectionPngs[i];
-
-                        string? title = null;
-                        if (i >= 0 && i < planningSectionTitles.Length)
-                            title = planningSectionTitles[i];
-
-                        col.Item().ShowEntire().Column(section =>
-                        {
-                            if (!string.IsNullOrWhiteSpace(title))
-                            {
-                                section.Item()
-                                    .Text(title)
-                                    .SemiBold()
-                                    .FontSize(12)
-                                    .FontColor(textMain);
-
-                                section.Item().PaddingTop(4);
-                            }
-
-                            section.Item().Image(png).FitArea();
-                        });
-                    }
+                    foreach (var png in allSections)
+                        col.Item().ShowEntire().Image(png).FitArea();
                 });
             });
         }).GeneratePdf(filePath);

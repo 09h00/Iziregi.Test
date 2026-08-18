@@ -94,6 +94,26 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     private readonly ObservableCollection<TaskRow> _taskRows = new();
     private readonly ObservableCollection<PlanningRow> _planningRows = new();
 
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : liste de participants "Mode PV", figée PAR
+    // SEMAINE (comme Samedi/Dimanche/AutoAddCompanyToPlanning, voir WeekStateFile). Pas de
+    // binding WPF (INotifyPropertyChanged) : contrairement à PlanningRow, ces lignes sont
+    // construites/relues directement depuis les contrôles (voir RebuildPvParticipantsUI),
+    // plus simple pour une liste éclatée en 2 colonnes.
+    private sealed class PvParticipantData
+    {
+        public string Name { get; set; } = "";
+        public string Company { get; set; } = "";
+
+        // ✅ NOUVEAU (18.08.2026, demande de Joe : "supprimer un nom sans que les autres
+        // bougent de leur place") : colonne (0=gauche, 1=droite) fixée une fois pour toutes à
+        // la création de la ligne, jamais recalculée -- retirer une ligne ne touche plus qu'à
+        // sa propre colonne, les autres gardent exactement leur place.
+        public int Column { get; set; }
+    }
+
+    private readonly List<PvParticipantData> _pvParticipants = new();
+    private bool _pvModeEnabled;
+
     // ✅ Vue filtrée de _taskRows (28.07.2026, demande de Joe) : une tâche "Effectué" ne se
     // reporte plus dans les semaines SUIVANT celle où elle a été cochée (voir
     // TaskRowVisibleInCurrentWeek). _taskRows reste la source de vérité complète (ajout/
@@ -182,6 +202,23 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     // (numérotation de tâche annuelle, voir LoadProjectTasks/SaveProjectTasks).
     private const double StickerDropDefaultWidth = 42;
     private const double PlanImageMinSize = 60;
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe : "elle doit garder les proportions") : taille de
+    // départ calculée à partir des dimensions réelles de l'image importée (grand côté = 360px),
+    // au lieu d'une boîte fixe 360x240 qui déformait toute image dont le ratio ne correspondait
+    // pas exactement à 3:2.
+    private static (double Width, double Height) ComputeDefaultPlanImageSize(ImageSource? source)
+    {
+        const double defaultMaxSide = 360;
+
+        if (source is BitmapSource bmp && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+        {
+            var scale = defaultMaxSide / Math.Max(bmp.PixelWidth, bmp.PixelHeight);
+            return (bmp.PixelWidth * scale, bmp.PixelHeight * scale);
+        }
+
+        return (defaultMaxSide, 240);
+    }
 
     // ✅ sticker sélectionné dans la banque (pour appliquer couleur entreprise)
     private StickerItem? _selectedBankSticker;
@@ -916,14 +953,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             {
                 if (string.IsNullOrWhiteSpace(fav.FilePath) || !File.Exists(fav.FilePath)) return;
 
+                var (defaultWidth, defaultHeight) = ComputeDefaultPlanImageSize(fav.ImageSource);
                 var it = new PlacedPlanImageItem
                 {
                     FilePath = fav.FilePath,
                     ImageSource = fav.ImageSource,
                     X = 20 + (PlacedPlanImages.Count * 20),
                     Y = 20 + (PlacedPlanImages.Count * 20),
-                    Width = 360,
-                    Height = 240
+                    Width = defaultWidth,
+                    Height = defaultHeight
                 };
 
                 PlacedPlanImages.Add(it);
@@ -1254,11 +1292,27 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             {
                 PreparePdfCaptureUi(restore);
 
-                var png = CaptureScrollViewerContentToPngBytes(MainScrollViewer);
+                // ✅ Participants (Mode PV), demande de Joe (18.08.2026) : capturée à part
+                // (PvPanel est hors du ScrollViewer, zone figée au-dessus de la grille des
+                // Tâches), sur sa propre page PDF, EN PREMIER (même ordre que sur l'écran). Le
+                // titre/les sous-titres "Nom"/"Entreprise" sont déjà dans la capture elle-même
+                // (pas besoin de les redessiner dans le PDF). Passée séparément à PdfService
+                // (paramètre dédié, pas mêlée à "sections") : elle reçoit une mise en page
+                // "compacte" à hauteur fixe, différente de celle des grandes captures
+                // Tâches/Planning/Image (voir PdfService.GeneratePlanningPdfFromSections).
+                byte[]? pvPng = null;
+                if (_pvModeEnabled && _pvParticipants.Count > 0 && PvPanel.Visibility == Visibility.Visible)
+                {
+                    var captured = CaptureElementToPngBytes(PvPanel);
+                    if (captured.Length > 0) pvPng = captured;
+                }
+
+                var png = CaptureScrollViewerContentToPngBytes(MainScrollViewer, TasksDataGrid, PlanningDataGrid);
 
                 PdfService.GeneratePlanningPdfFromSections(
                     dlg.FileName,
-                    new List<byte[]> { png }
+                    new List<byte[]> { png },
+                    pvPng
                 );
 
                 // ✅ Ouvrir le PDF après export
@@ -1285,10 +1339,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 }
             }
 
+            // ✅ "Planification" au lieu de "Planning" (18.08.2026, demande de Joe).
             System.Windows.MessageBox.Show(
                 _main,
-                "PDF planning généré.",
-                "Planning",
+                "PDF Planification généré.",
+                "Planification",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -1296,8 +1351,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         {
             System.Windows.MessageBox.Show(
                 _main,
-                $"Impossible de générer le PDF planning.\n\n{ex.Message}",
-                "Planning",
+                $"Impossible de générer le PDF Planification.\n\n{ex.Message}",
+                "Planification",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -1327,11 +1382,39 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         HideElementForCapture(AddPlanningRowButton, restore);
         HideElementForCapture(RemovePlanningRowButton, restore);
         HideElementForCapture(WeekStructureButton, restore);
+        // ✅ Oublié (18.08.2026, demande de Joe : "il y a toujours des boutons de planning
+        // hebdo et Image") : bascule Automatique/Manuel de l'ajout des intervenants.
+        HideElementForCapture(AutoAddToggleButton, restore);
 
         // ---- Section Image : cacher boutons Ajouter/Retirer/Reset
         HideElementForCapture(PlanAddButton, restore);
         HideElementForCapture(PlanRemoveButton, restore);
         HideElementForCapture(ResetStickersButton, restore);
+        // ✅ Oublié (18.08.2026, demande de Joe) : Ajouter aux favoris / Favoris ▾.
+        HideElementForCapture(AddImageToFavoritesButton, restore);
+        HideElementForCapture(ImageFavoritesButton, restore);
+
+        // ---- Participants (Mode PV) : cacher boutons Ajouter/Importer un groupe (18.08.2026)
+        HideElementForCapture(AddPvParticipantButton, restore);
+        HideElementForCapture(ImportPvGroupButton, restore);
+
+        // ✅ Croix "retirer ce participant", une par ligne (18.08.2026, demande de Joe : "il
+        // reste des boutons de commandes sur le pdf") : reconstruites dynamiquement à chaque
+        // RebuildPvParticipantsUI, pas de x:Name fixe -- repérées via leur Tag ("PvRemoveButton",
+        // voir BuildPvParticipantRowVisual) en parcourant les 2 colonnes.
+        foreach (var panel in new[] { PvParticipantsLeftPanel, PvParticipantsRightPanel })
+        {
+            if (panel == null) continue;
+            foreach (var rowChild in panel.Children)
+            {
+                if (rowChild is not Grid rowGrid) continue;
+                foreach (var cell in rowGrid.Children)
+                {
+                    if (cell is WpfButton btn && Equals(btn.Tag, "PvRemoveButton"))
+                        HideElementForCapture(btn, restore);
+                }
+            }
+        }
 
         // ---- Zones de texte : cacher entièrement la barre d’actions + export + panneau stickers + toolbar police
         HideElementForCapture(TextZoneHeaderToolbar, restore);
@@ -1383,7 +1466,43 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         grid.ColumnHeaderHeight = columnHeaderHeight;
     }
 
-    private static byte[] CaptureScrollViewerContentToPngBytes(ScrollViewer sv)
+    // ✅ Fix (18.08.2026, trouvé en inspectant le PNG de debug : "une petite partie de la
+    // grille Participants est visible... puis tout est vide") : le Grid racine de cette page a
+    // ClipToBounds="True" (voir XAML) -- si la fenêtre est courte, ActualHeight de PvPanel
+    // peut être une hauteur COMPRIMÉE par son parent (Grid.Row="2", "Auto" reste contraint par
+    // l'espace réellement disponible), pas la hauteur réelle nécessaire pour TOUT afficher.
+    // Comme CaptureScrollViewerContentToPngBytes (contenu potentiellement hors du viewport
+    // visible), on force ici un Measure avec une hauteur infinie pour obtenir la vraie
+    // hauteur désirée, puis on Arrange/Render à cette taille -- indépendamment de ce que la
+    // fenêtre affichait réellement au moment du clic.
+    private static byte[] CaptureElementToPngBytes(FrameworkElement element)
+    {
+        element.UpdateLayout();
+
+        double width = element.ActualWidth;
+        if (double.IsNaN(width) || double.IsInfinity(width) || width <= 0)
+            width = element.DesiredSize.Width > 0 ? element.DesiredSize.Width : 800;
+
+        element.Measure(new System.Windows.Size(width, double.PositiveInfinity));
+        element.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0), new System.Windows.Size(width, element.DesiredSize.Height)));
+        element.UpdateLayout();
+
+        var w = (int)Math.Ceiling(width);
+        var h = (int)Math.Ceiling(element.DesiredSize.Height);
+        if (w <= 0 || h <= 0) return Array.Empty<byte>();
+
+        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(element);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(rtb));
+
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
+    }
+
+    private static byte[] CaptureScrollViewerContentToPngBytes(ScrollViewer sv, DataGrid? tasksGrid = null, DataGrid? planningGrid = null)
     {
         if (sv == null)
             throw new ArgumentNullException(nameof(sv));
@@ -1391,17 +1510,37 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (sv.Content is not FrameworkElement content)
             throw new InvalidOperationException("MainScrollViewer.Content n'est pas un FrameworkElement.");
 
+        // ✅ VRAIE CAUSE trouvée (18.08.2026, via mesures réelles écrites dans un fichier de
+        // debug, pas une supposition) : MainScrollViewer n'a pas de HorizontalScrollBarVisibility
+        // explicite dans le XAML -> défaut "Disabled". Tant que le défilement horizontal est
+        // désactivé, le ScrollContentPresenter interne du ScrollViewer RE-mesure "content" à sa
+        // largeur de viewport à CHAQUE passe de layout (y compris celles déclenchées par
+        // UpdateLayout() plus bas), écrasant silencieusement tout Measure()/Width manuels
+        // qu'on lui impose ici -- c'est ce qui rendait tous les essais précédents (largeur
+        // forcée, InvalidateMeasure, désactivation du scroll interne des DataGrid) sans le
+        // moindre effet. Passer temporairement en "Hidden" autorise le contenu à se mesurer
+        // sur toute sa largeur réelle (scrollbar jamais affichée, capture uniquement).
+        var oldHorizontalScrollBarVisibility = sv.HorizontalScrollBarVisibility;
+        sv.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
+
         sv.UpdateLayout();
         content.UpdateLayout();
 
-        // ✅ IMPORTANT : capturer avec une largeur contrainte (sinon les zones de texte peuvent devenir ultra-étroites)
-        double targetWidth = sv.ViewportWidth;
+        // ✅ Largeur NATURELLE du contenu (18.08.2026, vraie cause trouvée et corrigée
+        // juste au-dessus : HorizontalScrollBarVisibility="Hidden" permet enfin à cette mesure
+        // de refléter la largeur réellement nécessaire, plus jamais re-plafonnée en cachette à
+        // la largeur du viewport). Utiliser directement cette largeur naturelle (au lieu d'un
+        // plancher arbitraire, ex. 1500) évite que "content" soit plus large que ce que les
+        // grilles ont réellement besoin -- un plancher trop généreux créait une "colonne
+        // fantôme" (zone vide après la dernière vraie colonne, la ligne de la grille continue
+        // de se dessiner sur toute la largeur du DataGrid).
+        content.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+        double targetWidth = content.DesiredSize.Width;
+
+        if (double.IsNaN(targetWidth) || double.IsInfinity(targetWidth) || targetWidth <= 0)
+            targetWidth = sv.ViewportWidth;
         if (double.IsNaN(targetWidth) || double.IsInfinity(targetWidth) || targetWidth <= 0)
             targetWidth = sv.ActualWidth;
-
-        if (double.IsNaN(targetWidth) || double.IsInfinity(targetWidth) || targetWidth <= 0)
-            targetWidth = content.ActualWidth;
-
         if (double.IsNaN(targetWidth) || double.IsInfinity(targetWidth) || targetWidth <= 0)
             targetWidth = 1100;
 
@@ -1414,20 +1553,29 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             // Force la largeur pendant le rendu off-screen
             content.Width = targetWidth;
 
-            // Mesurer tout le contenu (hauteur infinie)
-            content.Measure(new System.Windows.Size(targetWidth, double.PositiveInfinity));
-            content.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0),
-                new System.Windows.Size(targetWidth, content.DesiredSize.Height)));
-            content.UpdateLayout();
+            // ✅ Fix (18.08.2026, vraie cause trouvée) : PlanningGridStyle définit
+            // ScrollViewer.HorizontalScrollBarVisibility="Auto" sur les DataGrid -- elles
+            // gèrent alors leurs colonnes avec leur PROPRE défilement horizontal interne,
+            // indépendant de la largeur offerte par leur conteneur (d'où l'absence totale
+            // d'effet de tous mes essais précédents sur la largeur de "content"). Désactivée
+            // ici le temps de la capture : plus de défilement interne, les colonnes se mesurent
+            // toutes, pas de coupure ni de "vide" scrollable hors champ.
+            if (tasksGrid != null) tasksGrid.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
+            if (planningGrid != null) planningGrid.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
 
-            // ✅ 2e passe (demande de Joe, 16.07.2026) : la colonne étoile "Descriptif" de la
-            // grille des Tâches ne recalcule sa largeur qu'après qu'ActualWidth soit mis à
-            // jour par la 1ère passe — sans ce second passage, une bande vide apparaissait
-            // après la dernière colonne ("Effectué") sur le PDF capturé.
-            content.Measure(new System.Windows.Size(targetWidth, double.PositiveInfinity));
-            content.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0),
-                new System.Windows.Size(targetWidth, content.DesiredSize.Height)));
-            content.UpdateLayout();
+            tasksGrid?.InvalidateMeasure();
+            planningGrid?.InvalidateMeasure();
+
+            // Mesurer tout le contenu (hauteur infinie), plusieurs passes (voir commentaire
+            // ci-dessus -- 2 passes ne suffisaient pas pour les nombreuses colonnes "*" du
+            // Planning hebdo).
+            for (var pass = 0; pass < 4; pass++)
+            {
+                content.Measure(new System.Windows.Size(targetWidth, double.PositiveInfinity));
+                content.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0),
+                    new System.Windows.Size(targetWidth, content.DesiredSize.Height)));
+                content.UpdateLayout();
+            }
 
             int w = (int)Math.Ceiling(targetWidth);
             int h = (int)Math.Ceiling(content.DesiredSize.Height);
@@ -1450,6 +1598,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             // Restore
             content.Width = oldWidth;
             content.Height = oldHeight;
+            if (tasksGrid != null) tasksGrid.ClearValue(ScrollViewer.HorizontalScrollBarVisibilityProperty);
+            if (planningGrid != null) planningGrid.ClearValue(ScrollViewer.HorizontalScrollBarVisibilityProperty);
+            sv.HorizontalScrollBarVisibility = oldHorizontalScrollBarVisibility;
             content.UpdateLayout();
         }
     }
@@ -2249,14 +2400,15 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             bmp.EndInit();
             bmp.Freeze();
 
+            var (defaultWidth, defaultHeight) = ComputeDefaultPlanImageSize(bmp);
             var it = new PlacedPlanImageItem
             {
                 FilePath = storedPath,
                 ImageSource = bmp,
                 X = 20 + (PlacedPlanImages.Count * 20),
                 Y = 20 + (PlacedPlanImages.Count * 20),
-                Width = 360,
-                Height = 240
+                Width = defaultWidth,
+                Height = defaultHeight
             };
 
             PlacedPlanImages.Add(it);
@@ -2494,15 +2646,38 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             el.ReleaseMouseCapture();
     }
 
-    private void PlacedPlanImageResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    // ✅ NOUVEAU (18.08.2026, demande de Joe : "je dois uniquement pouvoir l'agrandir et la
+    // déplacer en glisser, mais je ne dois pas pouvoir la déformer, car elle doit garder les
+    // proportions. Donc ctrl + roulette serait la solution") : remplace l'ancien coin de
+    // redimensionnement libre (PlacedPlanImageResizeThumb_DragDelta, retiré) -- Largeur et
+    // Hauteur sont toujours multipliées par le MÊME facteur, le ratio ne peut donc jamais
+    // changer. Le centre de l'image reste fixe pendant le zoom (X/Y réajustés en conséquence).
+    private void PlacedPlanImage_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (!_isPageActive) return;
+        if (Keyboard.Modifiers != ModifierKeys.Control) return;
 
-        if (sender is not Thumb th) return;
-        if (th.DataContext is not PlacedPlanImageItem it) return;
+        if (sender is not FrameworkElement fe || fe.DataContext is not PlacedPlanImageItem it) return;
 
-        it.Width = Math.Max(PlanImageMinSize, it.Width + e.HorizontalChange);
-        it.Height = Math.Max(PlanImageMinSize, it.Height + e.VerticalChange);
+        var factor = e.Delta > 0 ? 1.1 : 1.0 / 1.1;
+
+        // ✅ Ne descend jamais sous PlanImageMinSize, sur AUCUNE des deux dimensions (garde le
+        // ratio même quand on approche la taille minimale).
+        var minFactor = PlanImageMinSize / Math.Min(it.Width, it.Height);
+        if (factor < minFactor) factor = minFactor;
+
+        var newWidth = it.Width * factor;
+        var newHeight = it.Height * factor;
+
+        var centerX = it.X + it.Width / 2.0;
+        var centerY = it.Y + it.Height / 2.0;
+
+        it.Width = newWidth;
+        it.Height = newHeight;
+        it.X = Math.Max(0, centerX - newWidth / 2.0);
+        it.Y = Math.Max(0, centerY - newHeight / 2.0);
+
+        e.Handled = true;
     }
 
     private void PlacedPlanImage_RightClick(object sender, WpfMouseButtonEventArgs e)
@@ -3085,6 +3260,255 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         PlanningDataGrid?.UpdateLayout();
     }
 
+    // ============================================================
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : "Mode PV" -- liste de participants
+    // (Prénom/Nom/Entreprise) d'une séance, affichée juste au-dessus de la grille des Tâches
+    // (PvPanel), étalée en 2 colonnes côte à côte pour économiser de la hauteur. Le champ
+    // "Nom" de chaque ligne est une ComboBox éditable listant les contacts du dossier (Carnet
+    // d'adresses, voir Db.GetContacts) : sélectionner un contact importe Prénom/Nom/Entreprise
+    // en une fois (reste modifiable ensuite).
+    // ============================================================
+    private void TogglePvModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _pvModeEnabled = !_pvModeEnabled;
+        PvPanel.Visibility = _pvModeEnabled ? Visibility.Visible : Visibility.Collapsed;
+        ApplyPvModeToggleButtonAppearance();
+
+        if (_pvModeEnabled && _pvParticipants.Count == 0)
+        {
+            AddPvParticipant();
+            RebuildPvParticipantsUI();
+        }
+
+        SaveCurrentWeekState();
+    }
+
+    // ✅ "On"/"Off" (18.08.2026, demande de Joe), même principe que
+    // ApplyAutoAddToggleButtonAppearance : couleur pleine quand actif, contour sinon.
+    private void ApplyPvModeToggleButtonAppearance()
+    {
+        if (TogglePvModeButton == null) return;
+
+        if (_pvModeEnabled)
+        {
+            TogglePvModeButton.Content = "Mode PV : On";
+            TogglePvModeButton.Style = (Style)FindResource("SmallBlueButtonStyle");
+        }
+        else
+        {
+            TogglePvModeButton.Content = "Mode PV : Off";
+            TogglePvModeButton.Style = (Style)FindResource("WeekNavButtonStyle");
+        }
+    }
+
+    private void AddPvParticipantButton_Click(object sender, RoutedEventArgs e)
+    {
+        AddPvParticipant();
+        RebuildPvParticipantsUI();
+    }
+
+    // ✅ Colonne fixée à la création (18.08.2026, demande de Joe), voir PvParticipantData.Column
+    // -- équilibrée entre gauche/droite (la moins remplie des 2 reçoit la nouvelle ligne),
+    // mais plus jamais recalculée après coup.
+    private void AddPvParticipant(string name = "", string company = "")
+    {
+        var leftCount = _pvParticipants.Count(p => p.Column == 0);
+        var rightCount = _pvParticipants.Count(p => p.Column == 1);
+        _pvParticipants.Add(new PvParticipantData { Name = name, Company = company, Column = leftCount <= rightCount ? 0 : 1 });
+    }
+
+    // ✅ NOUVEAU (18.08.2026, demande de Joe) : "importer les noms d'un groupe du carnet
+    // d'adresse" -- popup listant les groupes du dossier (Db.GetContactGroups), cliquer un
+    // groupe importe tous ses membres d'un coup.
+    private void ImportPvGroupButton_Click(object sender, RoutedEventArgs e)
+    {
+        var pid = Db.GetCurrentProjectId();
+        var groups = pid.HasValue ? Db.GetContactGroups(pid.Value) : new List<Db.ContactGroup>();
+
+        PvGroupImportListPanel.Children.Clear();
+
+        if (groups.Count == 0)
+        {
+            PvGroupImportListPanel.Children.Add(new TextBlock
+            {
+                Text = "Aucun groupe dans le Carnet d'adresses.",
+                FontSize = 12,
+                Foreground = new WpfSolidColorBrush(WpfColor.FromRgb(0x6B, 0x72, 0x80)),
+                Margin = new Thickness(6),
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+        else
+        {
+            foreach (var group in groups)
+            {
+                var item = new WpfButton
+                {
+                    Content = string.IsNullOrWhiteSpace(group.Name) ? "(Sans nom)" : group.Name,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(8, 6, 8, 6),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                };
+                var groupId = group.Id;
+                item.Click += (s, args) =>
+                {
+                    ImportPvGroup(groupId);
+                    PvGroupImportPopup.IsOpen = false;
+                };
+                PvGroupImportListPanel.Children.Add(item);
+            }
+        }
+
+        PvGroupImportPopup.IsOpen = true;
+    }
+
+    private void ImportPvGroup(long groupId)
+    {
+        var pid = Db.GetCurrentProjectId();
+        if (!pid.HasValue) return;
+
+        var contacts = Db.GetContacts(pid.Value);
+        var memberIds = Db.GetContactGroupMemberIds(groupId);
+
+        foreach (var c in contacts)
+        {
+            if (!memberIds.Contains(c.Id)) continue;
+
+            // ✅ Ignore les doublons (demande de Joe, 18.08.2026) : contact déjà présent dans
+            // la liste (même Nom + Entreprise), pas d'ajout en double. "Nom Prénom", Nom en
+            // premier (demande de Joe : tri/recherche par ordre alphabétique).
+            var name = PvContactDisplayName(c);
+            var company = (c.Company ?? "").Trim();
+            var alreadyPresent = _pvParticipants.Any(p =>
+                string.Equals(p.Name.Trim(), name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(p.Company.Trim(), company, StringComparison.OrdinalIgnoreCase));
+            if (alreadyPresent) continue;
+
+            // ✅ Répartition gauche/droite pour économiser la hauteur (demande de Joe), même
+            // logique que l'ajout manuel -- voir AddPvParticipant.
+            AddPvParticipant(name, company);
+        }
+
+        RebuildPvParticipantsUI();
+        SaveCurrentWeekState();
+    }
+
+    // ✅ "Nom Prénom" (18.08.2026, demande de Joe) : Nom en premier ("pour les chercher par
+    // ordre alphabétique"), utilisé à l'import (sélection dans la liste ou import de groupe).
+    private static string PvContactDisplayName(Db.Contact c)
+    {
+        var name = (c.Name ?? "").Trim();
+        var firstName = (c.FirstName ?? "").Trim();
+        var full = string.Join(" ", new[] { name, firstName }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        return string.IsNullOrWhiteSpace(full) ? "(Sans nom)" : full;
+    }
+
+    private void RebuildPvParticipantsUI()
+    {
+        if (PvParticipantsLeftPanel == null || PvParticipantsRightPanel == null) return;
+
+        PvParticipantsLeftPanel.Children.Clear();
+        PvParticipantsRightPanel.Children.Clear();
+
+        var pid = Db.GetCurrentProjectId();
+        // ✅ Triée par ordre alphabétique (18.08.2026, demande de Joe : "lorsque je cherche un
+        // nom dans la liste déroulante, la liste doit me les proposer par ordre alphabétique")
+        // -- Db.GetContacts renvoie par Id, pas par Nom ; contacts/contactNames restent
+        // synchronisés par index (voir IndexOf dans SelectionChanged plus bas).
+        var contacts = pid.HasValue
+            ? Db.GetContacts(pid.Value).OrderBy(PvContactDisplayName, StringComparer.OrdinalIgnoreCase).ToList()
+            : new List<Db.Contact>();
+        // ✅ "Nom Prénom" (18.08.2026, demande de Joe) : Nom en premier, pour trier/rechercher
+        // la liste des participants par ordre alphabétique -- voir PvContactDisplayName.
+        var contactNames = contacts.Select(PvContactDisplayName).ToList();
+
+        // ✅ Étalée en 2 colonnes (demande de Joe : "pour but d'économiser de la hauteur"),
+        // chaque ligne restant dans SA colonne (voir PvParticipantData.Column) -- supprimer
+        // une ligne ne fait plus bouger les autres (demande de Joe, 18.08.2026).
+        foreach (var p in _pvParticipants)
+        {
+            var target = p.Column == 0 ? PvParticipantsLeftPanel : PvParticipantsRightPanel;
+            target.Children.Add(BuildPvParticipantRowVisual(p, contacts, contactNames));
+        }
+    }
+
+    private UIElement BuildPvParticipantRowVisual(PvParticipantData data, List<Db.Contact> contacts, List<string> contactNames)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+
+        // ✅ "Nom" = ComboBox éditable listant les contacts du Carnet d'adresses (demande de
+        // Joe : "on doit pouvoir importer les infos de cette personne depuis la page Carnet
+        // d'adresses"). Sélectionner un contact importe Nom + Entreprise en une fois.
+        var nameCombo = new WpfComboBox
+        {
+            ItemsSource = contactNames,
+            Text = data.Name,
+            IsEditable = true,
+            IsTextSearchEnabled = true,
+            Margin = new Thickness(0, 0, 4, 0),
+            Padding = new Thickness(4, 2, 4, 2),
+        };
+        // ✅ ComboBox n'a pas TextChanged (contrairement à TextBox) : LostFocus couvre la
+        // saisie libre, SelectionChanged (plus bas) couvre le choix dans la liste.
+        nameCombo.LostFocus += (s, e) => data.Name = nameCombo.Text;
+        Grid.SetColumn(nameCombo, 0);
+        row.Children.Add(nameCombo);
+
+        var companyBox = new WpfTextBox
+        {
+            Text = data.Company,
+            Padding = new Thickness(4, 2, 4, 2),
+        };
+        companyBox.TextChanged += (s, e) => data.Company = companyBox.Text;
+        Grid.SetColumn(companyBox, 1);
+        row.Children.Add(companyBox);
+
+        nameCombo.SelectionChanged += (s, e) =>
+        {
+            if (e.AddedItems.Count == 0 || e.AddedItems[0] is not string selectedDisplay) return;
+
+            var idx = contactNames.IndexOf(selectedDisplay);
+            if (idx < 0) return;
+
+            var matched = contacts[idx];
+            var displayName = PvContactDisplayName(matched);
+            data.Name = displayName;
+            data.Company = matched.Company;
+            nameCombo.Text = displayName;
+            companyBox.Text = matched.Company;
+        };
+
+        var removeButton = new WpfButton
+        {
+            Content = "✕",
+            Width = 22,
+            Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = new WpfSolidColorBrush(WpfColor.FromRgb(0x94, 0xA3, 0xB8)),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Retirer ce participant",
+            // ✅ Repéré et masqué pendant la capture PDF (18.08.2026, demande de Joe : "il
+            // reste des boutons de commandes sur le pdf"), voir PreparePdfCaptureUi.
+            Tag = "PvRemoveButton",
+        };
+        removeButton.Click += (s, e) =>
+        {
+            _pvParticipants.Remove(data);
+            RebuildPvParticipantsUI();
+        };
+        Grid.SetColumn(removeButton, 2);
+        row.Children.Add(removeButton);
+
+        return row;
+    }
+
     // ✅ 30.07.2026 (demande de Joe) : ajout automatique des intervenants au planning
     // hebdo -- commutateur Automatique/Manuel, figé PAR SEMAINE (comme Samedi/Dimanche),
     // vrai (Automatique) par défaut.
@@ -3465,7 +3889,14 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 Title = z.Title,
                 DocumentXaml = z.DocumentXaml
             }).ToList(),
-            AutoAddCompanyToPlanning = _autoAddCompanyToPlanning
+            AutoAddCompanyToPlanning = _autoAddCompanyToPlanning,
+            PvModeEnabled = _pvModeEnabled,
+            PvParticipants = _pvParticipants.Select(p => new PvParticipantState
+            {
+                Name = p.Name,
+                Company = p.Company,
+                Column = p.Column
+            }).ToList()
         };
     }
 
@@ -3654,6 +4085,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         PlacedStickers.Clear();
         PlacedPlanImages.Clear();
         _selectedPlacedPlanImage = null;
+        _pvParticipants.Clear();
+        var pvModeEnabled = false;
 
         // ✅ Samedi/Dimanche : figé par semaine (voir BuildCurrentWeekStateForKey). Pour une
         // semaine sans fichier (jamais visitée/sauvegardée), le point de départ est le défaut
@@ -3679,6 +4112,9 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                     showSunday = state.ShowSunday;
                     autoAddCompany = state.AutoAddCompanyToPlanning;
                     textZoneStates = state.TextZoneStates;
+                    pvModeEnabled = state.PvModeEnabled;
+                    foreach (var p in state.PvParticipants)
+                        _pvParticipants.Add(new PvParticipantData { Name = p.Name, Company = p.Company, Column = p.Column });
 
                     // ✅ state.TaskRows n'est plus utilisé (voir LoadProjectTasks) — laissé
                     // dans le fichier/la classe uniquement pour compatibilité de lecture des
@@ -3758,6 +4194,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
 
         _autoAddCompanyToPlanning = autoAddCompany;
         ApplyAutoAddToggleButtonAppearance();
+
+        // ✅ "Mode PV" (18.08.2026, demande de Joe) : figé par semaine, comme le reste ci-dessus.
+        _pvModeEnabled = pvModeEnabled;
+        if (PvPanel != null) PvPanel.Visibility = _pvModeEnabled ? Visibility.Visible : Visibility.Collapsed;
+        ApplyPvModeToggleButtonAppearance();
+        RebuildPvParticipantsUI();
     }
 
     // ✅ FIX: samedi après vendredi (recalage des index de colonnes)
@@ -4917,6 +5359,18 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         // hebdo, figé PAR SEMAINE (comme Samedi/Dimanche) -- passer en manuel une semaine
         // donnée n'affecte pas les autres. Vrai par défaut (semaines jamais sauvegardées).
         public bool AutoAddCompanyToPlanning { get; set; } = true;
+
+        // ✅ NOUVEAU (18.08.2026, demande de Joe) : "Mode PV" et sa liste de participants,
+        // figés PAR SEMAINE (une séance donnée concerne une semaine donnée).
+        public bool PvModeEnabled { get; set; }
+        public List<PvParticipantState> PvParticipants { get; set; } = new();
+    }
+
+    private sealed class PvParticipantState
+    {
+        public string Name { get; set; } = "";
+        public string Company { get; set; } = "";
+        public int Column { get; set; }
     }
 
     private sealed class TaskRowState

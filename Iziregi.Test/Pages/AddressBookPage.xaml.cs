@@ -106,7 +106,11 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
 
         foreach (var contact in _contacts)
         {
-            var displayName = string.IsNullOrWhiteSpace(contact.Name) ? "(Sans nom)" : contact.Name.Trim();
+            // ✅ "Nom Prénom" (18.08.2026, demande de Joe : "classer les contacts avec nom et
+            // prénom par ordre alphabétique des noms") : affiche les deux, le tri (ci-dessus)
+            // reste basé uniquement sur Name (Nom de famille).
+            var displayName = string.Join(" ", new[] { contact.Name, contact.FirstName }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+            if (string.IsNullOrWhiteSpace(displayName)) displayName = "(Sans nom)";
             var contactId = contact.Id;
             var checkBox = new WpfCheckBox { IsChecked = _checkedContactIds.Contains(contactId), VerticalAlignment = VerticalAlignment.Center };
             checkBox.Click += (s, e) =>
@@ -173,7 +177,7 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
     // (vCard, Outlook, Gmail...) -- décision volontaire, voir discussion avec Joe.
     private static readonly string[] ContactCsvHeader =
     {
-        "Titre", "Nom", "Intervenant", "Entreprise", "Adresse",
+        "Titre", "Nom", "Prénom", "Intervenant", "Entreprise", "Adresse",
         "Téléphone mobile", "Téléphone bureau", "E-mail", "Site web", "Champ libre"
     };
 
@@ -198,7 +202,7 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
             {
                 sb.AppendLine(string.Join(",", new[]
                 {
-                    c.Title, c.Name, c.Intervenant, c.Company, c.Address,
+                    c.Title, c.Name, c.FirstName, c.Intervenant, c.Company, c.Address,
                     c.Phone, c.Phone2, c.Email, c.Website, c.FreeText
                 }.Select(CsvEscape)));
             }
@@ -246,14 +250,15 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
 
                 Db.UpdateContact(contactId, "Title", Get(0));
                 Db.UpdateContact(contactId, "Name", Get(1));
-                Db.UpdateContact(contactId, "Intervenant", Get(2));
-                Db.UpdateContact(contactId, "Company", Get(3));
-                Db.UpdateContact(contactId, "Address", Get(4));
-                Db.UpdateContact(contactId, "Phone", Get(5));
-                Db.UpdateContact(contactId, "Phone2", Get(6));
-                Db.UpdateContact(contactId, "Email", Get(7));
-                Db.UpdateContact(contactId, "Website", Get(8));
-                Db.UpdateContact(contactId, "FreeText", Get(9));
+                Db.UpdateContact(contactId, "FirstName", Get(2));
+                Db.UpdateContact(contactId, "Intervenant", Get(3));
+                Db.UpdateContact(contactId, "Company", Get(4));
+                Db.UpdateContact(contactId, "Address", Get(5));
+                Db.UpdateContact(contactId, "Phone", Get(6));
+                Db.UpdateContact(contactId, "Phone2", Get(7));
+                Db.UpdateContact(contactId, "Email", Get(8));
+                Db.UpdateContact(contactId, "Website", Get(9));
+                Db.UpdateContact(contactId, "FreeText", Get(10));
                 imported++;
             }
 
@@ -476,11 +481,30 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
         var fields = new Grid();
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         // ✅ Largeur +3cm (280 -> 393px, demande de Joe, 04.08.2026) : 3cm = 113px à 96 DPI.
-        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(393) });
+        // ✅ +10mm (393 -> 431px, demande de Joe, 18.08.2026 : "élargir les lignes... pour
+        // avoir des champs plus longs") : 10mm = 37.8px à 96 DPI.
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(431) });
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         const int rowCount = 10;
         for (var i = 0; i < rowCount; i++)
             fields.RowDefinitions.Add(new RowDefinition());
+
+        // ✅ Croix "effacer" (18.08.2026, demande de Joe : "mettre une croix en fin de champ
+        // pour effacer le champ en une fois", pour tous les champs de la fiche contact). Même
+        // style que la croix de fermeture de la fiche (DeleteButtonStyle) : discrète, rouge au
+        // survol seulement.
+        WpfButton MakeClearButton(Action clear)
+        {
+            var btn = new WpfButton
+            {
+                Content = "✕",
+                Style = (Style)Resources["DeleteButtonStyle"],
+                Margin = new Thickness(4, 0, 0, 4),
+                ToolTip = "Effacer",
+            };
+            btn.Click += (s, e) => clear();
+            return btn;
+        }
 
         WpfTextBox AddRow(int row, string label, string value)
         {
@@ -495,7 +519,56 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
             tb.GotFocus += (s, e) => _lastFocusedFieldTextBox = tb;
             fields.Children.Add(tb);
 
+            var clear = MakeClearButton(() => tb.Text = "");
+            Grid.SetRow(clear, row);
+            Grid.SetColumn(clear, 2);
+            fields.Children.Add(clear);
+
             return tb;
+        }
+
+        // ✅ "Nom" suivi de "Prénom", sur la même ligne (18.08.2026, demande de Joe : "Nom"
+        // en premier pour trier/rechercher par ordre alphabétique) : grille interne à 2
+        // champs (chacun avec sa propre croix "effacer"), placée sur toute la largeur de la
+        // ligne (les 3 colonnes de "fields") plutôt que dans la seule colonne 1.
+        (WpfTextBox, WpfTextBox) AddTwoFieldRow(int row, string label1, string value1, string label2, string value2)
+        {
+            var rowGrid = new Grid();
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            WpfTextBox AddHalf(string label, string value, int labelCol, int boxCol, int clearCol)
+            {
+                var lbl = new TextBlock { Text = label, Style = (Style)Resources["FieldLabelStyle"], Width = double.NaN, Margin = new Thickness(0, 0, 6, 4) };
+                Grid.SetColumn(lbl, labelCol);
+                rowGrid.Children.Add(lbl);
+
+                var tb = new WpfTextBox { Text = value, Style = (Style)Resources["FieldTextBoxStyle"] };
+                Grid.SetColumn(tb, boxCol);
+                tb.GotFocus += (s, e) => _lastFocusedFieldTextBox = tb;
+                rowGrid.Children.Add(tb);
+
+                var clear = MakeClearButton(() => tb.Text = "");
+                Grid.SetColumn(clear, clearCol);
+                rowGrid.Children.Add(clear);
+
+                return tb;
+            }
+
+            var box1 = AddHalf(label1, value1, 0, 1, 2);
+            var box2 = AddHalf(label2, value2, 4, 5, 6);
+
+            Grid.SetRow(rowGrid, row);
+            Grid.SetColumn(rowGrid, 0);
+            Grid.SetColumnSpan(rowGrid, 3);
+            fields.Children.Add(rowGrid);
+
+            return (box1, box2);
         }
 
         // ✅ "Intervenant" (demande de Joe, 04.08.2026), en 2e position : lié à la liste
@@ -567,6 +640,11 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
             Grid.SetColumn(cell, 1);
             fields.Children.Add(cell);
 
+            var clear = MakeClearButton(() => { combo.Text = ""; UpdateSwatch(""); });
+            Grid.SetRow(clear, row);
+            Grid.SetColumn(clear, 2);
+            fields.Children.Add(clear);
+
             return combo;
         }
 
@@ -575,9 +653,22 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
         // ✅ Renommés "Téléphone mobile"/"Téléphone bureau" (demande de Joe, 04.08.2026),
         // remplace "Téléphone 1"/"Téléphone 2".
         var titleBox = AddRow(0, "Titre", contact.Title);
-        var nameBox = AddRow(1, "Nom", contact.Name);
+        // ✅ "Nom" avant "Prénom", même ligne (18.08.2026, demande de Joe : tri/recherche par
+        // ordre alphabétique en tapant le Nom en premier).
+        var (nameBox, firstNameBox) = AddTwoFieldRow(1, "Nom", contact.Name, "Prénom", contact.FirstName);
         var intervenantCombo = AddIntervenantRow(2, contact.Intervenant);
         var companyBox = AddRow(3, "Entreprise", contact.Company);
+        // ✅ Copie par défaut dans "Entreprise" à la sélection d'un intervenant (18.08.2026,
+        // demande de Joe), reste modifiable ensuite -- ne se redéclenche que sur une nouvelle
+        // sélection dans la liste, pas à chaque frappe.
+        // ✅ Fix ("le copier ne se fait pas") : combo.Text n'est pas encore à jour au moment où
+        // SelectionChanged se déclenche pour une ComboBox éditable (piège WPF connu) -- lire
+        // directement l'élément sélectionné via e.AddedItems au lieu de combo.Text.
+        intervenantCombo.SelectionChanged += (s, e) =>
+        {
+            if (e.AddedItems.Count > 0 && e.AddedItems[0] is string selected)
+                companyBox.Text = selected;
+        };
         var addressBox = AddRow(4, "Adresse", contact.Address);
         var phoneBox = AddRow(5, "Téléphone mobile", contact.Phone);
         var phone2Box = AddRow(6, "Téléphone bureau", contact.Phone2);
@@ -602,14 +693,14 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
 
         var contactId = contact.Id;
 
-        // ✅ Boutons sous le dernier champ, alignés à gauche (demande de Joe, 04.08.2026,
-        // remplace l'alignement à droite précédent) ; la section "Associé à :" passe en
-        // dessous, alignée à gauche aussi. "Fermer" fait la même chose que la croix flottante
-        // du coin haut-droit.
+        // ✅ Boutons sous le dernier champ, groupés à droite (18.08.2026, demande de Joe :
+        // "Enregistrer va tout à droite et les autres collés à sa gauche") ; la section
+        // "Associé à :" passe en dessous, alignée à gauche. "Fermer" fait la même chose que la
+        // croix flottante du coin haut-droit.
         var bottomButtons = new StackPanel
         {
             Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
 
@@ -618,12 +709,12 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
             Content = "Enregistrer",
             Style = (Style)FindResource("PrimaryButtonStyle"),
             Height = 32,
-            Margin = new Thickness(0, 0, 8, 0),
         };
         saveButton.Click += (s, e) =>
         {
             Db.UpdateContact(contactId, "Title", titleBox.Text);
             Db.UpdateContact(contactId, "Name", nameBox.Text);
+            Db.UpdateContact(contactId, "FirstName", firstNameBox.Text);
             Db.UpdateContact(contactId, "Intervenant", intervenantCombo.Text);
             Db.UpdateContact(contactId, "Company", companyBox.Text);
             Db.UpdateContact(contactId, "Address", addressBox.Text);
@@ -635,9 +726,8 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
             // ✅ La fiche se ferme après enregistrement (demande de Joe).
             CloseDetail();
         };
-        bottomButtons.Children.Add(saveButton);
 
-        // ✅ "Copier" entre "Enregistrer" et "Fermer" (demande de Joe, 2e essai après le
+        // ✅ "Copier" (demande de Joe, 2e essai après le
         // chevauchement avec la croix de fermeture) : copie le champ actuellement sélectionné
         // (_lastFocusedFieldTextBox, voir GotFocus dans AddRow), repli sur l'e-mail si rien
         // n'a encore été sélectionné dans cette fiche.
@@ -665,7 +755,7 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
 
         // ✅ "Supprimer" avec confirmation (demande de Joe), directement depuis la fiche
         // (jusqu'ici seule la croix ✕ de la liste permettait de supprimer un contact).
-        var deleteButton = new WpfButton { Content = "Supprimer", Style = (Style)Resources["DeleteTextButtonStyle"] };
+        var deleteButton = new WpfButton { Content = "Supprimer", Style = (Style)Resources["DeleteTextButtonStyle"], Margin = new Thickness(0, 0, 8, 0) };
         deleteButton.Click += (s, e) =>
         {
             var confirm = WpfMessageBox.Show(
@@ -681,6 +771,10 @@ public partial class AddressBookPage : System.Windows.Controls.UserControl, IRel
             CloseDetail();
         };
         bottomButtons.Children.Add(deleteButton);
+
+        // ✅ Ajouté en dernier : rightmost dans le StackPanel Horizontal aligné à droite,
+        // "tout à droite" (18.08.2026, demande de Joe), les autres "collés à sa gauche".
+        bottomButtons.Children.Add(saveButton);
 
         DetailPanel.Children.Add(bottomButtons);
 

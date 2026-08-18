@@ -749,6 +749,11 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <!-- ✅ NOUVEAU (18.08.2026, demande de Joe) : ligne pour PvPanel, entre la barre
+                 Début/Fin et le bloc figé des Tâches (TasksHeaderFixedBlock, décalé de Row="2"
+                 à Row="3" ci-dessous, ainsi que TasksHeaderCollapsedSeparator et
+                 MainScrollViewer). -->
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
@@ -815,6 +820,17 @@
                            VerticalAlignment="Center"
                            Margin="0,0,4,0"/>
 
+                <!-- ✅ NOUVEAU (18.08.2026, demande de Joe) : bascule l'affichage du bloc
+                     "Participants (Mode PV)" juste au-dessus de la grille des Tâches (voir
+                     PvPanel, Grid.Row="2"), pour la liste des participants d'une séance. -->
+                <Button x:Name="TogglePvModeButton"
+                        Content="Mode PV"
+                        Style="{StaticResource WeekNavButtonStyle}"
+                        Height="30"
+                        Padding="10,0"
+                        Margin="20,0,0,0"
+                        Click="TogglePvModeButton_Click"/>
+
             </StackPanel>
 
             <!-- ✅ Marge droite de 8 pour aligner le bord droit avec la pastille "Dossier" de
@@ -880,8 +896,109 @@
         <!-- ✅ Padding bas réduit 10->4 (demande de Joe, 10.08.2026) : compense le Margin haut
              de 2mm ajouté sur la ligne de titres plus bas, qui laissait trop de vide sous les
              flèches ▾ et donnait l'impression que titres/flèches restaient trop hauts dans la carte. -->
-        <Border x:Name="TasksHeaderFixedBlock"
+        <!-- ✅ NOUVEAU (18.08.2026, demande de Joe) : "Mode PV" (bouton près des dates) fait
+             apparaître ce bloc, juste au-dessus de la grille des Tâches. Liste de
+             participants (Nom/Entreprise), étalée en 2 colonnes côte à côte pour économiser
+             de la hauteur (voir RebuildPvParticipantsUI). Le champ "Nom" de chaque ligne est
+             une ComboBox éditable listant les contacts du Carnet d'adresses : sélectionner un
+             contact importe Nom/Entreprise en une fois. Pas de colonne "Prénom" séparée
+             (demande de Joe, 18.08.2026 : le carnet d'adresses ne sépare plus Prénom/Nom, un
+             seul champ "Nom" y contient les deux). -->
+        <Border x:Name="PvPanel"
                 Grid.Row="2"
+                Background="White"
+                BorderBrush="#6B7280"
+                BorderThickness="1"
+                CornerRadius="18"
+                Padding="10"
+                Effect="{StaticResource CardShadowEffect}"
+                Margin="17,0,33,12"
+                Visibility="Collapsed">
+            <StackPanel>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="PARTICIPANTS À LA SÉANCE" FontSize="12.5" FontWeight="Bold" Foreground="Black" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <!-- ✅ NOUVEAU (18.08.2026, demande de Joe) : importe en une fois tous
+                             les membres d'un groupe du Carnet d'adresses (voir ImportPvGroupButton_Click/
+                             ImportPvGroup). Les doublons (même Nom+Entreprise déjà présents) sont
+                             ignorés, et les nouveaux participants sont répartis gauche/droite comme
+                             les ajouts manuels (voir AddPvParticipant), pour économiser la hauteur. -->
+                        <Button x:Name="AddPvParticipantButton"
+                                Content="+ Ajouter participant"
+                                Style="{StaticResource SmallBlueButtonStyle}"
+                                Height="30"
+                                Margin="0,0,8,0"
+                                Click="AddPvParticipantButton_Click"/>
+                        <!-- ✅ "Importer un groupe" à droite (18.08.2026, demande de Joe). -->
+                        <Button x:Name="ImportPvGroupButton"
+                                Content="Importer un groupe ▾"
+                                Style="{StaticResource OutlineBlueButtonStyle}"
+                                Height="30"
+                                Click="ImportPvGroupButton_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <Popup x:Name="PvGroupImportPopup"
+                       PlacementTarget="{Binding ElementName=ImportPvGroupButton}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="White"
+                            BorderBrush="#D1D5DB"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="6"
+                            MinWidth="180"
+                            MaxHeight="300"
+                            Effect="{StaticResource CardShadowEffect}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="288">
+                            <StackPanel x:Name="PvGroupImportListPanel"/>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="24"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="26"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Nom" FontSize="12" FontWeight="SemiBold" Foreground="#6B7280"/>
+                            <TextBlock Grid.Column="1" Text="Entreprise" FontSize="12" FontWeight="SemiBold" Foreground="#6B7280"/>
+                        </Grid>
+                        <StackPanel x:Name="PvParticipantsLeftPanel"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2">
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="26"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Nom" FontSize="12" FontWeight="SemiBold" Foreground="#6B7280"/>
+                            <TextBlock Grid.Column="1" Text="Entreprise" FontSize="12" FontWeight="SemiBold" Foreground="#6B7280"/>
+                        </Grid>
+                        <StackPanel x:Name="PvParticipantsRightPanel"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="TasksHeaderFixedBlock"
+                Grid.Row="3"
                 BorderBrush="#6B7280"
                 BorderThickness="1,1,1,0"
                 CornerRadius="18"
@@ -1156,13 +1273,13 @@
              Basculée par MainScrollViewer_ScrollChanged (PlanningPage.xaml.cs), même Grid.Row
              que TasksHeaderFixedBlock, jamais visible en même temps que lui. -->
         <Border x:Name="TasksHeaderCollapsedSeparator"
-                Grid.Row="2"
+                Grid.Row="3"
                 Height="1"
                 Background="#6B7280"
                 Margin="16,0,33,0"
                 Visibility="Collapsed"/>
 
-        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="3" VerticalScrollBarVisibility="Auto" ScrollChanged="MainScrollViewer_ScrollChanged">
+        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="4" VerticalScrollBarVisibility="Auto" ScrollChanged="MainScrollViewer_ScrollChanged">
             <Grid Margin="16,0,16,16">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -2211,6 +2328,11 @@
                                         </ItemsControl.ItemContainerStyle>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
+                                                <!-- ✅ Redimensionnement proportionnel uniquement (18.08.2026, demande de
+                                                     Joe : "je ne dois pas pouvoir la déformer, car elle doit garder les
+                                                     proportions") : le coin de redimensionnement libre (Thumb) est retiré,
+                                                     remplacé par Ctrl+molette (voir PlacedPlanImage_PreviewMouseWheel),
+                                                     qui agrandit/réduit toujours largeur ET hauteur du même facteur. -->
                                                 <Border Width="{Binding Width}"
 												        Height="{Binding Height}"
 												        Background="Transparent"
@@ -2218,7 +2340,8 @@
 												        PreviewMouseMove="PlacedPlanImage_PreviewMouseMove"
 												        PreviewMouseLeftButtonUp="PlacedPlanImage_PreviewMouseLeftButtonUp"
 												        PreviewMouseRightButtonDown="PlacedPlanImage_RightClick"
-												        ToolTip="Glisser : déplacer • Coin : redimensionner • Clic droit : supprimer">
+												        PreviewMouseWheel="PlacedPlanImage_PreviewMouseWheel"
+												        ToolTip="Glisser : déplacer • Ctrl+molette : agrandir/réduire • Clic droit : supprimer">
                                                     <!-- ✅ Contour visuel de sélection (19.07.2026, demande de Joe) : gris fin par
                                                          défaut, bleu et plus épais quand IsSelected. -->
                                                     <Border.Style>
@@ -2234,19 +2357,7 @@
                                                         </Style>
                                                     </Border.Style>
                                                     <Grid>
-                                                        <Image Source="{Binding ImageSource}" Stretch="Fill"/>
-                                                        <Thumb Width="14"
-														       Height="14"
-														       HorizontalAlignment="Right"
-														       VerticalAlignment="Bottom"
-														       Cursor="SizeNWSE"
-														       DragDelta="PlacedPlanImageResizeThumb_DragDelta">
-                                                            <Thumb.Template>
-                                                                <ControlTemplate TargetType="Thumb">
-                                                                    <Border Background="Black" CornerRadius="2"/>
-                                                                </ControlTemplate>
-                                                            </Thumb.Template>
-                                                        </Thumb>
+                                                        <Image Source="{Binding ImageSource}" Stretch="Uniform"/>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>
