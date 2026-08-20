@@ -44,6 +44,12 @@ public partial class TaskDescriptionWindow : Window
     // recherche/tri) ; ResultDocumentXaml n'est utilisé que par cette fenêtre.
     public string ResultDocumentXaml { get; private set; } = "";
 
+    // ✅ NOUVEAU (20.08.2026, demande de Joe) : même bascule que la case à cocher de la
+    // cellule Descriptif dans la grille (TaskRow.IncludeInTaskDetails), exposée ici aussi
+    // ("dans le descriptif lui-même"). Lue par PlanningPage.TaskExpandDescriptionButton_Click
+    // au retour de la fenêtre.
+    public bool ResultIncludeInTaskDetails { get; private set; }
+
     // ✅ Avertissement si fermeture sans avoir cliqué "Enregistrer" (demande de Joe,
     // 16.07.2026) : mémorise le texte de départ pour détecter une vraie modification,
     // et évite de redemander une fois que l'utilisateur a confirmé qu'il veut abandonner.
@@ -79,9 +85,27 @@ public partial class TaskDescriptionWindow : Window
         bool showBuilding,
         bool showFloor,
         bool showCategory,
-        bool showUrgent)
+        bool showUrgent,
+        bool includeInTaskDetails = false,
+        string? companyColorHex = null,
+        bool companyIsGradient = false,
+        double? descriptifContentWidth = null)
     {
         InitializeComponent();
+
+        IncludeInTaskDetailsCheckBox.IsChecked = includeInTaskDetails;
+        ResultIncludeInTaskDetails = includeInTaskDetails;
+
+        // ✅ NOUVEAU (20.08.2026, demande de Joe) : largeur de la zone de texte alignée sur la
+        // largeur réelle d'une fiche dans "Détails descriptifs" (voir
+        // PlanningPage.ComputeTaskDetailCardWidth), pour que le texte se césure au même endroit
+        // à l'écriture qu'à l'affichage dans la nouvelle section ("respecter le nombre de
+        // caractères par largeur").
+        if (descriptifContentWidth.HasValue)
+        {
+            DescriptifRichTextBox.Width = descriptifContentWidth.Value;
+            DescriptifRichTextBox.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+        }
 
         _taskRef = taskRef ?? "";
         _company = company ?? "";
@@ -102,6 +126,20 @@ public partial class TaskDescriptionWindow : Window
         FloorTextBlock.Text = string.IsNullOrWhiteSpace(_floor) ? "—" : _floor;
         CategoryTextBlock.Text = string.IsNullOrWhiteSpace(_category) ? "—" : _category;
         CompanyTextBlock.Text = string.IsNullOrWhiteSpace(_company) ? "—" : _company;
+
+        // ✅ NOUVEAU (20.08.2026, demande de Joe) : le nom de l'intervenant est surligné de sa
+        // couleur (même couleur que celle de la page Listes / grille des Tâches), voir
+        // PlanningPage.TaskExpandDescriptionButton_Click.
+        if (!string.IsNullOrWhiteSpace(_company) && !string.IsNullOrWhiteSpace(companyColorHex))
+        {
+            var bg = Iziregi.Test.Helpers.ColorGradientHelper.BuildBrush(companyColorHex, companyIsGradient);
+            if (bg != null)
+            {
+                CompanyTextBlock.Background = bg;
+                CompanyTextBlock.Foreground = GetTextBrushForBackground(bg);
+                CompanyTextBlock.Padding = new Thickness(4, 1, 4, 2);
+            }
+        }
         UrgentTextBlock.Text = string.IsNullOrWhiteSpace(urgent) ? "—" : urgent;
         DoneTextBlock.Text = done ? "Oui" : "Non";
 
@@ -169,6 +207,34 @@ public partial class TaskDescriptionWindow : Window
             }
         }
         return null;
+    }
+
+    // ✅ Duplique le même mécanisme que ArchivesPage/TrashPage/AccountingPage (contraste
+    // texte/fond selon luminance) : convention déjà établie dans ce projet (chaque page/fenêtre
+    // garde ses propres styles locaux plutôt qu'une centralisation à large portée).
+    private static bool TryGetSolidColor(System.Windows.Media.Brush brush, out System.Windows.Media.Color color)
+    {
+        if (brush is SolidColorBrush scb)
+        {
+            color = scb.Color;
+            return true;
+        }
+
+        color = default;
+        return false;
+    }
+
+    private static System.Windows.Media.Brush GetTextBrushForBackground(System.Windows.Media.Brush bg)
+    {
+        if (!TryGetSolidColor(bg, out var c))
+            return System.Windows.Media.Brushes.Black;
+
+        double r = c.R / 255.0;
+        double g = c.G / 255.0;
+        double b = c.B / 255.0;
+        double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+        return luminance < 0.55 ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Black;
     }
 
     private static FlowDocument MakeFlowDocumentFromPlainText(string text)
@@ -522,7 +588,13 @@ public partial class TaskDescriptionWindow : Window
     {
         ResultText = GetPlainTextFromDocument(DescriptifRichTextBox.Document);
         ResultDocumentXaml = SerializeFlowDocumentToXaml(DescriptifRichTextBox.Document);
+        ResultIncludeInTaskDetails = IncludeInTaskDetailsCheckBox.IsChecked == true;
         DialogResult = true;
+    }
+
+    private void IncludeInTaskDetailsCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        _hasEdited = true;
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
@@ -548,6 +620,50 @@ public partial class TaskDescriptionWindow : Window
         }
 
         return fields;
+    }
+
+    // ✅ NOUVEAU (20.08.2026, correctif : "si j'ajoute une image dans le descriptif tâche, elle
+    // n'apparaît pas dans le pdf") : GeneratePdfButton_Click passait GetPlainTextFromDocument
+    // (texte brut) à PdfService.GenerateTaskDescriptionPdf, qui affichait juste du texte QuestPDF
+    // -- toute image insérée était donc silencieusement perdue. Ici, on prend plutôt une capture
+    // PNG fidèle du Descriptif (mise en forme + images comprises), rendue hors-écran à partir
+    // d'une COPIE du FlowDocument (round-trip Xaml, même mécanisme que ResultDocumentXaml) car un
+    // FlowDocument ne peut être hébergé que par un seul RichTextBox à la fois -- utiliser
+    // directement DescriptifRichTextBox.Document le détacherait de l'éditeur visible.
+    private byte[] CaptureDescriptifSnapshotPng()
+    {
+        const double snapshotWidth = 640;
+
+        var snapshotDoc = DeserializeFlowDocumentFromXaml(SerializeFlowDocumentToXaml(DescriptifRichTextBox.Document))
+            ?? new FlowDocument();
+
+        var snapshotRtb = new System.Windows.Controls.RichTextBox
+        {
+            Document = snapshotDoc,
+            BorderThickness = new Thickness(0),
+            Background = System.Windows.Media.Brushes.White,
+            Padding = new Thickness(12),
+            FontSize = 13,
+            Width = snapshotWidth,
+        };
+
+        var paragraphStyle = new Style(typeof(Paragraph));
+        paragraphStyle.Setters.Add(new Setter(Block.MarginProperty, new Thickness(0)));
+        snapshotRtb.Resources.Add(typeof(Paragraph), paragraphStyle);
+
+        snapshotRtb.Measure(new System.Windows.Size(snapshotWidth, double.PositiveInfinity));
+        var height = Math.Max(1, snapshotRtb.DesiredSize.Height);
+        snapshotRtb.Arrange(new Rect(0, 0, snapshotWidth, height));
+        snapshotRtb.UpdateLayout();
+
+        var bmp = new RenderTargetBitmap((int)Math.Ceiling(snapshotWidth), (int)Math.Ceiling(height), 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(snapshotRtb);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bmp));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
     }
 
     // ✅ Se déclenche pour TOUTE fermeture (Annuler, croix en haut à droite, Alt+F4) —
@@ -597,7 +713,8 @@ public partial class TaskDescriptionWindow : Window
                 dlg.FileName,
                 _taskRef,
                 GetVisibleInfoFields(),
-                GetPlainTextFromDocument(DescriptifRichTextBox.Document));
+                GetPlainTextFromDocument(DescriptifRichTextBox.Document),
+                CaptureDescriptifSnapshotPng());
 
             // ✅ Ouvre automatiquement le PDF (23.07.2026, demande de Joe : tous les pdf générés
             // dans l'app doivent s'ouvrir automatiquement).

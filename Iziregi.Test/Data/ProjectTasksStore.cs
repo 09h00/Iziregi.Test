@@ -34,6 +34,13 @@ public sealed class TaskRecord
     // ✅ Corbeille des tâches (demande de Joe), même principe qu'IsArchived/ArchivedAt.
     public bool IsTrashed { get; set; }
     public DateTime? TrashedAt { get; set; }
+
+    // ✅ NOUVEAU (20.08.2026, demande de Joe : "avec un bouton placé dans le descriptif, je
+    // dois pouvoir sélectionner si je le place dans la nouvelle section") : coche par tâche,
+    // choisie via un bouton dans la cellule Descriptif de la grille (voir PlanningPage.xaml,
+    // TaskTodoColumn) -- seules les tâches cochées apparaissent dans "Détails tâches"
+    // (RebuildTaskDetailsUI). Faux par défaut : rien n'apparaît tant que Joe n'a rien choisi.
+    public bool IncludeInTaskDetails { get; set; }
 }
 
 public static class ProjectTasksStore

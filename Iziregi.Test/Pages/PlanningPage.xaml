@@ -96,6 +96,8 @@
         <local:TodoFirstLineConverter x:Key="TodoFirstLineConverter"/>
         <local:TodoShowPencilConverter x:Key="TodoShowPencilConverter"/>
         <local:TodoShowVoirPlusConverter x:Key="TodoShowVoirPlusConverter"/>
+        <local:TodoShowPencilMultiConverter x:Key="TodoShowPencilMultiConverter"/>
+        <local:TodoShowVoirPlusMultiConverter x:Key="TodoShowVoirPlusMultiConverter"/>
 
         <!-- ✅ Cell color only if not empty -->
         <local:CellTextAndCompanyToBrushConverter x:Key="CellCompanyColorIfNotEmptyConverter"/>
@@ -820,16 +822,23 @@
                            VerticalAlignment="Center"
                            Margin="0,0,4,0"/>
 
-                <!-- ✅ NOUVEAU (18.08.2026, demande de Joe) : bascule l'affichage du bloc
-                     "Participants (Mode PV)" juste au-dessus de la grille des Tâches (voir
-                     PvPanel, Grid.Row="2"), pour la liste des participants d'une séance. -->
-                <Button x:Name="TogglePvModeButton"
-                        Content="Mode PV"
-                        Style="{StaticResource WeekNavButtonStyle}"
-                        Height="30"
-                        Padding="10,0"
-                        Margin="20,0,0,0"
-                        Click="TogglePvModeButton_Click"/>
+                <!-- ✅ NOUVEAU (20.08.2026, demande de Joe : "à la place des boutons Détails
+                     descriptifs et Liste participants, j'aimerais mettre des cases à cocher...
+                     mettre l'un sur l'autre") : remplace les 2 boutons On/Off par des cases à
+                     cocher, empilées verticalement, juste après les dates. -->
+                <StackPanel Orientation="Vertical" Margin="20,0,0,0" VerticalAlignment="Center">
+                    <CheckBox x:Name="TogglePvModeCheckBox"
+                              Content="Liste participants"
+                              Foreground="#111827"
+                              Checked="TogglePvModeCheckBox_Changed"
+                              Unchecked="TogglePvModeCheckBox_Changed"/>
+                    <CheckBox x:Name="TaskDetailsToggleCheckBox"
+                              Content="Détails descriptifs"
+                              Foreground="#111827"
+                              Margin="0,4,0,0"
+                              Checked="TaskDetailsToggleCheckBox_Changed"
+                              Unchecked="TaskDetailsToggleCheckBox_Changed"/>
+                </StackPanel>
 
             </StackPanel>
 
@@ -1152,15 +1161,16 @@
                                 Click="PlanningTrashButton_Click"/>
                     </StackPanel>
 
-                    <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
-                         (mémorisé entre les sessions via Db.GetTasksVisibleColumns/
-                         SetTasksVisibleColumns). -->
-                    <Button x:Name="TaskColumnsButton"
-                            Grid.Column="3"
-                            Content="Colonnes ▾"
-                            Style="{StaticResource OutlineBlueButtonStyle}"
-                            Height="30"
-                            Click="TaskColumnsButton_Click"/>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal">
+                        <!-- ✅ Choix des colonnes à listes déroulantes affichées/masquées
+                             (mémorisé entre les sessions via Db.GetTasksVisibleColumns/
+                             SetTasksVisibleColumns). -->
+                        <Button x:Name="TaskColumnsButton"
+                                Content="Colonnes ▾"
+                                Style="{StaticResource OutlineBlueButtonStyle}"
+                                Height="30"
+                                Click="TaskColumnsButton_Click"/>
+                    </StackPanel>
                 </Grid>
 
                 <Popup x:Name="TaskColumnsPopup"
@@ -1205,7 +1215,7 @@
                                   VerticalAlignment="Center"
                                   Click="TaskSelectAllCheckBox_Click"/>
                     </Border>
-                    <Border Width="70" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskRefColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <TextBlock Text="N°" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                     </Border>
                     <!-- ✅ Fix désync titres/colonnes (18.08.2026, demande de Joe) : Visibility liée en plus
@@ -1232,7 +1242,7 @@
                     <Border Width="{Binding ActualWidth, Source={x:Reference TaskTodoColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
                         <TextBlock Text="Descriptif" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                     </Border>
-                    <Border Width="56" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1"/>
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskExpandDescriptionColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,0,1"/>
                     <Border Width="{Binding ActualWidth, Source={x:Reference TaskCategoryColumn}}"
                             Visibility="{Binding Visibility, Source={x:Reference TaskCategoryColumn}}"
                             BorderBrush="#D1D5DB" BorderThickness="1,1,0,1">
@@ -1257,7 +1267,7 @@
                             <Button Content="▾" Tag="Urgent" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Width="90" BorderBrush="#D1D5DB" BorderThickness="1,1,1,1">
+                    <Border Width="{Binding ActualWidth, Source={x:Reference TaskDoneColumn}}" BorderBrush="#D1D5DB" BorderThickness="1,1,1,1">
                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
                             <TextBlock Text="Effectuée" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" Foreground="#111827"/>
                             <Button Content="▾" Tag="Done" Style="{StaticResource FilterHeaderButtonStyle}" Click="TaskColumnFilterButton_Click" HorizontalAlignment="Center" Margin="0,2,0,0"/>
@@ -1282,6 +1292,9 @@
         <ScrollViewer x:Name="MainScrollViewer" Grid.Row="4" VerticalScrollBarVisibility="Auto" ScrollChanged="MainScrollViewer_ScrollChanged">
             <Grid Margin="16,0,16,16">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <!-- ✅ NOUVEAU (20.08.2026, demande de Joe) : "Détails tâches", entre la
+                         grille des Tâches et le Planning hebdo, voir TaskDetailsSectionBorder. -->
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -1338,7 +1351,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskRefColumn" Header="N°" Width="70">
+                                <DataGridTemplateColumn x:Name="TaskRefColumn" Header="N°" Width="50">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border CornerRadius="0" Padding="0">
@@ -1395,7 +1408,7 @@
                                      plus être coupé, ni dans les lignes ni dans l'entête, la colonne
                                      s'élargit maintenant librement pour l'accueillir (au lieu de tronquer,
                                      voir ancien commentaire du 16.07.2026 remplacé ici). -->
-                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" MinWidth="90" Width="Auto">
+                                <DataGridTemplateColumn x:Name="TaskBuildingColumn" MinWidth="124" Width="Auto">
                                     <!-- ✅ Filtre Excel (demande de Joe) : Header (instance unique,
                                          permanente) au lieu de HeaderTemplate, nécessaire pour
                                          nommer le Border/Button et les retrouver depuis
@@ -1421,7 +1434,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskFloorColumn" MinWidth="80" Width="Auto">
+                                <DataGridTemplateColumn x:Name="TaskFloorColumn" MinWidth="124" Width="Auto">
                                     <DataGridTemplateColumn.Header>
                                         <Border x:Name="FloorHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
                                             <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
@@ -1442,20 +1455,27 @@
                                 <!-- ✅ N'affiche que la 1ère ligne en mode lecture (le texte complet peut
                                      être multi-lignes via l'éditeur agrandi) — édition rapide inline
                                      toujours possible (reste sur une seule ligne, comme avant). -->
-                                <DataGridTemplateColumn x:Name="TaskTodoColumn" Header="Descriptif" MinWidth="120" Width="*">
+                                <!-- ✅ MaxWidth (20.08.2026, demande de Joe : "réduire de 5% la colonne
+                                     Descriptif") : plafond approximatif (~5% de moins que sa largeur
+                                     naturelle habituelle), sans ajouter de colonne supplémentaire (une
+                                     colonne "espaceur" en étoile testée avant apparaissait comme une
+                                     colonne à part entière à cause du quadrillage du tableau). -->
+                                <DataGridTemplateColumn x:Name="TaskTodoColumn" Header="Descriptif" MinWidth="120" MaxWidth="544" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding Todo, Converter={StaticResource TodoFirstLineConverter}}"
                                                        VerticalAlignment="Center"
+                                                       Margin="4,0,0,0"
                                                        TextTrimming="CharacterEllipsis"/>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                     <DataGridTemplateColumn.CellEditingTemplate>
                                         <DataTemplate>
                                             <TextBox Text="{Binding Todo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     MaxLength="80"
+                                                     MaxLength="70"
                                                      BorderThickness="0"
                                                      Background="Transparent"
+                                                     Margin="4,0,0,0"
                                                      VerticalContentAlignment="Center"
                                                      LostFocus="TaskTodoTextBox_LostFocus"/>
                                         </DataTemplate>
@@ -1468,7 +1488,7 @@
                                      confortable pour écrire beaucoup de texte. Crayon si 1 seule ligne ;
                                      texte "Voir +" (sans fond coloré) si plus d'une ligne. Icône/texte
                                      agrandis (demande de Joe, 16.07.2026, 2e passe). -->
-                                <DataGridTemplateColumn x:Name="TaskExpandDescriptionColumn" Header="" Width="56" CanUserResize="False">
+                                <DataGridTemplateColumn x:Name="TaskExpandDescriptionColumn" Header="" Width="48" CanUserResize="False">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Button Padding="4,0"
@@ -1482,13 +1502,29 @@
                                                           Stretch="Uniform"
                                                           Width="15"
                                                           Height="15"
-                                                          Fill="#6B7280"
-                                                          Visibility="{Binding Todo, Converter={StaticResource TodoShowPencilConverter}}"/>
+                                                          Fill="#6B7280">
+                                                        <Path.Visibility>
+                                                            <MultiBinding Converter="{StaticResource TodoShowPencilMultiConverter}">
+                                                                <Binding Path="Todo"/>
+                                                                <Binding Path="ActualWidth" Source="{x:Reference TaskTodoColumn}"/>
+                                                            </MultiBinding>
+                                                        </Path.Visibility>
+                                                    </Path>
+                                                    <!-- ✅ NOUVEAU (20.08.2026, demande de Joe : "si les '...' apparaissent, alors le
+                                                         'Voir+' doit apparaître aussi") : en plus du texte multi-lignes, se déclenche
+                                                         aussi si la 1ère ligne seule est trop longue pour la largeur actuelle de la
+                                                         colonne Descriptif (voir TodoOverflowHelper). -->
                                                     <TextBlock Text="Voir +"
                                                                FontSize="14"
                                                                FontWeight="SemiBold"
-                                                               Foreground="#2563EB"
-                                                               Visibility="{Binding Todo, Converter={StaticResource TodoShowVoirPlusConverter}}"/>
+                                                               Foreground="#2563EB">
+                                                        <TextBlock.Visibility>
+                                                            <MultiBinding Converter="{StaticResource TodoShowVoirPlusMultiConverter}">
+                                                                <Binding Path="Todo"/>
+                                                                <Binding Path="ActualWidth" Source="{x:Reference TaskTodoColumn}"/>
+                                                            </MultiBinding>
+                                                        </TextBlock.Visibility>
+                                                    </TextBlock>
                                                 </Grid>
                                             </Button>
                                         </DataTemplate>
@@ -1577,7 +1613,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn x:Name="TaskUrgentColumn" MinWidth="52" Width="Auto">
+                                <DataGridTemplateColumn x:Name="TaskUrgentColumn" MinWidth="40" Width="Auto">
                                     <!-- ✅ Width Auto (au lieu de 52 fixe) : la colonne doit pouvoir
                                          s'élargir pour accueillir le bouton de filtre "▾" sous le
                                          libellé, MinWidth conservé comme largeur plancher. -->
@@ -1608,7 +1644,7 @@
                                 <!-- ✅ Largeur augmentée (16.07.2026, demande de Joe) : 61px coupait la
                                      dernière lettre de "Effectué" depuis l'agrandissement de la police
                                      des grilles (13→15). -->
-                                <DataGridTemplateColumn x:Name="TaskDoneColumn" Width="90">
+                                <DataGridTemplateColumn x:Name="TaskDoneColumn" Width="70">
                                     <DataGridTemplateColumn.Header>
                                         <Border x:Name="DoneHeaderBorder" Style="{StaticResource FilterHeaderHighlightBorderStyle}">
                                             <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
@@ -1637,6 +1673,37 @@
                             </DataGrid.Columns>
                         </DataGrid>
                         </Border>
+                </Border>
+
+                <!-- ✅ NOUVEAU (20.08.2026, demande de Joe : "on va ajouter une section que
+                     l'on pourra masquer ou afficher avec un bouton 'Détails tâches'... placée
+                     après la grille des tâches... je veux pouvoir y afficher les fiches de
+                     'Descriptif de tâche'") : une fiche par tâche visible dans la grille
+                     ci-dessus (même filtre/semaine), reprenant le même en-tête contextuel que
+                     TaskDescriptionWindow (Ref + colonnes actuellement visibles) suivi du
+                     Descriptif complet en lecture seule (RewireResizableInlineImages/
+                     DeserializeFlowDocumentFromXaml, voir RebuildTaskDetailsUI). Masquée par
+                     défaut, comme "Mode PV". -->
+                <Border x:Name="TaskDetailsSectionBorder"
+                        Grid.Row="2"
+                        Background="White"
+                        BorderBrush="#6B7280"
+                        BorderThickness="1"
+                        CornerRadius="18"
+                        Padding="10"
+                        Effect="{StaticResource CardShadowEffect}"
+                        Margin="0,0,0,12"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="DÉTAILS DESCRIPTIFS" FontSize="12.5" FontWeight="Bold" Foreground="Black" Margin="0,0,0,10"/>
+                        <!-- ✅ 2 fiches par ligne (20.08.2026, demande de Joe), UniformGrid : la
+                             ligne suivante démarre automatiquement une fois 2 fiches placées.
+                             Section incluse dans le PDF (demande de Joe : "insérable dans le
+                             pdf") sans capture séparée : contrairement à PvPanel (hors du
+                             ScrollViewer), celle-ci fait partie du flux normal de la page,
+                             déjà comprise dans la capture existante (voir ExportPdfButton_Click). -->
+                        <UniformGrid x:Name="TaskDetailsListPanel" Columns="2"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- 2) Planning hebdo -->
@@ -2137,7 +2204,7 @@
 
                 <!-- 3) Image -->
                 <Border x:Name="PlanSectionBorder"
-                        Grid.Row="2"
+                        Grid.Row="3"
 				        BorderBrush="#6B7280"
 				        BorderThickness="1"
 				        CornerRadius="18"
@@ -2491,7 +2558,7 @@
 
                 <!-- 4) Zones de texte -->
                 <Border x:Name="TextZonesSectionBorder"
-                        Grid.Row="3"
+                        Grid.Row="4"
 				        BorderBrush="#6B7280"
 				        BorderThickness="1"
 				        CornerRadius="18"

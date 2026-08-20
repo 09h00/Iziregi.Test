@@ -3129,6 +3129,26 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         foreach (var r in visibleRows) r.IsSelected = select;
     }
 
+    // ✅ NOUVEAU (20.08.2026, demande de Joe : "la largeur de la fiche 'Descriptif' doit être
+    // identique à la largeur affichée dans la nouvelle section... pour respecter le nombre de
+    // caractères par largeur") : calcule la largeur réelle d'une fiche dans "Détails
+    // descriptifs" (2 colonnes, UniformGrid) à partir de TaskSectionBorder (grille des Tâches,
+    // toujours visible) qui a la même largeur extérieure que TaskDetailsSectionBorder (même
+    // Grid, même colonne implicite) -- fiable même quand la section est actuellement masquée
+    // (Visibility="Collapsed" => ActualWidth resterait à 0 si on mesurait sur elle-même).
+    private double? ComputeTaskDetailCardWidth()
+    {
+        var outerWidth = TaskSectionBorder.ActualWidth;
+        if (outerWidth <= 0) return null;
+
+        const double sectionPadding = 20; // TaskDetailsSectionBorder Padding="10" (10+10)
+        const double cardChrome = 8 + 20 + 2; // BuildTaskDetailCard : Margin 4*2 + Padding 10*2 + BorderThickness 1*2
+
+        var columnWidth = (outerWidth - sectionPadding) / 2.0;
+        var cardWidth = columnWidth - cardChrome;
+        return cardWidth > 60 ? cardWidth : (double?)null;
+    }
+
     // ✅ Éditeur agrandi du Descriptif (16.07.2026, demande de Joe) : ouvre TaskDescriptionWindow
     // en modal sur la ligne concernée. Le texte n'est appliqué que si l'utilisateur clique sur
     // "Enregistrer" dans la fenêtre (DialogResult == true) ; "Annuler" ne modifie rien.
@@ -3137,6 +3157,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         if (!_isPageActive) return;
         if (sender is not WpfButton btn || btn.DataContext is not TaskRow row) return;
 
+        var pid = Db.GetCurrentProjectId();
+        var companyColorHex = CompanyColorMap.GetValueOrDefault(row.Company ?? "");
+        var companyIsGradient = pid.HasValue && pid.Value > 0 && !string.IsNullOrWhiteSpace(row.Company)
+            && Db.GetCompanyIsGradient(pid.Value, row.Company);
+
         var win = new TaskDescriptionWindow(
             row.Ref, row.Company, row.Building, row.Floor, row.Category, row.Reserve, row.Urgent, row.Done, row.Todo, row.TodoDocumentXaml,
             CompanyLabel, BuildingLabel, FloorLabel, TaskCategoryLabel, TaskUrgencyLabel,
@@ -3144,7 +3169,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
             showBuilding: TaskBuildingColumn.Visibility == Visibility.Visible,
             showFloor: TaskFloorColumn.Visibility == Visibility.Visible,
             showCategory: TaskCategoryColumn.Visibility == Visibility.Visible,
-            showUrgent: TaskUrgentColumn.Visibility == Visibility.Visible)
+            showUrgent: TaskUrgentColumn.Visibility == Visibility.Visible,
+            includeInTaskDetails: row.IncludeInTaskDetails,
+            companyColorHex: companyColorHex,
+            companyIsGradient: companyIsGradient,
+            descriptifContentWidth: ComputeTaskDetailCardWidth())
         {
             Owner = System.Windows.Window.GetWindow(this)
         };
@@ -3153,8 +3182,178 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         {
             row.Todo = win.ResultText;
             row.TodoDocumentXaml = win.ResultDocumentXaml;
+            row.IncludeInTaskDetails = win.ResultIncludeInTaskDetails;
             SaveProjectTasks();
+            if (_taskDetailsVisible) RebuildTaskDetailsUI();
         }
+    }
+
+    // ============================================================
+    // ✅ NOUVEAU (20.08.2026, demande de Joe) : "Détails tâches" -- section affichant, sous la
+    // grille des Tâches, une fiche par tâche (même liste que la grille : filtre/semaine/tri
+    // actuels) avec son Descriptif complet en lecture seule, 3 fiches par ligne. Fait partie
+    // du flux normal de la page (contrairement à PvPanel) : incluse automatiquement dans
+    // l'export PDF existant, sans capture séparée.
+    // ============================================================
+    private bool _taskDetailsVisible;
+
+    // ✅ NOUVEAU (20.08.2026, demande de Joe) : case à cocher (remplace l'ancien bouton On/Off
+    // TaskDetailsToggleButton).
+    private void TaskDetailsToggleCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        _taskDetailsVisible = TaskDetailsToggleCheckBox.IsChecked == true;
+        TaskDetailsSectionBorder.Visibility = _taskDetailsVisible ? Visibility.Visible : Visibility.Collapsed;
+
+        if (_taskDetailsVisible)
+            RebuildTaskDetailsUI();
+    }
+
+    private void RebuildTaskDetailsUI()
+    {
+        if (TaskDetailsListPanel == null) return;
+
+        TaskDetailsListPanel.Children.Clear();
+
+        // ✅ Seules les tâches cochées "Inclure dans Détails tâches" apparaissent ici (demande
+        // de Joe : "je dois pouvoir sélectionner si je le place dans la nouvelle section"),
+        // parmi celles actuellement visibles dans la grille (même filtre/semaine).
+        var rows = (_taskRowsView?.Cast<TaskRow>() ?? TaskRowsForCurrentWeek())
+            .Where(r => r.IncludeInTaskDetails);
+        foreach (var row in rows)
+            TaskDetailsListPanel.Children.Add(BuildTaskDetailCard(row));
+    }
+
+    private UIElement BuildTaskDetailCard(TaskRow row)
+    {
+        var card = new Border
+        {
+            Background = System.Windows.Media.Brushes.White,
+            BorderBrush = new WpfSolidColorBrush(WpfColor.FromRgb(0xE5, 0xE7, 0xEB)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10),
+            Margin = new Thickness(4),
+            Effect = (System.Windows.Media.Effects.Effect)FindResource("CardShadowEffect"),
+        };
+
+        var stack = new StackPanel();
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(row.Ref) ? "(Sans n°)" : $"N° {row.Ref}",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new WpfSolidColorBrush(WpfColor.FromRgb(0x11, 0x18, 0x27)),
+            Margin = new Thickness(0, 0, 0, 4),
+        });
+
+        // ✅ Contexte affiché seulement pour les colonnes actuellement visibles dans la grille,
+        // même principe que TaskExpandDescriptionButton_Click/TaskDescriptionWindow.
+        var contextParts = new List<(string Text, bool IsCompany)>();
+        if (TaskBuildingColumn.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(row.Building)) contextParts.Add((row.Building, false));
+        if (TaskFloorColumn.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(row.Floor)) contextParts.Add((row.Floor, false));
+        if (TaskCategoryColumn.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(row.Category)) contextParts.Add((row.Category, false));
+        if (TaskCompanyColumn.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(row.Company)) contextParts.Add((row.Company, true));
+        if (TaskUrgentColumn.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(row.Urgent)) contextParts.Add((row.Urgent, false));
+
+        if (contextParts.Count > 0)
+        {
+            var contextWrap = new WrapPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+
+            for (int i = 0; i < contextParts.Count; i++)
+            {
+                var (text, isCompany) = contextParts[i];
+
+                if (isCompany)
+                {
+                    // ✅ NOUVEAU (20.08.2026, demande de Joe) : le nom de l'intervenant est surligné
+                    // de sa couleur, même mécanisme que CompanyNameToBrushConverter/
+                    // CompanyNameToTextBrushConverter (colonne "N°" de la grille des Tâches).
+                    var bg = (System.Windows.Media.Brush)new CompanyNameToBrushConverter()
+                        .Convert(new object[] { text, CompanyColorMap }, typeof(System.Windows.Media.Brush), null!, CultureInfo.CurrentCulture);
+                    var fg = (System.Windows.Media.Brush)new CompanyNameToTextBrushConverter()
+                        .Convert(new object[] { text, CompanyColorMap }, typeof(System.Windows.Media.Brush), null!, CultureInfo.CurrentCulture);
+
+                    contextWrap.Children.Add(new Border
+                    {
+                        Background = bg,
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(4, 1, 4, 1),
+                        Margin = new Thickness(0, 0, 4, 2),
+                        Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = fg },
+                    });
+                }
+                else
+                {
+                    contextWrap.Children.Add(new TextBlock
+                    {
+                        Text = text,
+                        FontSize = 11,
+                        Foreground = new WpfSolidColorBrush(WpfColor.FromRgb(0x6B, 0x72, 0x80)),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 4, 2),
+                    });
+                }
+
+                if (i < contextParts.Count - 1)
+                {
+                    contextWrap.Children.Add(new TextBlock
+                    {
+                        Text = "·",
+                        FontSize = 11,
+                        Foreground = new WpfSolidColorBrush(WpfColor.FromRgb(0x9C, 0xA3, 0xAF)),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 4, 2),
+                    });
+                }
+            }
+
+            stack.Children.Add(contextWrap);
+        }
+
+        // ✅ Descriptif complet, lecture seule (l'édition reste dans la grille/TaskDescriptionWindow).
+        var doc = !string.IsNullOrWhiteSpace(row.TodoDocumentXaml)
+            ? DeserializeFlowDocumentFromXaml(row.TodoDocumentXaml)
+            : null;
+
+        if (doc == null)
+        {
+            doc = new FlowDocument();
+            doc.Blocks.Add(new Paragraph(new Run(string.IsNullOrWhiteSpace(row.Todo) ? "(Aucun descriptif)" : row.Todo)));
+        }
+
+        var rtb = new WpfRichTextBox
+        {
+            Document = doc,
+            IsReadOnly = true,
+            IsDocumentEnabled = true,
+            BorderThickness = new Thickness(0),
+            Background = System.Windows.Media.Brushes.Transparent,
+            FontSize = 13, // ✅ Même taille que DescriptifRichTextBox (TaskDescriptionWindow) pour un nombre de caractères par ligne identique une fois la largeur alignée.
+            // ✅ NOUVEAU (20.08.2026, demande de Joe : "le passage à la ligne ne se fait pas de
+            // manière identique") : DescriptifRichTextBox (TaskDescriptionWindow.xaml) a
+            // Padding="12" -- sans ce même Padding ici, la largeur de texte RÉELLE (largeur du
+            // RichTextBox moins son Padding interne) différait entre les deux malgré une largeur
+            // extérieure identique (ComputeTaskDetailCardWidth), donc un retour à la ligne à un
+            // endroit différent.
+            Padding = new Thickness(12),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+
+        // ✅ NOUVEAU (20.08.2026, demande de Joe : "l'espace entre les lignes est trop grande")
+        // : sans ça, chaque retour à la ligne crée un nouveau Paragraph avec la marge par défaut
+        // du thème (~10px), donnant un écart bien plus grand qu'attendu -- même fix que
+        // TaskDescriptionWindow.xaml (DescriptifRichTextBox.Resources), dupliqué ici car ce
+        // RichTextBox est construit en code (pas de XAML pour cette fiche).
+        var paragraphStyle = new Style(typeof(Paragraph));
+        paragraphStyle.Setters.Add(new Setter(Block.MarginProperty, new Thickness(0)));
+        rtb.Resources.Add(typeof(Paragraph), paragraphStyle);
+
+        stack.Children.Add(rtb);
+
+        card.Child = stack;
+        return card;
     }
 
     // ✅ Fix (demande de Joe : "si je modifie un descriptif d'une seule ligne, il ne
@@ -3268,11 +3467,12 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
     // d'adresses, voir Db.GetContacts) : sélectionner un contact importe Prénom/Nom/Entreprise
     // en une fois (reste modifiable ensuite).
     // ============================================================
-    private void TogglePvModeButton_Click(object sender, RoutedEventArgs e)
+    // ✅ NOUVEAU (20.08.2026, demande de Joe) : case à cocher (remplace l'ancien bouton On/Off
+    // TogglePvModeButton).
+    private void TogglePvModeCheckBox_Changed(object sender, RoutedEventArgs e)
     {
-        _pvModeEnabled = !_pvModeEnabled;
+        _pvModeEnabled = TogglePvModeCheckBox.IsChecked == true;
         PvPanel.Visibility = _pvModeEnabled ? Visibility.Visible : Visibility.Collapsed;
-        ApplyPvModeToggleButtonAppearance();
 
         if (_pvModeEnabled && _pvParticipants.Count == 0)
         {
@@ -3283,22 +3483,19 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         SaveCurrentWeekState();
     }
 
-    // ✅ "On"/"Off" (18.08.2026, demande de Joe), même principe que
-    // ApplyAutoAddToggleButtonAppearance : couleur pleine quand actif, contour sinon.
     private void ApplyPvModeToggleButtonAppearance()
     {
-        if (TogglePvModeButton == null) return;
+        if (TogglePvModeCheckBox == null) return;
 
-        if (_pvModeEnabled)
-        {
-            TogglePvModeButton.Content = "Mode PV : On";
-            TogglePvModeButton.Style = (Style)FindResource("SmallBlueButtonStyle");
-        }
-        else
-        {
-            TogglePvModeButton.Content = "Mode PV : Off";
-            TogglePvModeButton.Style = (Style)FindResource("WeekNavButtonStyle");
-        }
+        // ✅ Détache temporairement les gestionnaires : appelé aussi lors du chargement de
+        // l'état d'une semaine (restauration de _pvModeEnabled), sans ça la simple mise à jour
+        // visuelle de la case redéclencherait TogglePvModeCheckBox_Changed (et donc un
+        // SaveCurrentWeekState prématuré, avant la fin du chargement).
+        TogglePvModeCheckBox.Checked -= TogglePvModeCheckBox_Changed;
+        TogglePvModeCheckBox.Unchecked -= TogglePvModeCheckBox_Changed;
+        TogglePvModeCheckBox.IsChecked = _pvModeEnabled;
+        TogglePvModeCheckBox.Checked += TogglePvModeCheckBox_Changed;
+        TogglePvModeCheckBox.Unchecked += TogglePvModeCheckBox_Changed;
     }
 
     private void AddPvParticipantButton_Click(object sender, RoutedEventArgs e)
@@ -3991,7 +4188,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                         IsArchived = r.IsArchived,
                         ArchivedAt = r.ArchivedAt,
                         IsTrashed = r.IsTrashed,
-                        TrashedAt = r.TrashedAt
+                        TrashedAt = r.TrashedAt,
+                        IncludeInTaskDetails = r.IncludeInTaskDetails
                     });
 
                 return;
@@ -4066,7 +4264,8 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
                 IsArchived = r.IsArchived,
                 ArchivedAt = r.ArchivedAt,
                 IsTrashed = r.IsTrashed,
-                TrashedAt = r.TrashedAt
+                TrashedAt = r.TrashedAt,
+                IncludeInTaskDetails = r.IncludeInTaskDetails
             }).ToList();
 
             ProjectTasksStore.Save(pid, rows);
@@ -5230,6 +5429,11 @@ public partial class PlanningPage : WpfUserControl, IReloadablePage, INotifyProp
         public bool IsTrashed { get => _isTrashed; set => SetField(ref _isTrashed, value); }
         public DateTime? TrashedAt { get => _trashedAt; set => SetField(ref _trashedAt, value); }
 
+        // ✅ NOUVEAU (20.08.2026, demande de Joe) : coche "Inclure dans Détails tâches", voir
+        // TaskRecord.IncludeInTaskDetails (Data/ProjectTasksStore.cs).
+        private bool _includeInTaskDetails;
+        public bool IncludeInTaskDetails { get => _includeInTaskDetails; set => SetField(ref _includeInTaskDetails, value); }
+
         public string Ref { get => _ref; set => SetField(ref _ref, value); }
         public string Company { get => _company; set => SetField(ref _company, value); }
         public string Building { get => _building; set => SetField(ref _building, value); }
@@ -5509,6 +5713,63 @@ public sealed class TodoShowVoirPlusConverter : IValueConverter
         => TodoLineCountHelper.HasMoreThanOneLine(value) ? Visibility.Visible : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+// ✅ NOUVEAU (20.08.2026, demande de Joe : "si les '...' apparaissent, alors le 'Voir+' doit
+// apparaître aussi") : en plus du texte multi-lignes, détecte aussi le cas d'une seule ligne
+// trop longue pour la largeur actuelle de la colonne Descriptif (donc coupée par
+// TextTrimming="CharacterEllipsis" dans la cellule) -- mesure la 1ère ligne avec FormattedText
+// et compare à TaskTodoColumn.ActualWidth (transmise via MultiBinding, voir
+// TaskExpandDescriptionColumn dans PlanningPage.xaml).
+internal static class TodoOverflowHelper
+{
+    public static bool NeedsExpandButton(string? todo, double columnWidth)
+    {
+        if (TodoLineCountHelper.HasMoreThanOneLine(todo)) return true;
+        if (string.IsNullOrEmpty(todo) || columnWidth <= 0) return false;
+
+        var firstLine = todo.Replace("\r\n", "\n").Split('\n')[0];
+        if (string.IsNullOrEmpty(firstLine)) return false;
+
+        var formatted = new FormattedText(
+            firstLine,
+            CultureInfo.CurrentCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            13,
+            WpfBrushes.Black,
+            1.0);
+
+        // ✅ Petite marge de sécurité (6px) : mieux vaut afficher "Voir +" un peu tôt que de
+        // rater une vraie troncature (imprécision du rendu réel vs. mesure approximative).
+        return formatted.WidthIncludingTrailingWhitespace > columnWidth - 6;
+    }
+}
+
+public sealed class TodoShowPencilMultiConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        var todo = values.Length > 0 ? values[0] as string : null;
+        var width = values.Length > 1 && values[1] is double w ? w : 0;
+        return TodoOverflowHelper.NeedsExpandButton(todo, width) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+public sealed class TodoShowVoirPlusMultiConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        var todo = values.Length > 0 ? values[0] as string : null;
+        var width = values.Length > 1 && values[1] is double w ? w : 0;
+        return TodoOverflowHelper.NeedsExpandButton(todo, width) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
 

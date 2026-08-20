@@ -189,7 +189,23 @@
                 Margin="0,0,0,12"
                 Effect="{StaticResource CardShadowEffect}">
             <StackPanel>
-                <TextBlock x:Name="TaskRefTextBlock" FontSize="15" FontWeight="SemiBold" Foreground="#111827" Margin="0,0,0,10"/>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="TaskRefTextBlock" Grid.Column="0" FontSize="15" FontWeight="SemiBold" Foreground="#111827" VerticalAlignment="Center"/>
+                    <!-- ✅ NOUVEAU (20.08.2026, demande de Joe) : même bascule que la case à cocher
+                         de la cellule Descriptif dans la grille (TaskRow.IncludeInTaskDetails),
+                         exposée ici aussi pour qu'elle soit accessible depuis le descriptif lui-même. -->
+                    <CheckBox x:Name="IncludeInTaskDetailsCheckBox"
+                              Grid.Column="1"
+                              Content="Afficher ce descriptif dans la page"
+                              FontSize="12"
+                              Foreground="#374151"
+                              VerticalAlignment="Center"
+                              Click="IncludeInTaskDetailsCheckBox_Click"/>
+                </Grid>
                 <!-- ✅ Ordre identique à celui de la grille des Tâches (Bâtiment, Étage,
                      Catégorie, Entreprise, Urg., Effectué), libellés dynamiques (page Listes),
                      et un champ n'apparaît ici QUE si sa colonne est actuellement visible dans
@@ -356,6 +372,7 @@
                      FontSize="13"
                      AcceptsReturn="True"
                      AcceptsTab="True"
+                     AllowDrop="True"
                      VerticalScrollBarVisibility="Auto"
                      HorizontalScrollBarVisibility="Disabled"
                      TextChanged="DescriptifRichTextBox_TextChanged"

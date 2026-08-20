@@ -1187,7 +1187,8 @@ public static class PdfService
         string filePath,
         string taskRef,
         List<(string Label, string Value)> infoFields,
-        string todo)
+        string todo,
+        byte[]? descriptifPng = null)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Chemin PDF invalide.", nameof(filePath));
@@ -1238,9 +1239,16 @@ public static class PdfService
                     col.Item().PaddingTop(10).LineHorizontal(1).LineColor(lineLight);
                 });
 
-                page.Content().PaddingTop(14).Text(string.IsNullOrWhiteSpace(todo) ? "" : todo)
-                    .FontSize(11)
-                    .LineHeight(1.4f);
+                // ✅ NOUVEAU (20.08.2026, correctif : "si j'ajoute une image dans le descriptif
+                // tâche, elle n'apparaît pas dans le pdf") : quand une capture image du
+                // Descriptif est fournie (mise en forme + images incluses), on l'affiche à la
+                // place du simple texte brut, qui ne pouvait jamais contenir d'image.
+                if (descriptifPng != null && descriptifPng.Length > 0)
+                    page.Content().PaddingTop(14).Image(descriptifPng).FitWidth();
+                else
+                    page.Content().PaddingTop(14).Text(string.IsNullOrWhiteSpace(todo) ? "" : todo)
+                        .FontSize(11)
+                        .LineHeight(1.4f);
 
                 page.Footer().AlignCenter().Text(x =>
                 {
