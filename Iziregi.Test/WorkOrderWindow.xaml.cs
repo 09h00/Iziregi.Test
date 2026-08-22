@@ -2681,7 +2681,14 @@ public partial class WorkOrderWindow : Window
             discountRate2    = wo.DiscountRate2,
             discountName     = wo.DiscountName ?? "",
             discountName2    = wo.DiscountName2 ?? "",
-            tvaRate          = wo.TvaRate
+            tvaRate          = wo.TvaRate,
+            // ✅ Lignes de devis (Libellé/Matériel, 22.08.2026) : jusqu'ici stockees uniquement
+            // en local (table WorkOrderLines) -- desormais synchronisees pour etre visibles
+            // et modifiables depuis Iziregi.Web. Le serveur ignore ce champ s'il est absent
+            // (retro-compatibilite), donc rien ne casse si cette version n'est pas encore a jour.
+            lines = Db.GetWorkOrderLines(wo.Id)
+                .Select(l => new { label = l.Label ?? "", qty = l.Qty, unitPrice = l.UnitPrice })
+                .ToArray()
         };
 
         var json    = JsonSerializer.Serialize(payload);
