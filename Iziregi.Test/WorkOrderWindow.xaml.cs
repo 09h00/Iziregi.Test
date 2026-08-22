@@ -2682,6 +2682,18 @@ public partial class WorkOrderWindow : Window
             discountName     = wo.DiscountName ?? "",
             discountName2    = wo.DiscountName2 ?? "",
             tvaRate          = wo.TvaRate,
+            // ✅ Pipeline de statut + Archives/Corbeille (22.08.2026) : jusqu'ici jamais publie,
+            // donc invisible depuis Iziregi.Web ("Bons actifs"). "isInCreation" sert de marqueur
+            // de presence cote serveur (retro-compatibilite) -- toujours envoye ici avec le reste.
+            isInCreation     = wo.IsInCreation,
+            isSentToCompany  = wo.IsSentToCompany,
+            isQuoteReceived  = wo.IsQuoteReceived,
+            isSentToSigner   = wo.IsSentToSigner,
+            validationDecision = wo.ValidationDecision ?? "",
+            distributedDate  = wo.DistributedAt?.ToString("yyyy-MM-dd") ?? "",
+            performedDate    = wo.PerformedAt?.ToString("yyyy-MM-dd") ?? "",
+            isArchived       = wo.IsArchived,
+            isTrashed        = wo.IsTrashed,
             // ✅ Lignes de devis (Libellé/Matériel, 22.08.2026) : jusqu'ici stockees uniquement
             // en local (table WorkOrderLines) -- desormais synchronisees pour etre visibles
             // et modifiables depuis Iziregi.Web. Le serveur ignore ce champ s'il est absent
