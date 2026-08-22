@@ -34,6 +34,12 @@ donner une commande sans cette précision. Communication en français, tutoiemen
 - **Synchro serveur** : polling toutes les 60s (`MainWindow.StartServerSyncTimer`) sur
   `/internal/submissions/since`, applique les réponses entreprise/signataire en local
   (popup son + flash barre des tâches). Curseur de synchro persisté (`LastServerSyncUtc`).
+- **Lignes de devis (Libellé/Matériel, `WorkOrderLines` en local)** : poussées vers le
+  serveur depuis le 22.08.2026 (`WorkOrderWindow.PublishWorkOrderToServerAsync`, champ
+  `lines` du payload `/internal/workorders/upsert`) — avant cette date elles ne quittaient
+  jamais ce PC. Ajouté pour que ces lignes soient visibles/modifiables depuis le nouveau
+  client web `Iziregi.Web` (voir son `CLAUDE.md`). Table serveur : `work_order_lines`, à
+  ne pas confondre avec `work_order_quote_lines` (contre-devis de l'entreprise via `/bdr`).
 - **Fallback manuel hors-ligne** : export `.iziregi-package` (zip manifeste JSON) et
   import `.iziregi-reponse` via sélecteur de fichier OU dossier `INBOX` surveillé
   (`FileSystemWatcher`, voir `MainWindow.StartInboxWatcher`).
