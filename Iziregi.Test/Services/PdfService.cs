@@ -1008,7 +1008,7 @@ public static class PdfService
                                     // avec un espace ; remplacé par une vraie bordure directement sur la
                                     // ligne, comme Total HT/Total TTC.
                                     AddTotalsRow4Cols(t, "Total Matériel", "", "", FmtInv(materialTotal),
-                                        isStrong: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, greyBackground: true);
+                                        isStrong: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, greyBackground: true, labelAlignLeft: true);
 
                                     AddTotalsRow4Cols(t, "Main d’œuvre",
                                         qtyText: FormatQty(wo.LaborHours),
@@ -1027,7 +1027,7 @@ public static class PdfService
                                     if (discountRate > 0.0000000001)
                                     {
                                         var htBrutDisplay = Math.Round(materialTotal + laborTotal + travelTotal + forfaitTotal, 2);
-                                        AddTotalsRow4Cols(t, "Sous-total 1", "", "", FmtInv(htBrutDisplay), isStrong: true, greyBackground: true, noInnerDividers: true);
+                                        AddTotalsRow4Cols(t, "Sous-total 1", "", "", FmtInv(htBrutDisplay), isStrong: true, greyBackground: true, noInnerDividers: true, labelAlignLeft: true);
                                     }
 
                                     // ✅ Réplique serveur : le taux va dans la colonne Qt, le libellé reste statique,
@@ -1041,7 +1041,7 @@ public static class PdfService
                                     if (discountRate2 > 0.0000000001)
                                     {
                                         var afterDiscount1Display = Math.Round((materialTotal + laborTotal + travelTotal + forfaitTotal) * (1.0 - (discountRate / 100.0)), 2);
-                                        AddTotalsRow4Cols(t, "Sous-total 2", "", "", FmtInv(afterDiscount1Display), isStrong: true, greyBackground: true, noInnerDividers: true);
+                                        AddTotalsRow4Cols(t, "Sous-total 2", "", "", FmtInv(afterDiscount1Display), isStrong: true, greyBackground: true, noInnerDividers: true, labelAlignLeft: true);
                                     }
 
                                     // ✅ Rabais 2 (17.08.2026, demande de Joe) : même structure que Rabais 1.
@@ -1051,14 +1051,14 @@ public static class PdfService
                                     // ✅ Pas de bordure haute ici (demande de Joe, 18.08.2026, bordures
                                     // uniformes de Total Matériel à Total TTC) : la bordure basse de Rabais 2
                                     // juste au-dessus suffit déjà, une bordure haute ici la doublerait.
-                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, bottomBorderThickness: 0.75f, matchGrandTotalHeight: true);
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, bottomBorderThickness: 0.75f, labelAlignLeft: true);
                                 }
                                 else
                                 {
                                     // ✅ Total HT devient la première ligne du tableau en position
                                     // "Devis PDF" (05.08.2026) : bordure haute explicite (comme "Total
                                     // Matériel" en position standard) puisque plus rien ne la précède.
-                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, matchGrandTotalHeight: true);
+                                    AddTotalsRow4Cols(t, "Total HT", "", "", FmtInv(htNet), isStrong: true, greyBackground: true, noInnerDividers: true, topBorderThickness: 0.75f, bottomBorderThickness: 0.75f, labelAlignLeft: true);
                                 }
 
                                 // ✅ Bordures uniformes de Total Matériel à Total TTC (demande de Joe,
@@ -1076,7 +1076,7 @@ public static class PdfService
                                 // l'absence de contenu Qt/Prix).
                                 var tvaValue = tvaRate.ToString("0.00", CultureInfo.InvariantCulture);
                                 AddTotalsRow4Cols(t, "TVA (%)", "", "", FmtInv(tvaAmount), isStrong: false, fullBlueBackground: true, bottomBorderThickness: 0.75f, labelAlignLeft: true, noInnerDividers: true, labelValue: tvaValue);
-                                AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true, bottomBorderThickness: 0.75f, noInnerDividers: true);
+                                AddTotalsRow4Cols(t, "Total TTC", "", "", FmtInv(ttcTotal), isStrong: true, isGrandTotal: true, bottomBorderThickness: 0.75f, noInnerDividers: true, labelAlignLeft: true);
                             });
                         });
 
@@ -1367,7 +1367,6 @@ public static class PdfService
         float topBorderThickness = 0f,
         bool blueBackground = false,
         bool bluePrixDecorative = false,
-        bool matchGrandTotalHeight = false,
         bool labelAlignLeft = false,
         bool noPrixRightBorder = false,
         bool fullBlueBackground = false,
@@ -1439,20 +1438,18 @@ public static class PdfService
             if (bottomBorderThickness > 0)
                 c = c.BorderBottom(bottomBorderThickness).BorderColor("#000000");
 
-            // ✅ Hauteur de ligne Total HT/TVA alignée sur Total TTC (demande de Joe, 11.08.2026) :
-            // matchGrandTotalHeight augmente juste le padding vertical (6 au lieu de 3), sans
-            // toucher à la taille de police ni au fond/bordure -- seule la hauteur doit matcher
-            // Total TTC (fontSize=12/padding=5), pas son style visuel de mise en avant.
-            var paddingV = isGrandTotal ? 5 : (matchGrandTotalHeight ? 6 : 3);
+            // ✅ Total HT même hauteur que Total Matériel (24.08.2026, demande de Joe) : ne
+            // matche plus la hauteur de Total TTC (revenu sur le 11.08.2026).
+            var paddingV = isGrandTotal ? 5 : 3;
             c = c.PaddingVertical(paddingV).PaddingHorizontal(7);
 
             return c;
         }
 
         // ✅ Réplique serveur : colonne Qt centrée (.tot-n), Prix/pc alignée à droite (.tot-n + .tot-n).
-        // ✅ Libellé aligné à droite de sa colonne (demande de Joe, 18.08.2026, "Total Matériel...")
-        // sauf Main d'œuvre/Déplacements/Rabais/TVA, restés à gauche comme sur l'écran WPF
-        // (WorkOrderWindow.xaml) -- voir labelAlignLeft sur chaque appel concerné.
+        // ✅ Libellé aligné à gauche (24.08.2026, demande de Joe, revenu sur le 18.08.2026) : tous
+        // les appels passent maintenant labelAlignLeft: true, y compris Total Matériel/Sous-total/
+        // Total HT/Total TTC.
         var labelCell = Cell(0);
         if (!labelAlignLeft) labelCell = labelCell.AlignRight();
         // ✅ labelValue rendu dans une zone de largeur fixe après "label" (demande de Joe,

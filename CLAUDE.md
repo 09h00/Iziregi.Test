@@ -27,8 +27,10 @@ donner une commande sans cette précision. Communication en français, tutoiemen
   vraies migrations — pas de retour en arrière possible sur le schéma.
 - **Modèle métier** : `WorkOrder` (bon de régie) rattaché à un `Project`, pipeline en 5
   étapes (création → envoyé entreprise → devis reçu → envoyé signataire → validé),
-  numérotation `01-P1` (numéro par projet + tag projet). Devis (heures, taux, déplacement,
-  forfait, rabais, TVA), lignes de matériel, signature électronique.
+  numérotation `01-D{ProjectId}` (ex. `01-D1`) — anciens bons créés avant un renommage
+  silencieux gardent le tag `P` (`01-P1`), `MainWindow.TryParseWorkOrderRef` gère les deux.
+  Devis (heures, taux, déplacement, forfait, rabais, TVA), lignes de matériel, signature
+  électronique.
 - **Config poste** : `%LOCALAPPDATA%\Iziregi\iziregi-config.json` (URL serveur + clé API),
   clé API chiffrée via DPAPI Windows (liée au compte Windows courant) — jamais en clair.
 - **Synchro serveur** : polling toutes les 60s (`MainWindow.StartServerSyncTimer`) sur

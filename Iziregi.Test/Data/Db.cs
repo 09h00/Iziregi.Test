@@ -1048,6 +1048,13 @@ public static class Db
     public static string GetDefaultDiscountName2() => GetSetting("DefaultDiscountName2") ?? "";
     public static void SetDefaultDiscountName2(string value) => SetSetting("DefaultDiscountName2", value ?? "");
 
+    // ✅ NOUVEAU (24.08.2026, demande de Joe) : même principe que le nom de rabais par défaut
+    // ci-dessus, étendu au taux de TVA -- pré-rempli sur un nouveau bon avec le dernier taux
+    // saisi par l'architecte (voir WorkOrderWindow.CreateDefaultWorkOrder/SaveWorkOrder).
+    public static double GetDefaultTvaRate() =>
+        double.TryParse(GetSetting("DefaultTvaRate"), NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : 8.1;
+    public static void SetDefaultTvaRate(double value) => SetSetting("DefaultTvaRate", value.ToString(CultureInfo.InvariantCulture));
+
     // =========================
     // ✅ Libellés UI (noms affichés) — par projet
     // =========================

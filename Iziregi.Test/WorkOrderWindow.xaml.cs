@@ -1737,7 +1737,10 @@ public partial class WorkOrderWindow : Window
             ForfaitPdfFileBytes = null,
             ForfaitTtc = 0,
 
-            TvaRate = 8.1,
+            // ✅ Taux de TVA par défaut (24.08.2026, demande de Joe) : même principe que le nom de
+            // rabais ci-dessous, pré-rempli avec le dernier taux saisi par l'architecte (voir
+            // Db.SetDefaultTvaRate, appelé à l'enregistrement).
+            TvaRate = Db.GetDefaultTvaRate(),
             QuoteNotes = "",
             DiscountRate = 0,
             DiscountRate2 = 0,
@@ -2423,6 +2426,9 @@ public partial class WorkOrderWindow : Window
         }
 
         _workOrder.TvaRate = ParseDouble(TvaRateTextBox.Text, 8.1);
+        // ✅ Mémorisé comme nouveau défaut pour le prochain nouveau bon (24.08.2026, demande de
+        // Joe), même principe que le nom de rabais ci-dessus.
+        Db.SetDefaultTvaRate(_workOrder.TvaRate);
 
         _workOrder.QuoteNotes = EnforceQuoteNotesRules(QuoteNotesTextBox.Text ?? "");
 
